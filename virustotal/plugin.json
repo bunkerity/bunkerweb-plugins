@@ -1,0 +1,27 @@
+{
+	"id": "virustotal",
+	"order": 4,
+	"name": "VirusTotal",
+	"description": "Automatic scan of uploaded files with the VirusTotal API.",
+	"version": "0.1",
+	"settings": {
+		"USE_VIRUSTOTAL": {
+			"context": "multisite",
+			"default": "no",
+			"help": "Activate automatic scan of uploaded files with VirusTotal.",
+			"id": "use-virustotal",
+			"label": "Use VirusTotal",
+			"regex": "^(yes|no)$",
+			"type": "check"
+		},
+		"VIRUSTOTAL_API_KEY": {
+			"context": "global",
+			"default": "",
+			"help": "Secret key to access the VirusTotal API.",
+			"id": "virustotal-api-key",
+			"label": "VirusTotal API key",
+			"regex": "^.*$",
+			"type": "text"
+		}
+	}
+}

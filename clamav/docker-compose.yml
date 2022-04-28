@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+
+  bunkerweb:
+    image: bw
+    ports:
+      - 80:8080
+      - 443:8443
+    volumes:
+      - ./bw-data:/data
+    environment:
+      - USE_BUNKERNET=no
+      - USE_CLAMAV=yes
+      - CLAMAV_API=http://clamav-api:3000
+      - LOG_LEVEL=info
+
+  clamav-api:
+    image: bw-clamav
+    environment:
+      - CLAMD_IP=clamav
+
+  clamav:
+    image: clamav/clamav:0.104
+    volumes:
+      - ./clamav-data:/var/lib/clamav
