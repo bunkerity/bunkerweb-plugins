@@ -1,6 +1,6 @@
 {
 	"id": "clamav",
-	"order": 1,
+	"order": 4,
 	"name": "ClamAV",
 	"description": "Automatic scan of uploaded files with ClamAV antivirus engine.",
 	"version": "0.1",
