@@ -14,12 +14,12 @@
 			"regex": "^(yes|no)$",
 			"type": "check"
 		},
-		"VIRUSTOTAL_API_KEY": {
+		"VIRUSTOTAL_API": {
 			"context": "global",
-			"default": "",
-			"help": "Secret key to access the VirusTotal API.",
-			"id": "virustotal-api-key",
-			"label": "VirusTotal API key",
+			"default": "http://virustotal-api:8000",
+			"help": "Address of the VirusTotal API.",
+			"id": "virustotal-api",
+			"label": "VirusTotal API",
 			"regex": "^.*$",
 			"type": "text"
 		}

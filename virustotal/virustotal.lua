@@ -7,14 +7,14 @@ local logger    = require "logger"
 local cjson		= require "cjson"
 local http		= require "resty.http"
 local upload	= require "resty.upload"
-local sha1		= require "resty.sha1"
+local sha256	= require "resty.sha256"
 
 function _M.new()
 	local self = setmetatable({}, _M)
-	local value, err = utils.get_variable("VIRUSTOTAL_API_KEY", false)
+	local value, err = utils.get_variable("VIRUSTOTAL_API", false)
 	if not value then
-		logger.log(ngx.ERR, "VIRUSTOTAL", "error while getting VIRUSTOTAL_API_KEY setting : " .. err)
-		return nil, "error while getting VIRUSTOTAL_API_KEY setting : " .. err
+		logger.log(ngx.ERR, "VIRUSTOTAL", "error while getting VIRUSTOTAL_API setting : " .. err)
+		return nil, "error while getting VIRUSTOTAL_API setting : " .. err
 	end
 	self.api = value
 	return self, nil
@@ -36,10 +36,10 @@ function _M:access()
 	end
 
 	-- Loop on files
-	local form = upload:new(4096)
+	local form = upload:new(4096, 512, true)
 	local process_file = false
-	local hash = sha1:new()
-	local analyses = {}
+	local hash = sha256:new()
+	local all_cached = true
 	while true do
 		-- Read the part
 		local typ, res, err = form:read()
@@ -65,9 +65,9 @@ function _M:access()
 			if cached == nil then
 				logger.log(ngx.ERR, "VIRUSTOTAL", "can't check the hashes cache : " .. err)
 			elseif not cached then
-				local id, err = 
+				all_cached = false
 			elseif cached ~= "clean" then
-				return true, "file with hash " .. final_hash .. " is detected (from cache) : " .. cached
+				return true, "file with hash " .. final_hash .. " is detected (from cache)", true, ngx.HTTP_FORBIDDEN
 			end
 			hash:reset()
 			process_file = false
@@ -77,11 +77,37 @@ function _M:access()
 		end 
 	end
 
-	-- Loop on analysis
-	for i, analyse in analyses do
-		
+	-- Send files to VirusTotal API if needed
+	if not all_cached then
+		local ok, err, status, data = self:request("POST", "/check")
+		if not ok then
+			return false, "error from request : " .. err, nil, nil
+		end
+		if not data.success then
+			return false, "error from VirusTotal API : " .. data.error, nil, nil
+		end
+		local is_infected = false
+		for hash, infected in pairs(data.results) do
+			if infected then
+				is_infected = true
+				logger.log(ngx.WARN, "VIRUSTOTAL", "file with hash " .. hash .. " is detected (not cached)")
+				local ok, err = self:add_to_cache(hash, "infected")
+				if not ok then
+					logger.log(ngx.ERR, "VIRUSTOTAL", "can't add file hash to cache : " .. err)
+				end
+			else
+				logger.log(ngx.INFO, "VIRUSTOTAL", "file with hash " .. hash .. " is not detected (not cached)")
+				local ok, err = self:add_to_cache(hash, "clean")
+				if not ok then
+					logger.log(ngx.ERR, "VIRUSTOTAL", "can't add file hash to cache : " .. err)
+				end
+			end
+		end
+		if is_infected then
+			return true, "at least one file is infected", true, ngx.HTTP_FORBIDDEN
+		end
 	end
-	return true, "success", nil, nil
+
 	return true, "success", nil, nil
 end
 
@@ -129,6 +155,26 @@ function _M:request(method, url)
 		return false, "error while decoding json : " .. ret, nil, nil
 	end
 	return true, "success", res.status, ret
+end
+
+function _M:is_in_cache(ele) 
+	local ret, err = datastore:get("plugin_virustotal_cache_" .. ele)
+	if not ret then
+		if err ~= "not found" then
+			logger.log(ngx.ERR, "VIRUSTOTAL", "Error while accessing cache : " .. err)
+		end
+		return false, err
+	end
+	return ret, "success"
+end
+
+function _M:add_to_cache(ele, kind)
+	local ok, err = datastore:set("plugin_virustotal_cache_" .. ele, kind, 86400)
+	if not ok then
+		logger.log(ngx.ERR, "VIRUSTOTAL", "Error while adding element to cache : " .. err)
+		return false, err
+	end
+	return true, "success"
 end
 
 return _M
