@@ -1,6 +1,6 @@
 # VirusTotal plugin
 
-![BunkerWeb VirusTotal diagram](https://github.com/bunkerity/bunkerweb-plugins/blob/master/virustotal/docs/diagram.svg?raw=true)
+![BunkerWeb VirusTotal diagram](https://github.com/bunkerity/bunkerweb-plugins/raw/main/virustotal/docs/diagram.svg)
 
 This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is already analyzed on VirusTotal and deny the request if the file is detected by some antivirus engine(s).
 
