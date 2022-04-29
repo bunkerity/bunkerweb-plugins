@@ -11,16 +11,11 @@ services:
       - ./bw-data:/data
     environment:
       - USE_BUNKERNET=no
-      - USE_CLAMAV=yes
-      - CLAMAV_API=http://clamav-api:3000
+      - USE_VIRUSTOTAL=yes
+      - VIRUSTOTAL_API=http://virustotal-api:8000
       - LOG_LEVEL=info
 
-  clamav-api:
-    image: bw-clamav
+  virustotal-api:
+    image: bw-vt
     environment:
-      - CLAMD_IP=clamav
-
-  clamav:
-    image: clamav/clamav:0.104
-    volumes:
-      - ./clamav-data:/var/lib/clamav
+      - VIRUSTOTAL_API_KEY=api-key-here

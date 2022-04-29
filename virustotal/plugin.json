@@ -1,6 +1,6 @@
 {
 	"id": "virustotal",
-	"order": 4,
+	"order": 1,
 	"name": "VirusTotal",
 	"description": "Automatic scan of uploaded files with the VirusTotal API.",
 	"version": "0.1",

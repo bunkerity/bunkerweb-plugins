@@ -87,8 +87,14 @@ function _M:request(method, url)
 				if not f then
 					return false, "can't read body from file " .. body_file .. " : " .. err, nil, nil
 				end
-				f:close()
-				body = io.lines(body_file)
+				local fileIterator = function (file)
+					return 
+				end
+				body = function ()
+					return function()
+						return f:read(4096)
+					end
+				end
 			end
 		end
 		res, err_http = httpc:request_uri(self.api .. url, {
