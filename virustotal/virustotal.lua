@@ -6,8 +6,6 @@ local datastore = require "datastore"
 local logger    = require "logger"
 local cjson		= require "cjson"
 local http		= require "resty.http"
-local upload	= require "resty.upload"
-local sha256	= require "resty.sha256"
 
 function _M.new()
 	local self = setmetatable({}, _M)

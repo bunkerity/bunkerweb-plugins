@@ -18,25 +18,8 @@ function _M.new()
 	return self, nil
 end
 
-function _M:init()
---	local check, err = utils.has_variable("USE_CLAMAV", "yes")
---	if check == nil then
---		return false, "error while checking variable USE_CLAMAV (" .. err .. ")"
---	end
---	if not check then
---		return true, "ClamAV plugin not enabled"
---	end
---	local ok, err, status, ret = self:request("GET", "/api/v1/version")
---	if not ok then
---		return false, "error while getting version from ClamAV API (" .. err .. ")"
---	end
---	if status ~= 200 then
---		return false, "received status code " .. tostring(status) .. " from ClamAV API : " .. ret.data.error
---	end
-	return true, "success"
-end
-
 function _M:access()
+	-- Check if ClamAV is activated
 	local check, err = utils.get_variable("USE_CLAMAV")
 	if check == nil then
 		return false, "error while getting variable USE_CLAMAV (" .. err .. ")", nil, nil
@@ -44,22 +27,26 @@ function _M:access()
 	if check ~= "yes" then
 		return true, "ClamAV plugin not enabled", nil, nil
 	end
-	if not ngx.var.http_content_type:match("boundary") or not ngx.var.http_content_type:match("multipart/form%-data") then
+
+	-- Check if we have downloads
+	if not ngx.var.http_content_type or (not ngx.var.http_content_type:match("boundary") or not ngx.var.http_content_type:match("multipart/form%-data")) then
 		return true, "no file upload detected", nil, nil
 	end
-	local ok, err, status, ret = self:request("POST", "/api/v1/scan")
-	if not ok then
-		return false, "error while sending request to ClamAV API (" .. err ..")", nil, nil
-	end
-	if not ret.success then
-		return false, "received status code " .. tostring(status) .. " from ClamAV API : " .. ret.data.error, nil, nil
-	end
-	for i, result in ipairs(ret.data.result) do
-		if result["is_infected"] then
-			return true, "ClamAV detected infected file : " .. result.viruses[1], true, ngx.HTTP_FORBIDDEN
+
+	-- Forward request to ClamAV API helper
+	local ok, err, status, data = self:request("POST", "/check")
+		if not ok then
+			return false, "error from request : " .. err, nil, nil
 		end
+	if not data.success then
+		return false, "received status code " .. tostring(status) .. " from ClamAV API : " .. data.error, nil, nil
 	end
+	if data.detected then
+		return true, "file with hash " .. data.hash .. " is detected", true, ngx.HTTP_FORBIDDEN
+	end
+
 	return true, "success", nil, nil
+
 end
 
 function _M:request(method, url)
@@ -75,7 +62,7 @@ function _M:request(method, url)
 		})
 	else
 		local body, err = httpc:get_client_body_reader()
-		if not reader then
+		if not body then
 			ngx.req.read_body()
 			body = ngx.req.get_body_data()
 			if not body then
@@ -87,13 +74,8 @@ function _M:request(method, url)
 				if not f then
 					return false, "can't read body from file " .. body_file .. " : " .. err, nil, nil
 				end
-				local fileIterator = function (file)
-					return 
-				end
 				body = function ()
-					return function()
-						return f:read(4096)
-					end
+					return f:read(4096)
 				end
 			end
 		end
