@@ -1,20 +1,36 @@
-# VirusTotal plugin
+# ClamAV plugin
 
-![BunkerWeb ClamAV diagram](https://github.com/bunkerity/bunkerweb-plugins/raw/main/clamav/docs/diagram.svg)
+<p align="center">
+	<img alt="BunkerWeb ClamAV diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/clamav/docs/diagram.svg" />
+</p>
 
 This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is detect by the ClamAV antivirus engine and deny the request if that's the case.
 
-## Prerequisites
+# Table of contents
+
+- [ClamAV plugin](#clamav-plugin)
+- [Table of contents](#table-of-contents)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+  * [Docker](#docker)
+  * [Swarm](#swarm)
+  * [Kubernetes](#kubernetes)
+- [Settings](#settings)
+  * [Plugin (BunkerWeb)](#plugin--bunkerweb-)
+  * [bunkerweb-clamav (API)](#bunkerweb-clamav--api-)
+- [TODO](#todo)
+
+# Prerequisites
 
 Please read the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation first.
 
 Please note that an additionnal service named **bunkerweb-clamav** is required : it's a simple REST API that will handle the checks to the ClamAV instance(s). A redis service is also recommended to cache ClamAV results in case high performance is needed.
 
-## Setup
+# Setup
 
 See the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
-### Docker
+## Docker
 
 ```yaml
 version: '3'
@@ -37,14 +53,14 @@ services:
 
   clamav:
     image: clamav/clamav:0.104
-	volumes:
-	  - ./clamav-data:/var/lib/clamav
+    volumes:
+      - ./clamav-data:/var/lib/clamav
 
   redis:
     image: redis:7-alpine
 ```
 
-### Swarm
+## Swarm
 
 ```yaml
 version: '3.5'
@@ -57,28 +73,28 @@ services:
     environment:
       - USE_CLAMAV=yes
       - CLAMAV_API=http://clamav-api:8000
-	...
+    ...
     networks:
       - bw-plugins
-	...
+    ...
 
   clamav-api:
     image: bunkerity/bunkerweb-clamav
     environment:
       - CLAMAV_HOST=clamav
       - REDIS_HOST=redis
-	networks:
-	  - bw-plugins
+    networks:
+      - bw-plugins
 
   clamav:
     image: clamav/clamav:0.104
-	networks:
-	  - bw-plugins
+    networks:
+      - bw-plugins
 
   redis:
     image: redis:7-alpine
-	networks:
-	  - bw-plugins
+    networks:
+      - bw-plugins
 
 networks:
   bw-plugins:
@@ -88,7 +104,7 @@ networks:
 ...
 ```
 
-### Kubernetes
+## Kubernetes
 
 First you will need to deploy the dependencies :
 ```yaml
@@ -196,21 +212,21 @@ metadata:
   name: ingress
   annotations:
     bunkerweb.io/AUTOCONF: "yes"
-	bunkerweb.io/USE_CLAMAV: "yes"
-	bunkerweb.io/CLAMAV_API: "http://svc-bunkerweb-clamav-api.default.svc.cluster.local"
+    bunkerweb.io/USE_CLAMAV: "yes"
+    bunkerweb.io/CLAMAV_API: "http://svc-bunkerweb-clamav-api.default.svc.cluster.local"
 ...
 ```
 
-## Settings
+# Settings
 
-### Plugin (BunkerWeb)
+## Plugin (BunkerWeb)
 
 | Setting      | Default                  | Description                                                                                    |
 | :----------: | :----------------------: | :--------------------------------------------------------------------------------------------- |
 | `USE_CLAMAV` | `no`                     | When set to `yes`, uploaded files will be checked with the ClamAV plugin.                      |
 | `CLAMAV_API` | `http://clamav-api:8000` | Address of the ClamAV "helper" that will check the files and talk to the real ClamAV instance. |
 
-### bunkerweb-clamav (API)
+## bunkerweb-clamav (API)
 
 | Setting          | Default | Description                                          |
 | :--------------: | :-----: | :----------------------------------------------------|
@@ -221,7 +237,7 @@ metadata:
 | `REDIS_PORT`     | `6379`  | Port of the Redis service.                           |
 | `REDIS_DB`       | `0`     | Redis database number to use.                        |
 
-## TODO
+# TODO
 
 * Test and document clustered mode
 * Custom ClamAV configuration

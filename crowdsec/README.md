@@ -1,16 +1,14 @@
-# VirusTotal plugin
+# CrowdSec plugin
 
 <p align="center">
-	<img alt="BunkerWeb VirusTotal diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/virustotal/docs/diagram.svg" />
+	<img alt="BunkerWeb CrowdSec diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/crowdsec/docs/diagram.svg" />
 </p>
 
-This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is already analyzed on VirusTotal and deny the request if the file is detected by some antivirus engine(s).
-
-At the moment, submission of new file is not supported, it only checks if files already exist in VT and get the scan result if that's the case.
+This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://crowdsec.net/) bouncer. It will deny requests based on the decision of your CrowdSec API. Not only you will benefinit from the crowdsourced blacklist, you can also configure [scenarios](https://docs.crowdsec.net/docs/concepts#scenarios) to automatically ban IPs based on suspicious behaviors.
 
 # Table of contents
 
-- [VirusTotal plugin](#virustotal-plugin)
+- [CrowdSec plugin](#crowdsec-plugin)
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
@@ -203,6 +201,6 @@ metadata:
 
 # TODO
 
-* Upload files to VT
+* Support stream mode
 * Test and document clustered mode
 * Additional security checks like IP

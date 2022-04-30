@@ -1,0 +1,43 @@
+{
+	"id": "crowdsec",
+	"order": 2,
+	"name": "CrowdSec",
+	"description": "CrowdSec bouncer for BunkerWeb.",
+	"version": "0.1",
+	"settings": {
+		"USE_CROWDSEC": {
+			"context": "multisite",
+			"default": "no",
+			"help": "Activate CrowdSec bouncer.",
+			"id": "use-crowdsec",
+			"label": "Use CrowdSec",
+			"regex": "^(yes|no)$",
+			"type": "check"
+		},
+		"CROWDSEC_API": {
+			"context": "global",
+			"default": "http://crowdsec-api:8080",
+			"help": "Address of the CrowdSec API.",
+			"id": "crowdsec-api",
+			"label": "CrowdSec API",
+			"regex": "^.*$",
+			"type": "text"
+		},
+		"CROWDSEC_API_KEY": {
+			"context": "global",
+			"default": "",
+			"help": "Key for the CrowdSec API given by cscli bouncer add.",
+			"id": "crowdsec-api-key",
+			"label": "CrowdSec API key",
+			"regex": "^.*$",
+			"type": "text"
+		}
+	},
+	"jobs": [
+		{
+			"name": "crowdsec-conf",
+			"file": "crowdsec-conf.py",
+			"every": "once"
+		}
+	]
+}
