@@ -16,7 +16,7 @@
 		},
 		"CLAMAV_API": {
 			"context": "global",
-			"default": "http://clamav-api:8080",
+			"default": "http://clamav-api:8000",
 			"help": "Address of the ClamAV API.",
 			"id": "clamav-api",
 			"label": "ClamAV API",
