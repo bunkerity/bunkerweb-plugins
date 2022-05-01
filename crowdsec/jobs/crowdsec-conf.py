@@ -32,7 +32,7 @@ try :
     # Copy template
     with open("/opt/bunkerweb/plugins/crowdsec/misc/crowdsec.conf", "r") as src :
         content = src.read().replace("%CROWDSEC_API%", os.getenv("CROWDSEC_API", "")).replace("%CROWDSEC_API_KEY%", os.getenv("CROWDSEC_API_KEY", ""))
-    with open("/opt/bunkerweb/plugins/crowdsec/misc/crowdsec.conf", "w") as dst :
+    with open("/opt/bunkerweb/cache/crowdsec/crowdsec.conf", "w") as dst :
         dst.write(content)
 
     # Done

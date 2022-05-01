@@ -33,9 +33,9 @@ function M.new(template_path, redirect_location, ret_code)
         end
     end
 
-    if template_file_ok == false and (M.redirect_location == nil or M.redirect_location == "") then
-        ngx.log(ngx.ERR, "BAN_TEMPLATE_PATH and REDIRECT_LOCATION variable are empty, will return HTTP " .. M.ret_code  .. " for ban decisions")
-    end
+    --if template_file_ok == false and (M.redirect_location == nil or M.redirect_location == "") then
+    --    ngx.log(ngx.ERR, "BAN_TEMPLATE_PATH and REDIRECT_LOCATION variable are empty, will return HTTP " .. M.ret_code  .. " for ban decisions")
+    --end
 
     return nil
 end

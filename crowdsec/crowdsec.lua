@@ -29,7 +29,7 @@ function _M:init()
 		return true, "CrowdSec plugin not enabled"
 	end
 	-- Init bouncer
-	local ok, err = cs.init("/opt/bunkerweb/plugins/cache/crowdsec/bouncer.conf", "crowdsec-bunkerweb-bouncer/v0.1")
+	local ok, err = cs.init("/opt/bunkerweb/cache/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v0.1")
 	if ok == nil then
 		return false, "error while initializing bouncer : " .. err
 	end
@@ -52,7 +52,7 @@ function _M:access()
 		return false, "error while executing CrowdSec bouncer : " .. err, nil, nil
 	end
 	if not allowed then
-		return true, "CrowSec bouncer banned IP : " .. reason, true, ngx.HTTP_FORBIDDEN
+		return true, "CrowSec bouncer denied request", true, ngx.HTTP_FORBIDDEN
 	end
 
 	return true, "success", nil, nil

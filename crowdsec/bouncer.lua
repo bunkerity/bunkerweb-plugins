@@ -43,7 +43,7 @@ function csmod.init(configFile, userAgent)
   local captcha_ok = true
   local err = recaptcha.New(runtime.conf["SITE_KEY"], runtime.conf["SECRET_KEY"], runtime.conf["CAPTCHA_TEMPLATE_PATH"])
   if err ~= nil then
-    ngx.log(ngx.ERR, "error loading recaptcha plugin: " .. err)
+    --ngx.log(ngx.ERR, "error loading recaptcha plugin: " .. err)
     captcha_ok = false
   end
   local succ, err, forcible = runtime.cache:set("captcha_ok", captcha_ok)

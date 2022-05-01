@@ -16,7 +16,7 @@
 		},
 		"CROWDSEC_API": {
 			"context": "global",
-			"default": "http://crowdsec-api:8080",
+			"default": "http://crowdsec:8080",
 			"help": "Address of the CrowdSec API.",
 			"id": "crowdsec-api",
 			"label": "CrowdSec API",
