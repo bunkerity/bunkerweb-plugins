@@ -16,8 +16,6 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
   * [Swarm](#swarm)
   * [Kubernetes](#kubernetes)
 - [Settings](#settings)
-  * [Plugin](#plugin--bunkerweb-)
-  * [bunkerweb-virustotal](#bunkerweb-virustotal--api-)
 - [TODO](#todo)
 
 # Prerequisites
@@ -181,113 +179,35 @@ networks:
 
 ## Kubernetes
 
-**TODO : export BW logs to our syslog server**
+The recommended way of installing CrowdSec in your Kubernetes cluster is by using their official [helm chart](https://github.com/crowdsecurity/helm-charts). You will find a tutorial [here](https://crowdsec.net/blog/kubernetes-crowdsec-integration/) for more information. By doing so, a syslog service is no more mandatory because agents will forward BunkerWeb logs to the CS API.
 
-You can use ConfigMaps to store CrowdSec and syslog-ng configurations :
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cfg-crowdsec
-data:
-  acquis.yaml: |
-    filenames:
-      - /var/log/bunkerweb.log
-    labels:
-      type: nginx
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cfg-syslog-ng
-data:
-  syslog-ng.conf: |
-    @version: 3.36
-    source s_net {
-      udp(
-        ip("0.0.0.0")
-      );
-    };
-    template t_imp {
-      template("$MSG\n");
-      template_escape(no);
-    };
-    destination d_file {
-      file("/var/log/bunkerweb.log" template(t_imp));
-    };
-    log { source(s_net); destination(d_file); };
+The first step is to add the CrowdSec chart repository :
+```shell
+helm repo add crowdsec https://crowdsecurity.github.io/helm-charts && helm repo update
 ```
 
-Let's create a PVC that will be used to store the logs of BunkerWeb :
+Now we can create the config file named **crowdsec-values.yml** that will be used to configure the chart :
 ```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: pvc-logs
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
+agent:
+  acquisition:
+      # Namespace of BunkerWeb
+    - namespace: default
+      # Pod names of BunkerWeb
+      podName: bunkerweb-*
+      program: nginx
+  env:
+  - name: BOUNCER_KEY_bunkerweb
+    value: "s3cr3tb0unc3rk3y"
+  - name: COLLECTIONS
+    value: "crowdsecurity/nginx"
 ```
 
-Then you can deploy both CrowdSec and syslog-ng on the same pod so they can share the same volume :
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: crowdsec-syslog-ng
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: crowdsec-syslog-ng
-  template:
-    metadata:
-      labels:
-        app: crowdsec-syslog-ng
-    spec:
-      containers:
-      - name: crowdsec
-        image: crowdsecurity/crowdsec:v1.3.4
-        env:
-        - name: BOUNCER_KEY_bunkerweb
-          value: "s3cr3tb0unc3rk3y"
-        - name: COLLECTIONS
-          value: "crowdsecurity/nginx"
-        volumeMounts:
-        - name: vol-crowdsec
-          mountPath: /etc/crowdsec/acquis.yaml
-        - name: vol-logs
-          mountPath: /var/logs
-      - name: syslog-ng
-        image: balabit/syslog-ng:3.36.1
-        volumeMounts:
-        - name: vol-logs
-          mountPath: /var/logs
-      volumes:
-        - name: vol-crowdsec
-          configMap:
-            name: cfg-crowdsec
-        - name: vol-logs
-          persistentVolumeClaim:
-            claimName: pvc-logs
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: svc-crowdsec-syslog-ng
-spec:
-  selector:
-    app: crowdsec-syslog-ng
-  ports:
-    - protocol: TCP
-      port: 8080
-      targetPort: 8080
+After the **crowdsec-values.yml** file is created, you can now deploy the CrowdSec stack :
+```shell
+helm install crowdsec crowdsec/crowdsec -f crowdsec-values.yaml
 ```
 
-Then you can configure the plugin :
+ configure the plugin :
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -296,7 +216,7 @@ metadata:
   annotations:
     bunkerweb.io/AUTOCONF: "yes"
     bunkerweb.io/USE_CROWDSEC: "yes"
-    bunkerweb.io/CROWDSEC_API: "http://svc-crowdsec-syslog-ng.default.svc.cluster.local"
+    bunkerweb.io/CROWDSEC_API: "http://crowdsec-service.default.svc.cluster.local"
     bunkerweb.io/CROWDSEC_API_KEY: "s3cr3tb0unc3rk3y"
 ...
 ```
@@ -311,5 +231,5 @@ metadata:
 
 # TODO
 
-* Test and document clustered mode
 * Linux setup example
+* Proper way for Swarm
