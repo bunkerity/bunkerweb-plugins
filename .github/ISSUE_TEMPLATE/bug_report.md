@@ -7,8 +7,8 @@ assignees: ''
 
 ---
 
-**Plugin**
-Which plugin is affected.
+**Plugin(s)**
+Which plugin(s) is/are affected.
 
 **Description**
 Concise description of what you're trying to do, the expected behavior and the current bug.
