@@ -1,7 +1,7 @@
 # BunkerWeb plugins
 
 <p align="center">
-	<img alt="BunkerWeb logo" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/bunkerweb.png" />
+	<img alt="BunkerWeb logo" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/logo.png" />
 </p>
 
 <p align="center">
