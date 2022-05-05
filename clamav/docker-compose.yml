@@ -3,24 +3,31 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bw
+    image: bunkerity/bunkerweb:1.4.0
     ports:
       - 80:8080
       - 443:8443
     volumes:
       - ./bw-data:/data
     environment:
-      - USE_BUNKERNET=no
       - USE_CLAMAV=yes
-      - CLAMAV_API=http://clamav-api:3000
+      - CLAMAV_API=http://clamav-api:8000
       - LOG_LEVEL=info
+      - USE_REVERSE_PROXY=yes
+      - REVERSE_PROXY_HOST=http://hello
+      - REVERSE_PROXY_URL=/
 
   clamav-api:
-    image: bw-clamav
+    image: bunkerity/bunkerweb-clamav
+    ports:
+      - localhost:8000:8000
     environment:
-      - CLAMD_IP=clamav
+      - CLAMAV_HOST=clamav
 
   clamav:
     image: clamav/clamav:0.104
     volumes:
       - ./clamav-data:/var/lib/clamav
+  
+  hello:
+    image: tutum/hello-world
