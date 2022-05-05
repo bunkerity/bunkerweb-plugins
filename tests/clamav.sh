@@ -24,8 +24,8 @@ fi
 do_and_check_cmd cp ./clamav/docker-compose.yml /tmp/bunkerweb-plugins/clamav
 
 # Edit compose
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*$@bunkerity/bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb-clamav$@bunkerity/bunkerweb-clamav:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerity/bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb-clamav\$@bunkerity/bunkerweb-clamav:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
 
 # Download EICAR file
 if [ -f /tmp/bunkerweb-plugins/clamav/eicar.com ] ; then
