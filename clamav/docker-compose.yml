@@ -1,3 +1,6 @@
+# ⚠️ DO NOT USE THIS FILE, IT IS ONLY USED FOR INTERNAL TESTS ⚠️
+# SEE README.md for instructions
+
 version: '3'
 
 services:
@@ -13,6 +16,7 @@ services:
       - USE_CLAMAV=yes
       - CLAMAV_API=http://clamav-api:8000
       - LOG_LEVEL=info
+      - USE_BAD_BEHAVIOR=no
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_HOST=http://hello
       - REVERSE_PROXY_URL=/
