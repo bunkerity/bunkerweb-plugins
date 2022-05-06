@@ -1,0 +1,68 @@
+# ⚠️ DO NOT USE THIS FILE, IT IS ONLY USED FOR INTERNAL TESTS ⚠️
+# SEE README.md for instructions
+
+version: '3'
+
+services:
+
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.4.0
+    ports:
+      - 80:8080
+      - 443:8443
+    volumes:
+      - ./bw-data:/data
+    environment:
+      - USE_CROWDSEC=yes
+      - CROWDSEC_API=http://crowdsec:8080
+      - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
+      - LOG_LEVEL=info
+      - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
+      - USE_LIMIT_CONN=no
+      - USE_REVERSE_PROXY=yes
+      - REVERSE_PROXY_HOST=http://hello
+      - REVERSE_PROXY_URL=/
+    networks:
+      - bw-plugins
+      - bw-services
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://10.10.10.254:514"
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.3.4
+    volumes:
+      - cs-data:/var/lib/crowdsec/data
+      - ./acquis.yaml:/etc/crowdsec/acquis.yaml
+      - bw-logs:/var/log:ro
+    environment:
+      - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
+      - COLLECTIONS=crowdsecurity/nginx
+
+  syslog:
+    image: balabit/syslog-ng:3.36.1
+    volumes:
+      - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
+      - bw-logs:/var/log
+    networks:
+      bw-plugins:
+        ipv4_address: 10.10.10.254
+  
+  hello:
+    image: tutum/hello-world
+    networks:
+      - bw-services
+
+networks:
+  bw-services:
+  bw-plugins:
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.10.10.0/24
+
+volumes:
+  bw-logs:
+  cs-data:

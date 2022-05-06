@@ -1,21 +1,32 @@
+# ⚠️ DO NOT USE THIS FILE, IT IS ONLY USED FOR INTERNAL TESTS ⚠️
+# SEE README.md for instructions
+
 version: '3'
 
 services:
 
   bunkerweb:
-    image: bw
+    image: bunkerity/bunkerweb:1.4.0
     ports:
       - 80:8080
       - 443:8443
     volumes:
       - ./bw-data:/data
     environment:
-      - USE_BUNKERNET=no
       - USE_VIRUSTOTAL=yes
       - VIRUSTOTAL_API=http://virustotal-api:8000
       - LOG_LEVEL=info
+      - USE_BAD_BEHAVIOR=no
+      - USE_REVERSE_PROXY=yes
+      - REVERSE_PROXY_HOST=http://hello
+      - REVERSE_PROXY_URL=/
 
   virustotal-api:
-    image: bw-vt
+    image: bunkerity/bunkerweb-virustotal
+    ports:
+      - 127.0.0.1:8000:8000
     environment:
-      - VIRUSTOTAL_API_KEY=api-key-here
+      - API_KEY=%VTKEY%
+  
+  hello:
+    image: tutum/hello-world

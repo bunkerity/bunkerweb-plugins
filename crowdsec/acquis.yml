@@ -1,0 +1,4 @@
+filenames:
+  - /var/log/bunkerweb.log
+labels:
+  type: nginx
