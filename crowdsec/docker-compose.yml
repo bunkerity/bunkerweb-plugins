@@ -40,7 +40,7 @@ services:
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
       - COLLECTIONS=crowdsecurity/nginx
-    network:
+    networks:
       - bw-plugins
 
   syslog:
