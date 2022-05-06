@@ -17,6 +17,7 @@ services:
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - LOG_LEVEL=info
+      - USE_MODSECURITY=no
       - USE_BAD_BEHAVIOR=no
       - USE_LIMIT_REQ=no
       - USE_LIMIT_CONN=no
@@ -40,6 +41,7 @@ services:
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
       - COLLECTIONS=crowdsecurity/nginx
+      - DISABLE_PARSERS=crowdsecurity/whitelists
     networks:
       - bw-plugins
 

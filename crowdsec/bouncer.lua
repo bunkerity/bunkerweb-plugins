@@ -509,10 +509,10 @@ function csmod.allowed()
 	if err ~= nil then
 		return false, err, nil
 	end
-	if not ok then
-		return true, nil, true
+	if remediation ~= nil then
+		return true, nil, false
 	end
-	return true, nil, false
+	return true, nil, true
 end
 
 return csmod
