@@ -5,27 +5,27 @@
 echo "ℹ️ Starting CrowdSec tests ..."
 
 # Create working directory
-if [ ! -d /tmp/bunkerweb-virustotal/virustotal ] ; then
-	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/virustotal
+if [ ! -d /tmp/bunkerweb-crowdsec/crowdsec ] ; then
+	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/crowdsec
 fi
-if [ ! -d /tmp/bunkerweb-plugins/virustotal/bw-data/plugins ] ; then
-	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/virustotal/bw-data/plugins
+if [ ! -d /tmp/bunkerweb-plugins/crowdsec/bw-data/plugins ] ; then
+	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/crowdsec/bw-data/plugins
 fi
-if [ -d /tmp/bunkerweb-plugins/virustotal/bw-data/plugins/virustotal ] ; then
-	do_and_check_cmd rm -rf /tmp/bunkerweb-plugins/virustotal/bw-data/plugins/virustotal
+if [ -d /tmp/bunkerweb-plugins/crowdsec/bw-data/plugins/crowdsec ] ; then
+	do_and_check_cmd rm -rf /tmp/bunkerweb-plugins/crowdsec/bw-data/plugins/crowdsec
 fi
-do_and_check_cmd cp -r ./virustotal /tmp/bunkerweb-plugins/virustotal/bw-data/plugins
-do_and_check_cmd sudo chmod -R 777 /tmp/bunkerweb-plugins/virustotal/bw-data
+do_and_check_cmd cp -r ./crowdsec /tmp/bunkerweb-plugins/crowdsec/bw-data/plugins
+do_and_check_cmd sudo chmod -R 777 /tmp/bunkerweb-plugins/crowdsec/bw-data
 
 # Copy compose
-if [ -f /tmp/bunkerweb-plugins/virustotal/docker-compose.yml ] ; then
-	do_and_check_cmd rm -f /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
+if [ -f /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml ] ; then
+	do_and_check_cmd rm -f /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 fi
-do_and_check_cmd cp ./virustotal/docker-compose.yml /tmp/bunkerweb-plugins/virustotal
+do_and_check_cmd cp ./crowdsec/docker-compose.yml /tmp/bunkerweb-plugins/crowdsec
 
 # Edit compose
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerity/bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
-do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerity/bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
+do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 
 # Copy configs
 do_and_check_cmd cp ./crowdsec/acquis.yml /tmp/bunkerweb-plugins/crowdsec
@@ -35,7 +35,7 @@ do_and_check_cmd cp ./crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowdsec
 success="ko"
 retry=0
 while [ $retry -lt 120 ] ; do
-	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/eicar.com" http://localhost)"
+	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/crowdsec/eicar.com" http://localhost)"
 	if [ $? -eq 0 ] && [ $ret -eq 200 ] ; then
 		success="ok"
 		break
@@ -66,7 +66,7 @@ dirb -H "Host: www.example.com" -H "Header: LegitOne" http://localhost
 
 # Expect a 403
 success="ko"
-ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/eicar.com" http://localhost)"
+ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/crowdsec/eicar.com" http://localhost)"
 if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
 	success="ok"
 	break
