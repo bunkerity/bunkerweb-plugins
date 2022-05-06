@@ -5,7 +5,7 @@
 echo "ℹ️ Starting VirusTotal tests ..."
 
 # Create working directory
-if [ ! -d /tmp/bunkerweb-virustotal/virustotal ] ; then
+if [ ! -d /tmp/bunkerweb-plugins/virustotal ] ; then
 	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/virustotal
 fi
 if [ ! -d /tmp/bunkerweb-plugins/virustotal/bw-data/plugins ] ; then

@@ -5,7 +5,7 @@
 echo "ℹ️ Starting CrowdSec tests ..."
 
 # Create working directory
-if [ ! -d /tmp/bunkerweb-crowdsec/crowdsec ] ; then
+if [ ! -d /tmp/bunkerweb-plugins/crowdsec ] ; then
 	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/crowdsec
 fi
 if [ ! -d /tmp/bunkerweb-plugins/crowdsec/bw-data/plugins ] ; then
