@@ -40,6 +40,8 @@ services:
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
       - COLLECTIONS=crowdsecurity/nginx
+    network:
+      - bw-plugins
 
   syslog:
     image: balabit/syslog-ng:3.36.1
