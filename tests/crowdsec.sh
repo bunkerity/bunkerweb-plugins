@@ -40,7 +40,7 @@ do_and_check_cmd docker-compose up -d
 success="ko"
 retry=0
 while [ $retry -lt 120 ] ; do
-	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/crowdsec/eicar.com" http://localhost)"
+	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
 	if [ $? -eq 0 ] && [ $ret -eq 200 ] ; then
 		success="ok"
 		break
@@ -71,7 +71,7 @@ dirb -H "Host: www.example.com" -H "Header: LegitOne" http://localhost
 
 # Expect a 403
 success="ko"
-ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/crowdsec/eicar.com" http://localhost)"
+ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
 if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
 	success="ok"
 	break
