@@ -67,14 +67,13 @@ fi
 
 # Run basic attack with dirb
 do_and_check_cmd sudo apt install -y dirb
-dirb http://localhost -H "Host: www.example.com" -H "Header: LegitOne"
+dirb http://localhost -H "Host: www.example.com" -H "Header: LegitOne" > /dev/null 2>&1
 
 # Expect a 403
 success="ko"
 ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
 if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
 	success="ok"
-	break
 fi
 
 # We're done
