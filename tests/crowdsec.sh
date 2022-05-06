@@ -28,7 +28,7 @@ do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerity/bunkerweb:${BW_TAG
 do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 
 # Copy configs
-do_and_check_cmd cp ./crowdsec/acquis.yml /tmp/bunkerweb-plugins/crowdsec
+do_and_check_cmd cp ./crowdsec/acquis.yaml /tmp/bunkerweb-plugins/crowdsec
 do_and_check_cmd cp ./crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowdsec
 
 # Do the tests
