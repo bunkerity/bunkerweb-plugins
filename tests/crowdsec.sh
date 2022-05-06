@@ -31,6 +31,11 @@ do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugi
 do_and_check_cmd cp ./crowdsec/acquis.yml /tmp/bunkerweb-plugins/crowdsec
 do_and_check_cmd cp ./crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowdsec
 
+# Do the tests
+current_dir="${PWD}"
+cd /tmp/bunkerweb-plugins/crowdsec/
+do_and_check_cmd docker-compose up -d
+
 # Wait until BW is started
 success="ko"
 retry=0

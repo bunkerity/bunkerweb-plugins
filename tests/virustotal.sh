@@ -34,6 +34,11 @@ if [ -f /tmp/bunkerweb-plugins/virustotal/eicar.com ] ; then
 fi
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/virustotal/eicar.com https://secure.eicar.org/eicar.com
 
+# Do the tests
+current_dir="${PWD}"
+cd /tmp/bunkerweb-plugins/virustotal/
+do_and_check_cmd docker-compose up -d
+
 # Check that API is working
 success="ko"
 retry=0
