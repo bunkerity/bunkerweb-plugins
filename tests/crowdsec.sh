@@ -67,7 +67,7 @@ fi
 
 # Run basic attack with dirb
 do_and_check_cmd sudo apt install -y dirb
-dirb -H "Host: www.example.com" -H "Header: LegitOne" http://localhost
+dirb http://localhost -H "Host: www.example.com" -H "Header: LegitOne"
 
 # Expect a 403
 success="ko"
