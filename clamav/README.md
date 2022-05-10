@@ -151,7 +151,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: bunkerweb-clamv
+      app: bunkerweb-clamav
   template:
     metadata:
       labels:
@@ -181,7 +181,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: bunkerweb-clamv-redis
+      app: bunkerweb-clamav-redis
   template:
     metadata:
       labels:
@@ -213,7 +213,7 @@ metadata:
   annotations:
     bunkerweb.io/AUTOCONF: "yes"
     bunkerweb.io/USE_CLAMAV: "yes"
-    bunkerweb.io/CLAMAV_API: "http://svc-bunkerweb-clamav-api.default.svc.cluster.local"
+    bunkerweb.io/CLAMAV_API: "http://svc-bunkerweb-clamav-api.default.svc.cluster.local:8000"
 ...
 ```
 
