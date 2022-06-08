@@ -8,7 +8,7 @@ function config.file_exists(file)
     return f ~= nil
 end
 
-  function split(s, delimiter)
+local function split(s, delimiter)
     result = {};
     for match in (s..delimiter):gmatch("(.-)"..delimiter.."(.-)") do
         table.insert(result, match);
