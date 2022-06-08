@@ -69,6 +69,7 @@ if [ "$success" == "ko" ] ; then
 	cd "$current_dir"
 	exit 1
 fi
+echo "ℹ️ API is working ..."
 
 # Now check if BunkerWeb is giving a 403
 success="ko"

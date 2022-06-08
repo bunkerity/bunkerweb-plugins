@@ -36,6 +36,7 @@ do_and_check_cmd wget -O /tmp/bunkerweb-plugins/clamav/eicar.com https://secure.
 # Do the tests
 current_dir="${PWD}"
 cd /tmp/bunkerweb-plugins/clamav/
+cat docker-compose.yml
 do_and_check_cmd docker-compose up -d
 
 # Check that API is working
@@ -68,6 +69,7 @@ if [ "$success" == "ko" ] ; then
 	cd "$current_dir"
 	exit 1
 fi
+echo "ℹ️ API is working ..."
 
 # Now check if BunkerWeb is giving a 403
 success="ko"
