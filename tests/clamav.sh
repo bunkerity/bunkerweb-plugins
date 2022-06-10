@@ -43,7 +43,7 @@ do_and_check_cmd docker-compose up -d
 success="ko"
 retry=0
 while [ $retry -lt 120 ] ; do
-	ret="$(curl -s -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-clamav/eicar.com" http://localhost:8000/check)"
+	ret="$(curl -s -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" http://localhost:8000/check)"
 	check="$(echo "$ret" | grep "\"success\":true")"
 	if [ $? -eq 0 ] && [ "$check" != "" ] ; then
 		check="$(echo "$ret" | grep "\"detected\":true")"

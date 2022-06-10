@@ -1,0 +1,27 @@
+{
+	"id": "discord",
+	"order": 999,
+	"name": "Discord",
+	"description": "Send alerts to a Discord channel (using webhooks).",
+	"version": "0.1",
+	"settings": {
+		"USE_DISCORD": {
+			"context": "multisite",
+			"default": "no",
+			"help": "Enable sending alerts to a Discord channel.",
+			"id": "use-discord",
+			"label": "Use Discord",
+			"regex": "^(yes|no)$",
+			"type": "check"
+		},
+		"DISCORD_WEBHOOK_URL": {
+			"context": "global",
+			"default": "https://discordapp.com/api/webhooks/...",
+			"help": "Address of the Discord Webhook.",
+			"id": "discord-webhook",
+			"label": "Discord webhook URL",
+			"regex": "^.*$",
+			"type": "text"
+		}
+	}
+}
