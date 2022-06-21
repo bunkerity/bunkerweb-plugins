@@ -64,7 +64,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.0
+    image: bunkerity/bunkerweb:1.4.1
     ports:
       - 80:8080
       - 443:8443
@@ -128,7 +128,7 @@ version: '3.5'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.0
+    image: bunkerity/bunkerweb:1.4.1
     ports:
       - 80:8080
       - 443:8443
@@ -214,7 +214,6 @@ kind: Ingress
 metadata:
   name: ingress
   annotations:
-    bunkerweb.io/AUTOCONF: "yes"
     bunkerweb.io/USE_CROWDSEC: "yes"
     bunkerweb.io/CROWDSEC_API: "http://crowdsec-service.default.svc.cluster.local"
     bunkerweb.io/CROWDSEC_API_KEY: "s3cr3tb0unc3rk3y"

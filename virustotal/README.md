@@ -42,7 +42,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.0
+    image: bunkerity/bunkerweb:1.4.1
     ...
     environment:
       - USE_VIRUSTOTAL=yes
@@ -67,7 +67,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.0
+    image: bunkerity/bunkerweb:1.4.1
     ...
     environment:
       - USE_VIRUSTOTAL=yes
@@ -175,7 +175,6 @@ kind: Ingress
 metadata:
   name: ingress
   annotations:
-    bunkerweb.io/AUTOCONF: "yes"
     bunkerweb.io/USE_VIRUSTOTAL: "yes"
     bunkerweb.io/VIRUSTOTAL_API: "http://virustotal-api:8000"
 ...

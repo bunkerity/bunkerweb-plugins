@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb-1.4.0-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb-1.4.1-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
 	<img src="https://img.shields.io/github/workflow/status/bunkerity/bunkerweb-plugins/Tests?label=tests" />
 	<img src="https://img.shields.io/github/issues/bunkerity/bunkerweb-plugins">
@@ -54,7 +54,7 @@ This project is licensed under the terms of the [GNU Affero General Public Licen
 
 # Contribute
 
-If you would like to contribute to the plugins you can read the [contributing guidelines](https://github.com/bunkerity/bunkerweb-plugins/tree/main/LICENSE.md) to get started.
+If you would like to contribute to the plugins you can read the [contributing guidelines](https://github.com/bunkerity/bunkerweb-plugins/tree/main/CONTRIBUTING.md) to get started.
 
 # Security policy
 

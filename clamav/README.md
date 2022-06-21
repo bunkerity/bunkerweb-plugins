@@ -38,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.0
+    image: bunkerity/bunkerweb:1.4.1
     ...
     environment:
       - USE_CLAMAV=yes
@@ -68,7 +68,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.0
+    image: bunkerity/bunkerweb:1.4.1
     ...
     environment:
       - USE_CLAMAV=yes
@@ -211,7 +211,6 @@ kind: Ingress
 metadata:
   name: ingress
   annotations:
-    bunkerweb.io/AUTOCONF: "yes"
     bunkerweb.io/USE_CLAMAV: "yes"
     bunkerweb.io/CLAMAV_API: "http://svc-bunkerweb-clamav-api.default.svc.cluster.local:8000"
 ...

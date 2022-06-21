@@ -14,6 +14,12 @@ function _M.new()
 		return nil, "error while getting DISCORD_WEBHOOK_URL setting : " .. err
 	end
 	self.webhook = value
+	local value, err = utils.get_variable("DISCORD_RETRY_IF_LIMITED", false)
+	if not value then
+		logger.log(ngx.ERR, "DISCORD", "error while getting DISCORD_RETRY_IF_LIMITED setting : " .. err)
+		return nil, "error while getting DISCORD_RETRY_IF_LIMITED setting : " .. err
+	end
+	self.retry = value
 	return self, nil
 end
 
@@ -35,14 +41,12 @@ function _M:log()
 	end
 	
 	-- Send request in a timer because cosocket is not allowed in log()
-	local function send(premature, obj, ip, reason)
+	local function send(premature, obj, data)
 		local httpc, err = http.new()
 		if not httpc then
 			logger.log(ngx.ERR, "DISCORD", "can't instantiate http object : " .. err)
 		end
-		local data = {}
-		data.content = "Banned IP " .. ip .. " (reason = " .. reason .. ")"
-		local res, err_http = httpc:request_uri(self.webhook, {
+		local res, err_http = httpc:request_uri(obj.webhook, {
 			method = "POST",
 			headers = {
 				["Content-Type"] = "application/json",
@@ -54,12 +58,33 @@ function _M:log()
 		if not res then
 			logger.log(ngx.ERR, "DISCORD", "error while sending request : " .. err)
 		end
+		if obj.retry == "yes" and res.status == 429 and res.headers["Retry-After"] then
+			logger.log(ngx.WARN, "DISCORD", "Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
+			local hdr, err = ngx.timer.at(res.headers["Retry-After"], send, obj, data)
+			if not hdr then
+				logger.log(ngx.ERR, "DISCORD", "can't create report timer : " .. err)
+				return
+			end
+			return
+		end
 		if res.status < 200 or res.status > 299 then
 			logger.log(ngx.ERR, "DISCORD", "request returned status " .. tostring(res.status))
+			return
 		end
 		logger.log(ngx.INFO, "DISCORD", "request sent to webhook")
 	end
-	local hdr, err = ngx.timer.at(0, send, self, ngx.var.remote_addr, reason)
+	local data = {}
+	data.content = "```Denied request for IP " .. ngx.var.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
+	local headers, err = ngx.req.get_headers()
+	if not headers then
+		data.content = data.content .. "error while getting headers : " .. err
+	else
+		for header, value in pairs(headers) do
+			data.content = data.content .. header .. ": " .. value .. "\n"
+		end
+	end
+	data.content = data.content .. "```"
+	local hdr, err = ngx.timer.at(0, send, self, data)
 	if not hdr then
 		return false, "can't create report timer : " .. err
 	end
