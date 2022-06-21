@@ -22,6 +22,7 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 
 * [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
 * [CrowdSec](https://github.com/bunkerity/bunkerweb-plugins/tree/main/crowdsec)
+* [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
 * [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 
 # Support
