@@ -20,7 +20,7 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation first and refer to the [CrowdSec documentation](https://docs.crowdsec.net/) if you are not familiar with it.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first and refer to the [CrowdSec documentation](https://docs.crowdsec.net/) if you are not familiar with it.
 
 You will need to run CrowdSec instance and configure it to parse BunkerWeb logs. Because BunkerWeb is based on NGINX, you can use the `nginx` value for the `type` parameter in your acquisition file (assuming that BunkerWeb logs are stored "as is" without additionnal data) :
 ```yaml
@@ -54,7 +54,7 @@ log { source(s_net); destination(d_file); };
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 ## Docker
 
@@ -64,7 +64,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ports:
       - 80:8080
       - 443:8443
@@ -128,7 +128,7 @@ version: '3.5'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ports:
       - 80:8080
       - 443:8443

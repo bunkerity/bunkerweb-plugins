@@ -24,7 +24,7 @@ At the moment, submission of new file is not supported, it only checks if files 
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation first.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
 
 You will need a VirusTotal API key to contact their API (see [here](https://support.virustotal.com/hc/en-us/articles/115002088769-Please-give-me-an-API-key)). The free API key is also working but you should check the terms of service and limits as described [here](https://support.virustotal.com/hc/en-us/articles/115002119845-What-is-the-difference-between-the-public-API-and-the-private-API-).
 
@@ -32,7 +32,7 @@ Please note that an additionnal service named **bunkerweb-virustotal** is requir
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 ## Docker
 
@@ -42,7 +42,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ...
     environment:
       - USE_VIRUSTOTAL=yes
@@ -67,7 +67,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ...
     environment:
       - USE_VIRUSTOTAL=yes

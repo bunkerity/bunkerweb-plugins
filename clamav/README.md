@@ -22,13 +22,13 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if an
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation first.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
 
 Please note that an additionnal service named **bunkerweb-clamav** is required : it's a simple REST API that will handle the checks to the ClamAV instance(s). A redis service is also recommended to cache ClamAV results in case high performance is needed.
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 ## Docker
 
@@ -38,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ...
     environment:
       - USE_CLAMAV=yes
@@ -68,7 +68,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ...
     environment:
       - USE_CLAMAV=yes

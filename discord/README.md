@@ -16,13 +16,13 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you at
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation first.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
 
 You will need to setup a Discord webhook URL, you will find more information [here](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 There is no additional services to setup besides the plugin itself.
 
@@ -34,7 +34,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ...
     environment:
       - USE_DISCORD=yes
@@ -50,7 +50,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.1
+    image: bunkerity/bunkerweb:1.4.2
     ...
     environment:
       - USE_DISCORD=yes
