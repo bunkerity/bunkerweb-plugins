@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb-1.4.1-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb-1.4.2-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
 	<img src="https://img.shields.io/github/workflow/status/bunkerity/bunkerweb-plugins/Tests?label=tests" />
 	<img src="https://img.shields.io/github/issues/bunkerity/bunkerweb-plugins">
@@ -23,6 +23,7 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 * [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
 * [CrowdSec](https://github.com/bunkerity/bunkerweb-plugins/tree/main/crowdsec)
 * [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
+* [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
 * [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 
 # Support
