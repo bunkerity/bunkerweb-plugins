@@ -14,7 +14,7 @@ This repository contains "official" plugins for the [BunkerWeb solution](https:/
 
 # Prerequisites
 
-The installation of external plugins is covered in the [plugins section](https://docs.bunkerweb.io/plugins) of the documentation.
+The installation of external plugins is covered in the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the documentation.
 
 # Plugins
 
