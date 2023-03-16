@@ -49,7 +49,9 @@ destination d_file {
   file("/var/log/bunkerweb.log" template(t_imp));
 };
 
-log { source(s_net); destination(d_file); };
+log { source(s_net); 
+  destination(d_file); 
+};
 ```
 
 # Setup
@@ -64,25 +66,48 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.0
     ports:
       - 80:8080
       - 443:8443
+    labels:
+      - "bunkerweb.INSTANCE"
     ...
     environment:
+      ...
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
     networks:
-      - bw-plugins
+      - bw-universe
     logging:
       driver: syslog
       options:
         syslog-address: "udp://10.10.10.254:514"
     ...
 
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.5.0
+    depends_on:
+      - bunkerweb
+      - bw-docker
+    environment:
+      - DOCKER_HOST=tcp://bw-docker:2375
+    networks:
+      - bw-universe
+      - bw-docker
+
+  bw-docker:
+    image: tecnativa/docker-socket-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+    networks:
+      - bw-docker
+
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.3.4
+    image: crowdsecurity/crowdsec:v1.4.6
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -91,27 +116,29 @@ services:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
       - COLLECTIONS=crowdsecurity/nginx
     networks:
-      - bw-plugins
+      - bw-universe
 
   syslog:
-    image: balabit/syslog-ng:3.36.1
+    image: balabit/syslog-ng:4.1.1
     volumes:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log
     networks:
-      bw-plugins:
+      bw-universe:
         ipv4_address: 10.10.10.254
 
 ...
 
 networks:
-  bw-plugins:
+  bw-docker:
+  bw-universe:
     ipam:
       driver: default
       config:
         - subnet: 10.10.10.0/24
 
 volumes:
+  bw-data:
   bw-logs:
   cs-data:
 
@@ -128,7 +155,7 @@ version: '3.5'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.0
     ports:
       - 80:8080
       - 443:8443
@@ -138,12 +165,32 @@ services:
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
     networks:
-      - bw-plugins
+      - bw-universe
     logging:
       driver: syslog
       options:
         syslog-address: "udp://10.10.10.254:514"
     ...
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.5.0
+    depends_on:
+      - bunkerweb
+      - bw-docker
+    environment:
+      - DOCKER_HOST=tcp://bw-docker:2375
+    networks:
+      - bw-universe
+      - bw-docker
+
+  bw-docker:
+    image: tecnativa/docker-socket-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+    networks:
+      - bw-docker
 
   crowdsec:
     image: crowdsecurity/crowdsec:v1.3.4
@@ -155,7 +202,7 @@ services:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
       - COLLECTIONS=crowdsecurity/nginx
     networks:
-      - bw-plugins
+      - bw-universe
 
   syslog:
     image: balabit/syslog-ng:3.36.1
@@ -163,13 +210,13 @@ services:
       - /shared/syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - /shared/logs:/var/log
     networks:
-      bw-plugins:
+      bw-universe:
         ipv4_address: 10.10.10.254
 
 ...
 
 networks:
-  bw-plugins:
+  bw-universe:
     driver: overlay
     attachable: true
     name: bw-plugins

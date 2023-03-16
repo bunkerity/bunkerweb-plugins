@@ -1,46 +1,81 @@
 #!/usr/bin/python3
 
-import sys, os, traceback, shutil
+from os import getenv
+from pathlib import Path
+from sys import exit as sys_exit, path as sys_path
+from threading import Lock
+from traceback import format_exc
 
-sys.path.append("/opt/bunkerweb/deps/python")
-sys.path.append("/opt/bunkerweb/utils")
+if "/usr/share/bunkerweb/deps/python" not in sys_path:
+    sys_path.append("/usr/share/bunkerweb/deps/python")
+if "/usr/share/bunkerweb/utils" not in sys_path:
+    sys_path.append("/usr/share/bunkerweb/utils")
+if "/usr/share/bunkerweb/db" not in sys_path:
+    sys_path.append("/usr/share/bunkerweb/db")
 
-import logger
+from Database import Database
+from logger import setup_logger
 
+logger = setup_logger("CROWDSEC", getenv("LOG_LEVEL", "INFO"))
 status = 0
 
-try :
-
+try:
     # Check if at least a server has CrowdSec activated
     crowdsec_activated = False
     # Multisite case
-    if os.getenv("MULTISITE") == "yes" :
-        for first_server in os.getenv("SERVER_NAME").split(" ") :
-            if os.getenv(first_server + "_USE_CROWDSEC", os.getenv("USE_CROWDSEC")) == "yes" :
+    if getenv("MULTISITE") == "yes":
+        for first_server in getenv("SERVER_NAME").split(" "):
+            if (
+                getenv(f"{first_server}_USE_CROWDSEC", getenv("USE_CROWDSEC", "no"))
+                == "yes"
+            ):
                 crowdsec_activated = True
                 break
     # Singlesite case
-    elif os.getenv("USE_CROWDSEC") == "yes" :
+    elif getenv("USE_CROWDSEC", "no") == "yes":
         crowdsec_activated = True
-    if not crowdsec_activated :
-        logger.log("CROWDSEC", "ℹ️", "CrowdSec is not activated, skipping job...")
-        os._exit(0)
+    if not crowdsec_activated:
+        logger.info("CrowdSec is not activated, skipping job...")
+        sys_exit(status)
 
     # Create directory
-    os.makedirs("/opt/bunkerweb/cache/crowdsec", exist_ok=True)
+    Path("/var/cache/bunkerweb/crowdsec").mkdir(parents=True, exist_ok=True)
+
+    db = Database(
+        logger,
+        sqlalchemy_string=getenv("DATABASE_URI", None),
+    )
+    lock = Lock()
 
     # Copy template
-    with open("/opt/bunkerweb/plugins/crowdsec/misc/crowdsec.conf", "r") as src :
-        content = src.read().replace("%CROWDSEC_API%", os.getenv("CROWDSEC_API", "")).replace("%CROWDSEC_API_KEY%", os.getenv("CROWDSEC_API_KEY", ""))
-    with open("/opt/bunkerweb/cache/crowdsec/crowdsec.conf", "w") as dst :
-        dst.write(content)
+    content = (
+        Path("/etc/bunkerweb/plugins/crowdsec/misc/crowdsec.conf")
+        .read_bytes()
+        .replace(b"%CROWDSEC_API%", getenv("CROWDSEC_API", "").encode())
+        .replace(b"%CROWDSEC_API_KEY%", getenv("CROWDSEC_API_KEY", "").encode())
+    )
+
+    # Write configuration in cache
+    Path("/var/cache/bunkerweb/crowdsec/crowdsec.conf").write_bytes(content)
+
+    with lock:
+        err = db.update_job_cache(
+            "crowdsec-conf",
+            None,
+            "crowdsec.conf",
+            content,
+        )
+
+    if err:
+        logger.warning(f"Couldn't update db cache for crowdsec.conf: {err}")
 
     # Done
-    logger.log("CROWDSEC", "ℹ️", "CrowdSec configuration successfully generated")
+    logger.info("CrowdSec configuration successfully generated")
 
-except :
+except SystemExit as e:
+    raise e
+except:
     status = 2
-    logger.log("CROWDSEC", "❌", "Exception while running crowdsec-init.py :")
-    print(traceback.format_exc())
+    logger.error(f"Exception while running crowdsec-init.py :\n{format_exc()}")
 
-sys.exit(status)
+sys_exit(status)

@@ -1,7 +1,7 @@
 local utils = require "crowdsec.utils"
 
 
-local M = {_TYPE='module', _NAME='ban.funcs', _VERSION='1.0-0'}
+local M = { _TYPE = 'module', _NAME = 'ban.funcs', _VERSION = '1.0-0' }
 
 M.template_str = ""
 M.redirect_location = ""
@@ -40,8 +40,6 @@ function M.new(template_path, redirect_location, ret_code)
     return nil
 end
 
-
-
 function M.apply()
     if M.redirect_location ~= "" then
         ngx.redirect(M.redirect_location)
@@ -54,7 +52,7 @@ function M.apply()
         ngx.exit(M.ret_code)
         return
     end
- 
+
     ngx.exit(M.ret_code)
 
     return

@@ -4,9 +4,9 @@ _M.__index      = _M
 local utils     = require "utils"
 local datastore = require "datastore"
 local logger    = require "logger"
-local cjson		= require "cjson"
-local http		= require "resty.http"
-local cs		= require "crowdsec.bouncer"
+local cjson     = require "cjson"
+local http      = require "resty.http"
+local cs        = require "crowdsec.bouncer"
 
 function _M.new()
 	local self = setmetatable({}, _M)
@@ -29,7 +29,7 @@ function _M:init()
 		return true, "CrowdSec plugin not enabled"
 	end
 	-- Init bouncer
-	local ok, err = cs.init("/opt/bunkerweb/cache/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v0.1")
+	local ok, err = cs.init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v0.1")
 	if ok == nil then
 		return false, "error while initializing bouncer : " .. err
 	end
@@ -56,7 +56,6 @@ function _M:access()
 	end
 
 	return true, "success", nil, nil
-
 end
 
 return _M
