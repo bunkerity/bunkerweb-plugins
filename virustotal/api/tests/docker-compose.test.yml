@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+
+  virustotal-api:
+    image: bunkerweb-virustotal:tests
+    ports:
+      - 127.0.0.1:8000:8000
+    environment:
+      - API_KEY=%VTKEY%

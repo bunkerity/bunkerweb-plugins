@@ -2,13 +2,13 @@
 	"id": "virustotal",
 	"order": 1,
 	"name": "VirusTotal",
-	"description": "Automatic scan of uploaded files with the VirusTotal API.",
+	"description": "Automatic scan of uploaded files and ips optionaly with the VirusTotal API.",
 	"version": "0.1",
 	"settings": {
 		"USE_VIRUSTOTAL": {
 			"context": "multisite",
 			"default": "no",
-			"help": "Activate automatic scan of uploaded files with VirusTotal.",
+			"help": "Activate VirusTotal integration.",
 			"id": "use-virustotal",
 			"label": "Use VirusTotal",
 			"regex": "^(yes|no)$",
@@ -22,6 +22,24 @@
 			"label": "VirusTotal API",
 			"regex": "^.*$",
 			"type": "text"
+		},
+		"VIRUSTOTAL_SCAN_FILE": {
+			"context": "multisite",
+			"default": "yes",
+			"help": "Activate automatic scan of uploaded files with VirusTotal.",
+			"id": "virustotal-scan-file",
+			"label": "VirusTotal scan file",
+			"regex": "^(yes|no)$",
+			"type": "check"
+		},
+		"VIRUSTOTAL_SCAN_IP": {
+			"context": "multisite",
+			"default": "yes",
+			"help": "Activate automatic scan of uploaded ips with VirusTotal.",
+			"id": "virustotal-scan-ip",
+			"label": "VirusTotal scan ip addresses",
+			"regex": "^(yes|no)$",
+			"type": "check"
 		}
 	}
 }
