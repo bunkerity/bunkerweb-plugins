@@ -184,24 +184,27 @@ metadata:
 
 ## Plugin (BunkerWeb)
 
-| Setting          | Default                      | Description                                                                               |
-| :--------------: | :--------------------------: | :---------------------------------------------------------------------------------------- |
-| `USE_VIRUSTOTAL` | `no`                         | When set to `yes`, uploaded files will be checked with the VirusTotal plugin.             |
-| `VIRUSTOTAL_API` | `http://virustotal-api:8000` | Address of the VirusTotal "helper" that will check the files and talk to the real VT API. |
+| Setting                | Default                      | Description                                                                               |
+| :--------------------: | :--------------------------: | :---------------------------------------------------------------------------------------- |
+| `USE_VIRUSTOTAL`       | `no`                         | When set to `yes`, the virus total plugin will be enabled.                                |
+| `VIRUSTOTAL_API`       | `http://virustotal-api:8000` | Address of the VirusTotal "helper" that will check the files and talk to the real VT API. |
+| `VIRUSTOTAL_SCAN_FILE` | `yes`                        | When set to `yes`, uploaded files will be scanned by the VirusTotal API.                  |
+| `VIRUSTOTAL_SCAN_IP`   | `yes`                        | When set to `yes`, IP addresses will be scanned by the VirusTotal API.                    |
 
 ## bunkerweb-virustotal (API)
 
-| Setting            | Default                      | Description                                            |
-| :----------------: | :-----: | :-------------------------------------------------------------------------- |
-| `API_KEY`          |         | API key for the VirusTotal API.                                             |
-| `MALICIOUS_COUNT`  | `3`     | Minimum number of "malicious" detections to consider the file as infected.  |
-| `SUSPICIOUS_COUNT` | `5`     | Minimum number of "suspicious" detections to consider the file as infected. |
-| `REDIS_HOST`       |         | Optional Redis hostname/IP to cache results from VT API.                    |
-| `REDIS_PORT`       | `6379`  | Port of the Redis service.                                                  |
-| `REDIS_DB`         | `0`     | Redis database number to use.                                               |
+| Setting               | Default                      | Description                                            |
+| :-------------------: | :-----: | :-------------------------------------------------------------------------: |
+| `API_KEY`             |         | API key for the VirusTotal API.                                             |
+| `MALICIOUS_COUNT`     | `3`     | Minimum number of "malicious" detections to consider the file as infected.  |
+| `SUSPICIOUS_COUNT`    | `5`     | Minimum number of "suspicious" detections to consider the file as infected. |
+| `IP_MALICIOUS_COUNT`  | `3`     | Minimum number of "malicious" detections to consider the ip as bad.         |
+| `IP_SUSPICIOUS_COUNT` | `5`     | Minimum number of "suspicious" detections to consider the ip as bad.        |
+| `REDIS_HOST`          |         | Optional Redis hostname/IP to cache results from VT API.                    |
+| `REDIS_PORT`          | `6379`  | Port of the Redis service.                                                  |
+| `REDIS_DB`            | `0`     | Redis database number to use.                                               |
 
 # TODO
 
 * Upload files to VT
 * Test and document clustered mode
-* Additional security checks like IP
