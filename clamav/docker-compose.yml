@@ -1,37 +1,88 @@
 # ⚠️ DO NOT USE THIS FILE, IT IS ONLY USED FOR INTERNAL TESTS ⚠️
 # SEE README.md for instructions
 
-version: '3'
+version: '3.5'
 
 services:
-
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.0
     ports:
       - 80:8080
       - 443:8443
-    volumes:
-      - ./bw-data:/data
+    labels:
+      - "bunkerweb.INSTANCE"
     environment:
+      - SERVER_NAME=www.example.com
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
       - USE_CLAMAV=yes
       - CLAMAV_API=http://clamav-api:8000
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
+      - USE_BUNKERNET=no
+      - USE_BLACKLIST=no
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_HOST=http://hello
       - REVERSE_PROXY_URL=/
+    networks:
+      - bw-universe
+      - bw-services
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.5.0
+    depends_on:
+      - bunkerweb
+      - bw-docker
+    volumes:
+      - bw-data:/data
+    environment:
+      - DOCKER_HOST=tcp://bw-docker:2375
+    networks:
+      - bw-universe
+      - bw-docker
+
+  bw-docker:
+    image: tecnativa/docker-socket-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+    networks:
+      - bw-docker
 
   clamav-api:
-    image: bunkerity/bunkerweb-clamav
+    build: api
     ports:
       - 127.0.0.1:8000:8000
     environment:
       - CLAMAV_HOST=clamav
+    networks:
+      - bw-universe
 
   clamav:
-    image: clamav/clamav:0.104
+    image: clamav/clamav:1.0
     volumes:
-      - ./clamav-data:/var/lib/clamav
-  
+      - clamav-data:/var/lib/clamav
+    networks:
+      - bw-universe
+
   hello:
     image: tutum/hello-world
+    networks:
+      - bw-services
+
+volumes:
+  bw-data:
+  clamav-data:
+
+
+networks:
+  bw-universe:
+    name: bw-universe
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.30.0/24
+  bw-services:
+    name: bw-services
+  bw-docker:
+    name: bw-docker

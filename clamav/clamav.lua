@@ -4,15 +4,15 @@ _M.__index      = _M
 local utils     = require "utils"
 local datastore = require "datastore"
 local logger    = require "logger"
-local cjson		= require "cjson"
-local http		= require "resty.http"
+local cjson     = require "cjson"
+local http      = require "resty.http"
 
 function _M.new()
 	local self = setmetatable({}, _M)
 	local value, err = utils.get_variable("CLAMAV_API", false)
 	if not value then
 		logger.log(ngx.ERR, "CLAMAV", "error while getting CLAMAV_API setting : " .. err)
-		return nil, "error while getting CLAMAV_API setting : " .. err
+		return self, "error while getting CLAMAV_API setting : " .. err
 	end
 	self.api = value
 	return self, nil
@@ -35,9 +35,9 @@ function _M:access()
 
 	-- Forward request to ClamAV API helper
 	local ok, err, status, data = self:request("POST", "/check")
-		if not ok then
-			return false, "error from request : " .. err, nil, nil
-		end
+	if not ok then
+		return false, "error from request : " .. err, nil, nil
+	end
 	if not data.success then
 		return false, "received status code " .. tostring(status) .. " from ClamAV API : " .. data.error, nil, nil
 	end
@@ -46,7 +46,6 @@ function _M:access()
 	end
 
 	return true, "success", nil, nil
-
 end
 
 function _M:request(method, url)
@@ -74,7 +73,7 @@ function _M:request(method, url)
 				if not f then
 					return false, "can't read body from file " .. body_file .. " : " .. err, nil, nil
 				end
-				body = function ()
+				body = function()
 					return f:read(4096)
 				end
 			end
