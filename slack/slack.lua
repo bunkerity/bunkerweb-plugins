@@ -1,23 +1,23 @@
-local _M        = {}
-_M.__index      = _M
+local _M     = {}
+_M.__index   = _M
 
-local utils     = require "utils"
-local logger    = require "logger"
-local cjson		= require "cjson"
-local http		= require "resty.http"
+local utils  = require "utils"
+local logger = require "logger"
+local cjson  = require "cjson"
+local http   = require "resty.http"
 
 function _M.new()
 	local self = setmetatable({}, _M)
 	local value, err = utils.get_variable("SLACK_WEBHOOK_URL", false)
 	if not value then
 		logger.log(ngx.ERR, "SLACK", "error while getting SLACK_WEBHOOK_URL setting : " .. err)
-		return nil, "error while getting SLACK_WEBHOOK_URL setting : " .. err
+		return self, "error while getting SLACK_WEBHOOK_URL setting : " .. err
 	end
 	self.webhook = value
 	local value, err = utils.get_variable("SLACK_RETRY_IF_LIMITED", false)
 	if not value then
 		logger.log(ngx.ERR, "SLACK", "error while getting SLACK_RETRY_IF_LIMITED setting : " .. err)
-		return nil, "error while getting SLACK_RETRY_IF_LIMITED setting : " .. err
+		return self, "error while getting SLACK_RETRY_IF_LIMITED setting : " .. err
 	end
 	self.retry = value
 	return self, nil
@@ -40,7 +40,7 @@ function _M:log(bypass_use_slack)
 	if reason == nil then
 		return true, "request not denied"
 	end
-	
+
 	-- Send request in a timer because cosocket is not allowed in log()
 	local function send(premature, obj, data)
 		local httpc, err = http.new()
@@ -54,7 +54,7 @@ function _M:log(bypass_use_slack)
 				["User-Agent"] = "BunkerWeb/" .. utils.get_version()
 			},
 			body = cjson.encode(data)
-		})	
+		})
 		httpc:close()
 		if not res then
 			logger.log(ngx.ERR, "SLACK", "error while sending request : " .. err)
@@ -75,7 +75,8 @@ function _M:log(bypass_use_slack)
 		logger.log(ngx.INFO, "SLACK", "request sent to webhook")
 	end
 	local data = {}
-	data.text = "```Denied request for IP " .. ngx.var.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
+	data.text = "```Denied request for IP " ..
+			ngx.var.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
 	local headers, err = ngx.req.get_headers()
 	if not headers then
 		data.text = data.text .. "error while getting headers : " .. err

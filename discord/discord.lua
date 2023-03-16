@@ -1,23 +1,23 @@
-local _M        = {}
-_M.__index      = _M
+local _M     = {}
+_M.__index   = _M
 
-local utils     = require "utils"
-local logger    = require "logger"
-local cjson		= require "cjson"
-local http		= require "resty.http"
+local utils  = require "utils"
+local logger = require "logger"
+local cjson  = require "cjson"
+local http   = require "resty.http"
 
 function _M.new()
 	local self = setmetatable({}, _M)
 	local value, err = utils.get_variable("DISCORD_WEBHOOK_URL", false)
 	if not value then
 		logger.log(ngx.ERR, "DISCORD", "error while getting DISCORD_WEBHOOK_URL setting : " .. err)
-		return nil, "error while getting DISCORD_WEBHOOK_URL setting : " .. err
+		return self, "error while getting DISCORD_WEBHOOK_URL setting : " .. err
 	end
 	self.webhook = value
 	local value, err = utils.get_variable("DISCORD_RETRY_IF_LIMITED", false)
 	if not value then
 		logger.log(ngx.ERR, "DISCORD", "error while getting DISCORD_RETRY_IF_LIMITED setting : " .. err)
-		return nil, "error while getting DISCORD_RETRY_IF_LIMITED setting : " .. err
+		return self, "error while getting DISCORD_RETRY_IF_LIMITED setting : " .. err
 	end
 	self.retry = value
 	return self, nil
@@ -40,7 +40,7 @@ function _M:log(bypass_use_discord)
 	if reason == nil then
 		return true, "request not denied"
 	end
-	
+
 	-- Send request in a timer because cosocket is not allowed in log()
 	local function send(premature, obj, data)
 		local httpc, err = http.new()
@@ -54,13 +54,14 @@ function _M:log(bypass_use_discord)
 				["User-Agent"] = "BunkerWeb/" .. utils.get_version()
 			},
 			body = cjson.encode(data)
-		})	
+		})
 		httpc:close()
 		if not res then
 			logger.log(ngx.ERR, "DISCORD", "error while sending request : " .. err)
 		end
 		if obj.retry == "yes" and res.status == 429 and res.headers["Retry-After"] then
-			logger.log(ngx.WARN, "DISCORD", "Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
+			logger.log(ngx.WARN, "DISCORD",
+				"Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
 			local hdr, err = ngx.timer.at(res.headers["Retry-After"], send, obj, data)
 			if not hdr then
 				logger.log(ngx.ERR, "DISCORD", "can't create report timer : " .. err)
@@ -75,7 +76,8 @@ function _M:log(bypass_use_discord)
 		logger.log(ngx.INFO, "DISCORD", "request sent to webhook")
 	end
 	local data = {}
-	data.content = "```Denied request for IP " .. ngx.var.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
+	data.content = "```Denied request for IP " ..
+			ngx.var.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
 	local headers, err = ngx.req.get_headers()
 	if not headers then
 		data.content = data.content .. "error while getting headers : " .. err
