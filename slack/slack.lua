@@ -51,7 +51,6 @@ function _M:log(bypass_use_slack)
 			method = "POST",
 			headers = {
 				["Content-Type"] = "application/json",
-				["User-Agent"] = "BunkerWeb/" .. utils.get_version()
 			},
 			body = cjson.encode(data)
 		})
