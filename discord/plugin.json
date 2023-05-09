@@ -4,6 +4,7 @@
 	"name": "Discord",
 	"description": "Send alerts to a Discord channel (using webhooks).",
 	"version": "0.1",
+	"stream": "no",
 	"settings": {
 		"USE_DISCORD": {
 			"context": "multisite",

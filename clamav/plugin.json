@@ -4,6 +4,7 @@
 	"name": "ClamAV",
 	"description": "Automatic scan of uploaded files with ClamAV antivirus engine.",
 	"version": "0.1",
+	"stream": "no",
 	"settings": {
 		"USE_CLAMAV": {
 			"context": "multisite",

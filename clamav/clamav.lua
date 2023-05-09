@@ -1,62 +1,59 @@
-local _M        = {}
-_M.__index      = _M
+local class      = require "middleclass"
+local plugin     = require "bunkerweb.plugin"
+local utils      = require "bunkerweb.utils"
+local cachestore = require "bunkerweb.cachestore"
 
-local utils     = require "utils"
-local datastore = require "datastore"
-local logger    = require "logger"
-local cjson     = require "cjson"
-local http      = require "resty.http"
+local clamav     = class("clamav", plugin)
 
-function _M.new()
-	local self = setmetatable({}, _M)
-	local value, err = utils.get_variable("CLAMAV_API", false)
-	if not value then
-		logger.log(ngx.ERR, "CLAMAV", "error while getting CLAMAV_API setting : " .. err)
-		return self, "error while getting CLAMAV_API setting : " .. err
+function clamav:initialize()
+	-- Call parent initialize
+	plugin.initialize(self, "clamav")
+	-- Instantiate cachestore
+	local use_redis, err = utils.get_variable("USE_REDIS", false)
+	if not use_redis then
+		self.logger:log(ngx.ERR, err)
 	end
-	self.api = value
-	return self, nil
+	self.use_redis = use_redis == "yes"
+	self.cachestore = cachestore:new(self.use_redis)
 end
 
-function _M:access()
+function clamav:access()
 	-- Check if ClamAV is activated
-	local check, err = utils.get_variable("USE_CLAMAV")
-	if check == nil then
-		return false, "error while getting variable USE_CLAMAV (" .. err .. ")", nil, nil
-	end
-	if check ~= "yes" then
-		return true, "ClamAV plugin not enabled", nil, nil
+	if self.variables["USE_CLAMAV"] ~= "yes" then
+		return self:ret(true, "ClamAV plugin not enabled")
 	end
 
 	-- Check if we have downloads
 	if not ngx.var.http_content_type or (not ngx.var.http_content_type:match("boundary") or not ngx.var.http_content_type:match("multipart/form%-data")) then
-		return true, "no file upload detected", nil, nil
+		return self:ret(true, "No file upload detected")
 	end
 
 	-- Forward request to ClamAV API helper
 	local ok, err, status, data = self:request("POST", "/check")
 	if not ok then
-		return false, "error from request : " .. err, nil, nil
+		return self:ret(true, "Error from request : " .. err)
 	end
 	if not data.success then
-		return false, "received status code " .. tostring(status) .. " from ClamAV API : " .. data.error, nil, nil
+		return self:ret(false, "Received status code " .. tostring(status) .. " from ClamAV API : " .. data.error)
 	end
 	if data.detected then
-		return true, "file with hash " .. data.hash .. " is detected", true, ngx.HTTP_FORBIDDEN
+		return self:ret(true, "File with hash " .. data.hash .. " is detected",
+			utils.get_deny_status())
 	end
 
-	return true, "success", nil, nil
+	return self:ret(true, "File is not detected")
 end
 
-function _M:request(method, url)
+function clamav:request(method, url)
+	local api = self.variables["CLAMAV_API"]
 	local httpc, err = http.new()
 	if not httpc then
-		return false, "can't instantiate http object : " .. err, nil, nil
+		return self:ret(false, "Can't instantiate http object : " .. err)
 	end
 	local res = nil
 	local err_http = "unknown error"
 	if method == "GET" then
-		res, err_http = httpc:request_uri(self.api .. url, {
+		res, err_http = httpc:request_uri(api .. url, {
 			method = method,
 		})
 	else
@@ -95,4 +92,4 @@ function _M:request(method, url)
 	return true, "success", res.status, ret
 end
 
-return _M
+return clamav
