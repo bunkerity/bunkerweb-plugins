@@ -1,10 +1,9 @@
 {
 	"id": "slack",
-	"order": 999,
 	"name": "Slack",
 	"description": "Send alerts to a Slack channel (using webhooks).",
 	"version": "0.1",
-	"stream": "no",
+	"stream": "partial",
 	"settings": {
 		"USE_SLACK": {
 			"context": "multisite",

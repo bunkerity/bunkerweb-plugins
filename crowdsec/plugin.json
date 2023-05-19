@@ -1,6 +1,6 @@
 {
 	"id": "crowdsec",
-	"order": 2,
+	"stream": "partial",
 	"name": "CrowdSec",
 	"description": "CrowdSec bouncer for BunkerWeb.",
 	"version": "0.1",

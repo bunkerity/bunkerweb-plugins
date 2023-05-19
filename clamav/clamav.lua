@@ -17,6 +17,27 @@ function clamav:initialize()
 	self.cachestore = cachestore:new(self.use_redis)
 end
 
+function clamav:init_worker()
+	-- Check if worker is needed
+	local init_needed, err = utils.has_variable("USE_CLAMAV", "yes")
+	if init_needed == nil then
+		return self:ret(false, "can't check USE_CLAMAV variable : " .. err)
+	end
+	if not init_needed or self.is_loading then
+		return self:ret(true, "init_worker not needed")
+	end
+	-- Send ping to ClamAV API
+	local ok, err, status, data = self:request("GET", "/ping")
+	if not ok then
+		return self:ret(false, "error from request : " .. err)
+	end
+	if not data.success then
+		return self:ret(false, "received status code " .. tostring(status) .. " from ClamAV API : " .. data.error)
+	end
+	self.logger:log(ngx.NOTICE, "connectivity with " .. self.variables["CLAMAV_API"] .. " successful")
+	return self:ret(true, "success")
+end
+
 function clamav:access()
 	-- Check if ClamAV is activated
 	if self.variables["USE_CLAMAV"] ~= "yes" then
@@ -24,31 +45,30 @@ function clamav:access()
 	end
 
 	-- Check if we have downloads
-	if not ngx.var.http_content_type or (not ngx.var.http_content_type:match("boundary") or not ngx.var.http_content_type:match("multipart/form%-data")) then
-		return self:ret(true, "No file upload detected")
+	if not ngx.ctx.bw.http_content_type or (not ngx.ctx.bw.http_content_type:match("boundary") or not ngx.ctx.bw.http_content_type:match("multipart/form%-data")) then
+		return self:ret(true, "no file upload detected")
 	end
 
 	-- Forward request to ClamAV API helper
 	local ok, err, status, data = self:request("POST", "/check")
 	if not ok then
-		return self:ret(true, "Error from request : " .. err)
+		return self:ret(false, "error from request : " .. err)
 	end
 	if not data.success then
-		return self:ret(false, "Received status code " .. tostring(status) .. " from ClamAV API : " .. data.error)
+		return self:ret(false, "received status code " .. tostring(status) .. " from ClamAV API : " .. data.error)
 	end
 	if data.detected then
-		return self:ret(true, "File with hash " .. data.hash .. " is detected",
-			utils.get_deny_status())
+		return self:ret(true, "file with hash " .. data.hash .. " is detected", utils.get_deny_status())
 	end
 
-	return self:ret(true, "File is not detected")
+	return self:ret(true, "file is not detected")
 end
 
 function clamav:request(method, url)
 	local api = self.variables["CLAMAV_API"]
 	local httpc, err = http.new()
 	if not httpc then
-		return self:ret(false, "Can't instantiate http object : " .. err)
+		return false, "can't instantiate http object : " .. err
 	end
 	local res = nil
 	local err_http = "unknown error"
@@ -64,11 +84,11 @@ function clamav:request(method, url)
 			if not body then
 				local body_file = ngx.req.get_body_file()
 				if not body_file then
-					return false, "can't access client body", nil, nil
+					return false, "can't access client body"
 				end
 				local f, err = io.open(body_file, "rb")
 				if not f then
-					return false, "can't read body from file " .. body_file .. " : " .. err, nil, nil
+					return false, "can't read body from file " .. body_file .. " : " .. err
 				end
 				body = function()
 					return f:read(4096)
@@ -83,11 +103,11 @@ function clamav:request(method, url)
 	end
 	httpc:close()
 	if not res then
-		return false, "error while sending request : " .. err_http, nil, nil
+		return false, "error while sending request : " .. err_http
 	end
 	local ok, ret = pcall(cjson.decode, res.body)
 	if not ok then
-		return false, "error while decoding json : " .. ret, nil, nil
+		return false, "error while decoding json : " .. ret
 	end
 	return true, "success", res.status, ret
 end
