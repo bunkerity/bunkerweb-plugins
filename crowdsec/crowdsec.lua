@@ -1,61 +1,51 @@
-local _M        = {}
-_M.__index      = _M
+local class      = require "middleclass"
+local plugin     = require "bunkerweb.plugin"
+local utils      = require "bunkerweb.utils"
+local cachestore = require "bunkerweb.cachestore"
+local cjson      = require "cjson"
+local cs         = require "crowdsec.lib.bouncer"
 
-local utils     = require "utils"
-local datastore = require "datastore"
-local logger    = require "logger"
-local cjson     = require "cjson"
-local http      = require "resty.http"
-local cs        = require "crowdsec.bouncer"
+local crowdsec   = class("crowdsec", plugin)
 
-function _M.new()
-	local self = setmetatable({}, _M)
-	local value, err = utils.get_variable("CROWDSEC_API", false)
-	if not value then
-		logger.log(ngx.ERR, "CROWDSEC", "error while getting CROWDSEC_API setting : " .. err)
-		return nil, "error while getting CROWDSEC_API setting : " .. err
+function crowdsec:initialize()
+	-- Call parent initialize
+	plugin.initialize(self, "crowdsec")
+	local value = self.variables["CROWDSEC_API"]
+	if value then
+		self.api = value
+		-- Check if CS is activated
+		if self.variables["USE_CROWDSEC"] == "yes" then
+			-- Init bouncer
+			local ok, err = cs.init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v0.1")
+			if ok == nil then
+				self.logger:log(ngx.ERR, "Error while initializing bouncer : " .. err)
+			end
+		end
+	else
+		self.api = nil
+		self.logger:log(ngx.ERR, "Error while getting CROWDSEC_API setting : " .. err)
 	end
-	self.api = value
-	return self, nil
 end
 
-function _M:init()
+function crowdsec:access()
 	-- Check if CS is activated
-	local check, err = utils.has_variable("USE_CROWDSEC", "yes")
-	if check == nil then
-		return false, "error while checking variable USE_CROWDSEC (" .. err .. ")"
+	if self.variables["USE_CROWDSEC"] ~= "yes" then
+		return self:ret(true, "CrowdSec plugin not enabled")
 	end
-	if not check then
-		return true, "CrowdSec plugin not enabled"
-	end
-	-- Init bouncer
-	local ok, err = cs.init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v0.1")
-	if ok == nil then
-		return false, "error while initializing bouncer : " .. err
-	end
-	return true, "success"
-end
-
-function _M:access()
-	-- Check if CS is activated
-	local check, err = utils.get_variable("USE_CROWDSEC")
-	if check == nil then
-		return false, "error while getting variable USE_CROWDSEC (" .. err .. ")", nil, nil
-	end
-	if check ~= "yes" then
-		return true, "CrowdSec plugin not enabled", nil, nil
+	if self.api == nil then
+		return self:ret(false, "CrowdSec API not set")
 	end
 
 	-- Do the check
 	local ok, err, allowed = cs.allowed()
 	if not ok then
-		return false, "error while executing CrowdSec bouncer : " .. err, nil, nil
+		return self:ret(false, "Error while executing CrowdSec bouncer : " .. err)
 	end
 	if not allowed then
-		return true, "CrowSec bouncer denied request", true, ngx.HTTP_FORBIDDEN
+		return self:ret(true, "CrowSec bouncer denied request", utils.get_deny_status())
 	end
 
-	return true, "success", nil, nil
+	return self:ret(true, "Not denied by CrowdSec bouncer")
 end
 
-return _M
+return crowdsec
