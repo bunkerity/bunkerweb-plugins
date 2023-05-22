@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. ./tests/utils.sh
+. .tests/utils.sh
 
 echo "ℹ️ Starting ClamAV tests ..."
 
