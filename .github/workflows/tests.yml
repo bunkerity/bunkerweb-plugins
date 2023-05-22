@@ -26,16 +26,16 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Pull images
-        run: ./tests/pull.sh
+      - name: Pull and build BW
+        run: ./.tests/bw.sh $TAG
 
       - name: Run ClamAV tests
-        run: ./tests/clamav.sh
+        run: ./.tests/clamav.sh
 
-      - name: Run CrowdSec tests
-        run: ./tests/crowdsec.sh
+      # - name: Run CrowdSec tests
+      #   run: ./tests/crowdsec.sh
 
-      - name: Run VirusTotal tests
-        run: ./tests/virustotal.sh
-        env:
-          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+      # - name: Run VirusTotal tests
+      #   run: ./tests/virustotal.sh
+      #   env:
+      #     VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}

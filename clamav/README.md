@@ -30,7 +30,7 @@ Please note that an additionnal service named **bunkerweb-clamav** is required :
 
 See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
-## Docker
+## Docker and autoconf
 
 ```yaml
 version: '3'
@@ -52,7 +52,7 @@ services:
       - REDIS_HOST=redis
 
   clamav:
-    image: clamav/clamav:0.104
+    image: clamav/clamav:1.1.0
     volumes:
       - ./clamav-data:/var/lib/clamav
 
@@ -63,7 +63,7 @@ services:
 ## Swarm
 
 ```yaml
-version: '3.5'
+version: '3'
 
 services:
 
@@ -87,7 +87,7 @@ services:
       - bw-plugins
 
   clamav:
-    image: clamav/clamav:0.104
+    image: clamav/clamav:stable
     networks:
       - bw-plugins
 
@@ -159,7 +159,7 @@ spec:
     spec:
       containers:
       - name: bunkerweb-clamav
-        image: clamav/clamav:0.104
+        image: clamav/clamav:1.1
 ---
 apiVersion: v1
 kind: Service

@@ -1,7 +1,4 @@
-# ⚠️ DO NOT USE THIS FILE, IT IS ONLY USED FOR INTERNAL TESTS ⚠️
-# SEE README.md for instructions
-
-version: '3.5'
+version: '3'
 
 services:
   bunkerweb:
@@ -33,7 +30,7 @@ services:
       - bunkerweb
       - bw-docker
     volumes:
-      - bw-data:/data
+      - ./bw-data/plugins:/data/plugins
     environment:
       - DOCKER_HOST=tcp://bw-docker:2375
     networks:
@@ -50,7 +47,7 @@ services:
       - bw-docker
 
   clamav-api:
-    build: api
+    build: bw-data/plugins/clamav/api
     ports:
       - 127.0.0.1:8000:8000
     environment:
@@ -59,7 +56,7 @@ services:
       - bw-universe
 
   clamav:
-    image: clamav/clamav:1.0
+    image: clamav/clamav:1.1
     volumes:
       - clamav-data:/var/lib/clamav
     networks:

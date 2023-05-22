@@ -5,32 +5,18 @@
 echo "ℹ️ Starting ClamAV tests ..."
 
 # Create working directory
-if [ ! -d /tmp/bunkerweb-plugins/clamav ] ; then
-	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/clamav
-fi
-if [ ! -d /tmp/bunkerweb-plugins/clamav/bw-data/plugins ] ; then
-	do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/clamav/bw-data/plugins
-fi
-if [ -d /tmp/bunkerweb-plugins/clamav/bw-data/plugins/clamav ] ; then
-	do_and_check_cmd rm -rf /tmp/bunkerweb-plugins/clamav/bw-data/plugins/clamav
-fi
+do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/clamav/bw-data/plugins
 do_and_check_cmd cp -r ./clamav /tmp/bunkerweb-plugins/clamav/bw-data/plugins
-do_and_check_cmd sudo chmod -R 777 /tmp/bunkerweb-plugins/clamav/bw-data
+do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/clamav/bw-data
 
 # Copy compose
-if [ -f /tmp/bunkerweb-plugins/clamav/docker-compose.yml ] ; then
-	do_and_check_cmd rm -f /tmp/bunkerweb-plugins/clamav/docker-compose.yml
-fi
-do_and_check_cmd cp ./clamav/docker-compose.yml /tmp/bunkerweb-plugins/clamav
+do_and_check_cmd cp .tests/clamav/docker-compose.yml /tmp/bunkerweb-plugins/clamav
 
 # Edit compose
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerity/bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb-clamav\$@bunkerity/bunkerweb-clamav:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
 
 # Download EICAR file
-if [ -f /tmp/bunkerweb-plugins/clamav/eicar.com ] ; then
-	do_and_check_cmd rm -f /tmp/bunkerweb-plugins/clamav/eicar.com
-fi
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/clamav/eicar.com https://secure.eicar.org/eicar.com
 
 # Do the tests

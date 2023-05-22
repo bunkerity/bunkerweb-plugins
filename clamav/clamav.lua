@@ -1,20 +1,12 @@
 local class      = require "middleclass"
 local plugin     = require "bunkerweb.plugin"
 local utils      = require "bunkerweb.utils"
-local cachestore = require "bunkerweb.cachestore"
 
 local clamav     = class("clamav", plugin)
 
 function clamav:initialize()
 	-- Call parent initialize
 	plugin.initialize(self, "clamav")
-	-- Instantiate cachestore
-	local use_redis, err = utils.get_variable("USE_REDIS", false)
-	if not use_redis then
-		self.logger:log(ngx.ERR, err)
-	end
-	self.use_redis = use_redis == "yes"
-	self.cachestore = cachestore:new(self.use_redis)
 end
 
 function clamav:init_worker()
