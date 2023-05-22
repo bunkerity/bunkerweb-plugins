@@ -13,8 +13,8 @@ do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/clamav/bw-data
 do_and_check_cmd cp .tests/clamav/docker-compose.yml /tmp/bunkerweb-plugins/clamav
 
 # Edit compose
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
-do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:${BW_TAG}@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
+do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/clamav/docker-compose.yml
 
 # Download EICAR file
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/clamav/eicar.com https://secure.eicar.org/eicar.com
