@@ -1,84 +1,81 @@
-local _M        = {}
-_M.__index      = _M
+local class      = require "middleclass"
+local plugin     = require "bunkerweb.plugin"
+local utils      = require "bunkerweb.utils"
+local cjson		 = require "cjson"
+local http		 = require "resty.http"
 
-local utils     = require "utils"
-local datastore = require "datastore"
-local logger    = require "logger"
-local cjson     = require "cjson"
-local http      = require "resty.http"
+local virustotal    = class("virustotal", plugin)
 
-function _M.new()
-	local self = setmetatable({}, _M)
-	local value, err = utils.get_variable("VIRUSTOTAL_API", false)
-	if not value then
-		logger.log(ngx.ERR, "VIRUSTOTAL", "error while getting VIRUSTOTAL_API setting : " .. err)
-		return self, "error while getting VIRUSTOTAL_API setting : " .. err
-	end
-	self.api = value
-	return self, nil
+function virustotal:initialize()
+	-- Call parent initialize
+	plugin.initialize(self, "virustotal")
 end
 
-function _M:access()
-	-- Check if VT is activated
-	local check, err = utils.get_variable("USE_VIRUSTOTAL")
-	if check == nil then
-		return false, "error while getting variable USE_VIRUSTOTAL (" .. err .. ")", nil, nil
+function virustotal:init_worker()
+	-- Check if worker is needed
+	local init_needed, err = utils.has_variable("USE_VIRUSTOTAL", "yes")
+	if init_needed == nil then
+		return self:ret(false, "can't check USE_VIRUSTOTAL variable : " .. err)
 	end
-	if check ~= "yes" then
-		return true, "VirusTotal plugin not enabled", nil, nil
+	if not init_needed or self.is_loading then
+		return self:ret(true, "init_worker not needed")
+	end
+	-- Send ping to VirusTotal API
+	local ok, err, status, data = self:request("GET", "/ping")
+	if not ok then
+		return self:ret(false, "error from request : " .. err)
+	end
+	if not data.success then
+		return self:ret(false, "received status code " .. tostring(status) .. " from VirusTotal API : " .. data.error)
+	end
+	self.logger:log(ngx.NOTICE, "connectivity with " .. self.variables["VIRUSTOTAL_API"] .. " successful")
+	return self:ret(true, "success")
+end
+
+function virustotal:access()
+	-- Check if enabled
+	if self.variables["USE_VIRUSTOTAL"] ~= "yes" or (self.variables["VIRUSTOTAL_SCAN_IP"] ~= "yes" and self.variables["VIRUSTOTAL_SCAN_FILE"] ~= "yes") then
+		return self:ret(true, "virustotal plugin not enabled")
 	end
 
-	local check_file, err = utils.get_variable("VIRUSTOTAL_SCAN_FILE")
-	if check_file == nil then
-		return false, "error while getting variable VIRUSTOTAL_SCAN_FILE (" .. err .. ")", nil, nil
-	end
-
-	local check_ip, err = utils.get_variable("VIRUSTOTAL_SCAN_IP")
-	if check_ip == nil then
-		return false, "error while getting variable VIRUSTOTAL_SCAN_IP (" .. err .. ")", nil, nil
-	end
-
-	if check_file ~= "yes" and check_ip ~= "yes" then
-		return true, "Both VirusTotal scan file and scan ip not activated", nil, nil
-	end
-
-	if check_ip == "yes" then
-		-- Forward request to VT API helper
+	-- IP check
+	if self.variables["VIRUSTOTAL_SCAN_IP"] == "yes" then
 		local ok, err, status, data = self:request("POST", "/check_ip", "ip")
 		if not ok then
-			return false, "error from request : " .. err, nil, nil
+			return self:ret(false, "error from request : " .. err)
 		end
 		if not data.success then
-			return false, "error from VirusTotal API : " .. data.error, nil, nil
+			return self:ret(false, "error from API : " .. data.error)
 		end
 		if data.detected then
-			return true, "ip " .. ngx.var.remote_addr .. " is detected", true, ngx.HTTP_FORBIDDEN
+			self:ret(true, "ip " .. ngx.ctx.bw.remote_addr .. " is detected", utils.get_deny_status())
 		end
 	end
 
-	if check_file == "yes" then
+	-- File check
+	if self.variables["VIRUSTOTAL_SCAN_FILE"] == "yes" then
 		-- Check if we have downloads
-		if not ngx.var.http_content_type or (not ngx.var.http_content_type:match("boundary") or not ngx.var.http_content_type:match("multipart/form%-data")) then
-			return true, "no file upload detected", nil, nil
+		if not ngx.ctx.bw.http_content_type or (not ngx.ctx.bw.http_content_type:match("boundary") or not ngx.ctx.bw.http_content_type:match("multipart/form%-data")) then
+			return self:ret(true, "no file upload detected")
 		end
-
-		-- Forward request to VT API helper
 		local ok, err, status, data = self:request("POST", "/check", "file")
 		if not ok then
-			return false, "error from request : " .. err, nil, nil
+			return self:ret(false, "error from request : " .. err)
 		end
 		if not data.success then
-			return false, "error from VirusTotal API : " .. data.error, nil, nil
+			return self:ret(false, "error from API : " .. data.error)
 		end
 		if data.detected then
-			return true, "file with hash " .. data.hash .. " is detected", true, ngx.HTTP_FORBIDDEN
+			return self:ret(true, "file with hash " .. data.hash .. " is detected", utils.get_deny_status())
 		end
 	end
 
-	return true, "success", nil, nil
+	return self:ret(true, "no ip/file detected")
+
 end
 
-function _M:request(method, url, type)
+function virustotal:request(method, url, type)
+	local api = self.variables["VIRUSTOTAL_API"]
 	local httpc, err = http.new()
 	if not httpc then
 		return false, "can't instantiate http object : " .. err, nil, nil
@@ -86,18 +83,18 @@ function _M:request(method, url, type)
 	local res = nil
 	local err_http = "unknown error"
 	if method == "GET" then
-		res, err_http = httpc:request_uri(self.api .. url, {
+		res, err_http = httpc:request_uri(api .. url, {
 			method = method,
 		})
 	else
-		headers = ngx.req.get_headers()
+		local headers = {}
 		if type == "ip" then
 			headers["Content-Type"] = "application/json"
-			res, err_http = httpc:request_uri(self.api .. url, {
+			res, err_http = httpc:request_uri(api .. url, {
 				method = method,
 				headers = headers,
 				body = cjson.encode({
-					ip = ngx.var.remote_addr
+					ip = ngx.ctx.bw.remote_addr
 				})
 			})
 		elseif type == "file" then
@@ -119,7 +116,8 @@ function _M:request(method, url, type)
 					end
 				end
 			end
-			res, err_http = httpc:request_uri(self.api .. url, {
+			headers = ngx.req.get_headers()
+			res, err_http = httpc:request_uri(api .. url, {
 				method = method,
 				headers = headers,
 				body = body
@@ -137,4 +135,4 @@ function _M:request(method, url, type)
 	return true, "success", res.status, ret
 end
 
-return _M
+return virustotal

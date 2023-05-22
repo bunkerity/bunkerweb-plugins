@@ -35,7 +35,7 @@ jobs:
       # - name: Run CrowdSec tests
       #   run: ./tests/crowdsec.sh
 
-      # - name: Run VirusTotal tests
-      #   run: ./tests/virustotal.sh
-      #   env:
-      #     VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+      - name: Run VirusTotal tests
+        run: ./tests/virustotal.sh
+        env:
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}

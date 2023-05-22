@@ -1,6 +1,8 @@
 local class      = require "middleclass"
 local plugin     = require "bunkerweb.plugin"
 local utils      = require "bunkerweb.utils"
+local cjson		 = require "cjson"
+local http		 = require "resty.http"
 
 local clamav     = class("clamav", plugin)
 
@@ -87,7 +89,7 @@ function clamav:request(method, url)
 				end
 			end
 		end
-		res, err_http = httpc:request_uri(self.api .. url, {
+		res, err_http = httpc:request_uri(api .. url, {
 			method = method,
 			headers = ngx.req.get_headers(),
 			body = body

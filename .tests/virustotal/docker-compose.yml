@@ -1,14 +1,8 @@
-# ⚠️ DO NOT USE THIS FILE, IT IS ONLY USED FOR INTERNAL TESTS ⚠️
-# SEE README.md for instructions
-
-version: '3.5'
+version: '3'
 
 services:
   bunkerweb:
-    # image: bunkerity/bunkerweb:1.5.0
-    build:
-      context: /home/theophile/dev/bunkerweb-staging
-      dockerfile: src/bw/Dockerfile
+    image: bunkerity/bunkerweb:1.5.0
     ports:
       - 80:8080
       - 443:8443
@@ -21,8 +15,10 @@ services:
       - VIRUSTOTAL_API=http://virustotal-api:8000
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
       - USE_BUNKERNET=no
       - USE_BLACKLIST=no
+      - USE_MODSECURITY=no
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_HOST=http://hello
       - REVERSE_PROXY_URL=/
@@ -31,15 +27,12 @@ services:
       - bw-services
 
   bw-scheduler:
-    # image: bunkerity/bunkerweb-scheduler:1.5.0
-    build:
-      context: /home/theophile/dev/bunkerweb-staging
-      dockerfile: src/scheduler/Dockerfile
+    image: bunkerity/bunkerweb-scheduler:1.5.0
     depends_on:
       - bunkerweb
       - bw-docker
     volumes:
-      - /tmp/bw-data:/data
+      - ./bw-data/plugins:/data/plugins
     environment:
       - DOCKER_HOST=tcp://bw-docker:2375
     networks:
@@ -56,11 +49,11 @@ services:
       - bw-docker
 
   virustotal-api:
-    build: api
+    build: bw-data/plugins/virustotal/api
     ports:
       - 127.0.0.1:8000:8000
     environment:
-      - API_KEY=91980f5c26b326062228583effa8ddc8b6a5a275b3fe6ce8b80dd6cf775e62f0
+      - API_KEY=%VTKEY%
     networks:
       - bw-universe
 
@@ -71,7 +64,6 @@ services:
 
 volumes:
   bw-data:
-
 
 networks:
   bw-services:

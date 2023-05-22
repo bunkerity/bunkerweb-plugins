@@ -15,8 +15,10 @@ services:
       - CLAMAV_API=http://clamav-api:8000
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
       - USE_BUNKERNET=no
       - USE_BLACKLIST=no
+      - USE_MODSECURITY=no
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_HOST=http://hello
       - REVERSE_PROXY_URL=/
