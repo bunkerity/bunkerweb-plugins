@@ -15,7 +15,7 @@ jobs:
       - name: Get BW tag
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=latest" >> $GITHUB_ENV
+            echo "BW_TAG=master" >> $GITHUB_ENV
           else
             echo "BW_TAG=dev" >> $GITHUB_ENV
           fi
@@ -27,7 +27,7 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Pull and build BW
-        run: ./.tests/bw.sh $TAG
+        run: ./.tests/bw.sh "${{ env.BW_TAG }}"
 
       - name: Run ClamAV tests
         run: ./.tests/clamav.sh
