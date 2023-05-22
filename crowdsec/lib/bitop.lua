@@ -53,7 +53,7 @@ function M.tobit(x)
   return x % 2 ^ 32
 end
 
-M.bxor = make_bitop { [0] = { [0] = 0,[1] = 1 },[1] = { [0] = 1,[1] = 0 }, n = 4 }
+M.bxor = make_bitop { [0] = { [0] = 0, [1] = 1 }, [1] = { [0] = 1, [1] = 0 }, n = 4 }
 local bxor = M.bxor
 
 function M.bnot(a) return MODM - a end
@@ -116,12 +116,9 @@ end
 local replace = M.replace
 
 function M.bswap(x) -- BitOp style
-  local a = band(x, 0xff);
-  x = rshift(x, 8)
-  local b = band(x, 0xff);
-  x = rshift(x, 8)
-  local c = band(x, 0xff);
-  x = rshift(x, 8)
+  local a = band(x, 0xff); x = rshift(x, 8)
+  local b = band(x, 0xff); x = rshift(x, 8)
+  local c = band(x, 0xff); x = rshift(x, 8)
   local d = band(x, 0xff)
   return lshift(lshift(lshift(a, 8) + b, 8) + c, 8) + d
 end

@@ -12,9 +12,9 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
-  * [Docker](#docker)
-  * [Swarm](#swarm)
-  * [Kubernetes](#kubernetes)
+  - [Docker](#docker)
+  - [Swarm](#swarm)
+  - [Kubernetes](#kubernetes)
 - [Settings](#settings)
 - [TODO](#todo)
 
@@ -107,7 +107,7 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.4.6
+    image: crowdsecurity/crowdsec:v1.5.1
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -119,7 +119,7 @@ services:
       - bw-universe
 
   syslog:
-    image: balabit/syslog-ng:4.1.1
+    image: balabit/syslog-ng:4.2.0
     volumes:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log
@@ -193,7 +193,7 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.3.4
+    image: crowdsecurity/crowdsec:v1.5.1
     volumes:
       - /shared/cs-data:/var/lib/crowdsec/data
       - /shared/acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -205,7 +205,7 @@ services:
       - bw-universe
 
   syslog:
-    image: balabit/syslog-ng:3.36.1
+    image: balabit/syslog-ng:4.2.0
     volumes:
       - /shared/syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - /shared/logs:/var/log
@@ -269,10 +269,10 @@ metadata:
 
 # Settings
 
-| Setting            | Default                | Description                                                                      |
+|      Setting       |        Default         | Description                                                                      |
 | :----------------: | :--------------------: | :------------------------------------------------------------------------------- |
-| `USE_CROWDSEC`     | `no`                   | When set to `yes`, CrowdSec bouncer will be activated.                           |
-| `CROWDSEC_API`     | `http://crowdsec:8080` | Address of the CrowdSec API.                                                     |
+|   `USE_CROWDSEC`   |          `no`          | When set to `yes`, CrowdSec bouncer will be activated.                           |
+|   `CROWDSEC_API`   | `http://crowdsec:8080` | Address of the CrowdSec API.                                                     |
 | `CROWDSEC_API_KEY` |                        | Bouncer key to use when contacting the API (must be created on the CS instance). |
 
 # TODO

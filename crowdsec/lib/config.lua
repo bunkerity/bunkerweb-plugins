@@ -8,8 +8,8 @@ function config.file_exists(file)
     return f ~= nil
 end
 
-local function split(s, delimiter)
-    result = {};
+function split(s, delimiter)
+    local result = {};
     for match in (s .. delimiter):gmatch("(.-)" .. delimiter .. "(.-)") do
         table.insert(result, match);
     end
@@ -42,7 +42,7 @@ function config.loadConfig(file)
     local conf = {}
     local valid_params = { 'ENABLED', 'API_URL', 'API_KEY', 'BOUNCING_ON_TYPE', 'MODE', 'SECRET_KEY', 'SITE_KEY',
         'BAN_TEMPLATE_PATH', 'CAPTCHA_TEMPLATE_PATH', 'REDIRECT_LOCATION', 'RET_CODE', 'EXCLUDE_LOCATION',
-        'FALLBACK_REMEDIATION' }
+        'FALLBACK_REMEDIATION', 'CAPTCHA_PROVIDER' }
     local valid_int_params = { 'CACHE_EXPIRATION', 'CACHE_SIZE', 'REQUEST_TIMEOUT', 'UPDATE_FREQUENCY',
         'CAPTCHA_EXPIRATION' }
     local valid_bouncing_on_type_values = { 'ban', 'captcha', 'all' }
@@ -56,7 +56,8 @@ function config.loadConfig(file)
         ['CAPTCHA_EXPIRATION'] = 3600,
         ['REDIRECT_LOCATION'] = "",
         ['EXCLUDE_LOCATION'] = {},
-        ['RET_CODE'] = 0
+        ['RET_CODE'] = 0,
+        ['CAPTCHA_PROVIDER'] = "recaptcha"
     }
     for line in io.lines(file) do
         local isOk = false
@@ -74,8 +75,8 @@ function config.loadConfig(file)
                         local value = s[2]
                         if not has_value(valid_truefalse_values, s[2]) then
                             ngx.log(ngx.ERR,
-                            "unsupported value '" ..
-                            s[2] .. "' for variable '" .. v .. "'. Using default value 'true' instead")
+                                "unsupported value '" ..
+                                s[2] .. "' for variable '" .. v .. "'. Using default value 'true' instead")
                             break
                         end
                     end
@@ -83,8 +84,8 @@ function config.loadConfig(file)
                         local value = s[2]
                         if not has_value(valid_bouncing_on_type_values, s[2]) then
                             ngx.log(ngx.ERR,
-                            "unsupported value '" ..
-                            s[2] .. "' for variable '" .. v .. "'. Using default value 'ban' instead")
+                                "unsupported value '" ..
+                                s[2] .. "' for variable '" .. v .. "'. Using default value 'ban' instead")
                             break
                         end
                     end
@@ -92,14 +93,14 @@ function config.loadConfig(file)
                         local value = s[2]
                         if not has_value({ 'stream', 'live' }, s[2]) then
                             ngx.log(ngx.ERR,
-                            "unsupported value '" ..
-                            s[2] .. "' for variable '" .. v .. "'. Using default value 'stream' instead")
+                                "unsupported value '" ..
+                                s[2] .. "' for variable '" .. v .. "'. Using default value 'stream' instead")
                             break
                         end
                     end
                     if v == "EXCLUDE_LOCATION" then
                         local value = s[2]
-                        exclude_location = {}
+                        local exclude_location = {}
                         if value ~= "" then
                             for match in (value .. ","):gmatch("(.-)" .. ",") do
                                 table.insert(exclude_location, match)
@@ -113,8 +114,8 @@ function config.loadConfig(file)
                         local value = s[2]
                         if not has_value({ 'captcha', 'ban' }, s[2]) then
                             ngx.log(ngx.ERR,
-                            "unsupported value '" ..
-                            s[2] .. "' for variable '" .. v .. "'. Using default value 'ban' instead")
+                                "unsupported value '" ..
+                                s[2] .. "' for variable '" .. v .. "'. Using default value 'ban' instead")
                             local n = next(s, k)
                             conf[v] = "ban"
                             break

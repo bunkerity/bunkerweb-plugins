@@ -37,7 +37,8 @@
 		{
 			"name": "crowdsec-conf",
 			"file": "crowdsec-conf.py",
-			"every": "once"
+			"every": "once",
+			"reload": false
 		}
 	]
 }
