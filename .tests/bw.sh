@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. ./tests/utils.sh
+. ./.tests/utils.sh
 
 echo "ℹ️ Pulling repo ..."
 do_and_check_cmd git clone https://github.com/bunkerity/bunkerweb.git
