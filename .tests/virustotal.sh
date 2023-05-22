@@ -25,7 +25,7 @@ do_and_check_cmd wget -O /tmp/bunkerweb-plugins/virustotal/eicar.com https://sec
 
 # Do the tests
 cd /tmp/bunkerweb-plugins/virustotal
-do_and_check_cmd docker-compose up -d
+do_and_check_cmd docker-compose up --build -d
 
 # Check that API is working
 echo "ℹ️ Testing API ..."
@@ -44,25 +44,56 @@ while [ $retry -lt 60 ] ; do
 	retry=$(($retry + 1))
 	sleep 1
 done
-if [ $retry -eq 120 ] ; then
-	echo "❌ Error timeout after 120s"
+if [ $retry -eq 60 ] ; then
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error timeout after 60s"
 	exit 1
 fi
 if [ "$success" == "ko" ] ; then
-	echo "❌ Error EICAR not detected"
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error EICAR not detected"
 	exit 1
 fi
 echo "ℹ️ API is working ..."
+
+# Wait until BW is started
+echo "ℹ️ Waiting for BW ..."
+success="ko"
+retry=0
+while [ $retry -lt 60 ] ; do
+	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
+	if [ $? -eq 0 ] && [ $ret -eq 200 ] ; then
+		ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+		if [ "$ret" != "" ] ; then
+			success="ok"
+			break
+		fi
+	fi
+	retry=$(($retry + 1))
+	sleep 1
+done
+
+# We're done
+if [ $retry -eq 60 ] ; then
+	docker-compose logs
+	docker-compose down -v
+	echo "❌ Error timeout after 60s"
+	exit 1
+fi
+if [ "$success" == "ko" ] ; then
+	docker-compose logs
+	docker-compose down -v
+	echo "❌ Error did not receive 200 code"
+	exit 1
+fi
 
 # Now check if BunkerWeb is giving a 403
 echo "ℹ️ Testing BW ..."
 success="ko"
 retry=0
-while [ $retry -lt 120 ] ; do
+while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/eicar.com" http://localhost)"
 	if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
 		success="ok"
@@ -73,17 +104,20 @@ while [ $retry -lt 120 ] ; do
 done
 
 # We're done
-if [ $retry -eq 120 ] ; then
-	echo "❌ Error timeout after 120s"
+if [ $retry -eq 60 ] ; then
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error timeout after 60s"
 	exit 1
 fi
 if [ "$success" == "ko" ] ; then
-	echo "❌ Error did not receive 403 code"
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error did not receive 403 code"
 	exit 1
+fi
+if [ "$1" = "verbose" ] ; then
+	docker-compose logs
 fi
 docker-compose down -v
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. ./.tests/utils.sh
+. .tests/utils.sh
 
 if [ -d /tmp/bunkerweb ] ; then
     echo "ℹ️ Remove old repo ..."

@@ -106,6 +106,10 @@ async def shutdown_event():
     logger.info("BunkerWeb ClamAV API stopped")
 
 
+@app.get("/ping")
+async def ping(request: Request):
+     return {"success": True, "error": "pong"}
+
 @app.post("/check")
 async def check_files(request: Request):
     detected = False

@@ -32,10 +32,14 @@ jobs:
       - name: Run ClamAV tests
         run: ./.tests/clamav.sh
 
-      # - name: Run CrowdSec tests
-      #   run: ./tests/crowdsec.sh
+      - name: Run CrowdSec tests
+        run: ./tests/crowdsec.sh
 
       - name: Run VirusTotal tests
         run: ./tests/virustotal.sh
         env:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+
+      - name: Build and push APIs
+        if: env.BW_TAG == 'master'
+        run: ./tests/build-push.sh

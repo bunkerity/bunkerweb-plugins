@@ -181,6 +181,9 @@ async def check_ip(body: dict):
         }
     return {"success": success, "error": error, "detected": detected, "hash": digest}
 
+@app.get("/ping")
+async def ping(request: Request):
+     return {"success": True, "error": "pong"}
 
 @app.post("/check")
 async def check_files(request: Request):

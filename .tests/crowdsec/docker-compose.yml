@@ -17,6 +17,7 @@ services:
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - LOG_LEVEL=info
       - USE_MODSECURITY=no
+      - USE_BLACKLIST=no
       - USE_BAD_BEHAVIOR=no
       - USE_BUNKERNET=no
       - USE_LIMIT_REQ=no
@@ -38,7 +39,7 @@ services:
       - bunkerweb
       - bw-docker
     volumes:
-      - bw-data:/data
+      - ./bw-data/plugins:/data/plugins
     environment:
       - DOCKER_HOST=tcp://bw-docker:2375
     networks:

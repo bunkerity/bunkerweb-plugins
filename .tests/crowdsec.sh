@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. ./tests/utils.sh
+. .tests/utils.sh
 
 echo "ℹ️ Starting CrowdSec tests ..."
 
@@ -34,8 +34,11 @@ retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
 	if [ $? -eq 0 ] && [ $ret -eq 200 ] ; then
-		success="ok"
-		break
+		ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+		if [ "$ret" != "" ] ; then
+			success="ok"
+			break
+		fi
 	fi
 	retry=$(($retry + 1))
 	sleep 1
@@ -43,15 +46,15 @@ done
 
 # We're done
 if [ $retry -eq 60 ] ; then
-	echo "❌ Error timeout after 60s"
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error timeout after 60s"
 	exit 1
 fi
 if [ "$success" == "ko" ] ; then
-	echo "❌ Error did not receive 200 code"
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error did not receive 200 code"
 	exit 1
 fi
 
@@ -70,10 +73,13 @@ fi
 
 # We're done
 if [ "$success" == "ko" ] ; then
-	echo "❌ Error did not receive 403 code"
 	docker-compose logs
 	docker-compose down -v
+	echo "❌ Error did not receive 403 code"
 	exit 1
+fi
+if [ "$1" = "verbose" ] ; then
+	docker-compose logs
 fi
 docker-compose down -v
 
