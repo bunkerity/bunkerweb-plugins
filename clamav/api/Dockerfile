@@ -12,6 +12,6 @@ RUN apk add --no-cache --virtual .build-deps rust cargo && \
   rm -f /tmp/requirements.txt && \
   apk del .build-deps
 
-COPY *.py /app
+COPY *.py /app/
 
 ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--log-config", "logs.yaml"]

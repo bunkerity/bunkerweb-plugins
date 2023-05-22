@@ -42,4 +42,4 @@ jobs:
 
       - name: Build and push APIs
         if: env.BW_TAG == 'master'
-        run: ./tests/build-push.sh
+        run: .tests/build-push.sh
