@@ -1,10 +1,10 @@
-local class      = require "middleclass"
-local plugin     = require "bunkerweb.plugin"
-local utils      = require "bunkerweb.utils"
-local cjson		 = require "cjson"
-local http		 = require "resty.http"
+local class  = require "middleclass"
+local plugin = require "bunkerweb.plugin"
+local utils  = require "bunkerweb.utils"
+local cjson  = require "cjson"
+local http   = require "resty.http"
 
-local slack     = class("slack", plugin)
+local slack  = class("slack", plugin)
 
 function slack:initialize()
 	-- Call parent initialize
@@ -43,7 +43,7 @@ function slack:log(bypass_use_slack)
 	end
 end
 
-function slack:send(premature, data)
+function slack:send(self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)
