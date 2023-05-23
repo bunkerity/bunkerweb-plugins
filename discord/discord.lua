@@ -1,10 +1,10 @@
-local class      = require "middleclass"
-local plugin     = require "bunkerweb.plugin"
-local utils      = require "bunkerweb.utils"
-local cjson		 = require "cjson"
-local http		 = require "resty.http"
+local class   = require "middleclass"
+local plugin  = require "bunkerweb.plugin"
+local utils   = require "bunkerweb.utils"
+local cjson   = require "cjson"
+local http    = require "resty.http"
 
-local discord     = class("discord", plugin)
+local discord = class("discord", plugin)
 
 function discord:initialize()
 	-- Call parent initialize
@@ -43,7 +43,7 @@ function discord:log(bypass_use_discord)
 	end
 end
 
-function discord:send(premature, data)
+function discord:send(self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)
