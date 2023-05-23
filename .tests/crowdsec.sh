@@ -32,13 +32,10 @@ echo "ℹ️ Waiting for BW ..."
 success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
-	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
-	if [ $? -eq 0 ] && [ $ret -eq 200 ] ; then
-		ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
-		if [ "$ret" != "" ] ; then
-			success="ok"
-			break
-		fi
+	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
+		success="ok"
+		break
 	fi
 	retry=$(($retry + 1))
 	sleep 1
