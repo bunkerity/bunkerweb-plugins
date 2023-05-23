@@ -2,7 +2,7 @@
 	"id": "slack",
 	"name": "Slack",
 	"description": "Send alerts to a Slack channel (using webhooks).",
-	"version": "0.1",
+	"version": "1.0",
 	"stream": "partial",
 	"settings": {
 		"USE_SLACK": {
