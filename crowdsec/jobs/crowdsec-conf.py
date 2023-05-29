@@ -1,73 +1,79 @@
 #!/usr/bin/python3
 
-from os import getenv
+from os import getenv, sep
+from os.path import join
 from pathlib import Path
 from sys import exit as sys_exit, path as sys_path
-from threading import Lock
 from traceback import format_exc
 
-if "/usr/share/bunkerweb/deps/python" not in sys_path:
-    sys_path.append("/usr/share/bunkerweb/deps/python")
-if "/usr/share/bunkerweb/utils" not in sys_path:
-    sys_path.append("/usr/share/bunkerweb/utils")
-if "/usr/share/bunkerweb/db" not in sys_path:
-    sys_path.append("/usr/share/bunkerweb/db")
+for deps_path in [
+    join(sep, "usr", "share", "bunkerweb", *paths)
+    for paths in (("deps", "python"), ("utils",), ("db",))
+]:
+    if deps_path not in sys_path:
+        sys_path.append(deps_path)
 
-from Database import Database
-from logger import setup_logger
+from Database import Database  # type: ignore
+from logger import setup_logger  # type: ignore
+from jobs import set_file_in_db
 
 logger = setup_logger("CROWDSEC", getenv("LOG_LEVEL", "INFO"))
 status = 0
 
 try:
     # Check if at least a server has CrowdSec activated
-    crowdsec_activated = False
+    cs_activated = False
     # Multisite case
-    if getenv("MULTISITE") == "yes":
-        for first_server in getenv("SERVER_NAME").split(" "):
+    if getenv("MULTISITE", "no") == "yes":
+        for first_server in getenv("SERVER_NAME", "").strip().split(" "):
             if (
                 getenv(f"{first_server}_USE_CROWDSEC", getenv("USE_CROWDSEC", "no"))
                 == "yes"
             ):
-                crowdsec_activated = True
+                cs_activated = True
                 break
     # Singlesite case
     elif getenv("USE_CROWDSEC", "no") == "yes":
-        crowdsec_activated = True
-    if not crowdsec_activated:
+        cs_activated = True
+
+    if not cs_activated:
         logger.info("CrowdSec is not activated, skipping job...")
         sys_exit(status)
 
     # Create directory
-    Path("/var/cache/bunkerweb/crowdsec").mkdir(parents=True, exist_ok=True)
+    cs_path = Path(sep, "var", "cache", "bunkerweb", "crowdsec")
+    cs_path.mkdir(parents=True, exist_ok=True)
 
     db = Database(
         logger,
         sqlalchemy_string=getenv("DATABASE_URI", None),
     )
-    lock = Lock()
 
     # Copy template
     content = (
-        Path("/etc/bunkerweb/plugins/crowdsec/misc/crowdsec.conf")
+        Path(sep, "etc", "bunkerweb", "plugins", "crowdsec", "misc", "crowdsec.conf")
         .read_bytes()
         .replace(b"%CROWDSEC_API%", getenv("CROWDSEC_API", "").encode())
         .replace(b"%CROWDSEC_API_KEY%", getenv("CROWDSEC_API_KEY", "").encode())
+        .replace(b"%CROWDSEC_MODE%", getenv("CROWDSEC_MODE", "stream").encode())
+        .replace(
+            b"%CROWDSEC_REQUEST_TIMEOUT%",
+            getenv("CROWDSEC_REQUEST_TIMEOUT", "1000").encode(),
+        )
+        .replace(b"%UPDATE_FREQUENCY%", getenv("UPDATE_FREQUENCY", "10").encode())
     )
 
     # Write configuration in cache
-    Path("/var/cache/bunkerweb/crowdsec/crowdsec.conf").write_bytes(content)
+    cs_path.joinpath("crowdsec.conf").write_bytes(content)
 
-    with lock:
-        err = db.update_job_cache(
-            "crowdsec-conf",
-            None,
-            "crowdsec.conf",
-            content,
-        )
-
-    if err:
-        logger.warning(f"Couldn't update db cache for crowdsec.conf: {err}")
+    # Update db
+    cached, err = set_file_in_db(
+        "crowdsec.conf",
+        content,
+        db,
+    )
+    if not cached:
+        logger.error(f"Error while caching crowdsec.conf file : {err}")
 
     # Done
     logger.info("CrowdSec configuration successfully generated")

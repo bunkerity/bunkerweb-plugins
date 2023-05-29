@@ -1,44 +1,72 @@
 {
-	"id": "crowdsec",
-	"stream": "partial",
-	"name": "CrowdSec",
-	"description": "CrowdSec bouncer for BunkerWeb.",
-	"version": "1.0",
-	"settings": {
-		"USE_CROWDSEC": {
-			"context": "multisite",
-			"default": "no",
-			"help": "Activate CrowdSec bouncer.",
-			"id": "use-crowdsec",
-			"label": "Use CrowdSec",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"CROWDSEC_API": {
-			"context": "global",
-			"default": "http://crowdsec:8080",
-			"help": "Address of the CrowdSec API.",
-			"id": "crowdsec-api",
-			"label": "CrowdSec API",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"CROWDSEC_API_KEY": {
-			"context": "global",
-			"default": "",
-			"help": "Key for the CrowdSec API given by cscli bouncer add.",
-			"id": "crowdsec-api-key",
-			"label": "CrowdSec API key",
-			"regex": "^.*$",
-			"type": "text"
-		}
-	},
-	"jobs": [
-		{
-			"name": "crowdsec-conf",
-			"file": "crowdsec-conf.py",
-			"every": "once",
-			"reload": false
-		}
-	]
+  "id": "crowdsec",
+  "stream": "partial",
+  "name": "CrowdSec",
+  "description": "CrowdSec bouncer for BunkerWeb.",
+  "version": "1.0",
+  "settings": {
+    "USE_CROWDSEC": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate CrowdSec bouncer.",
+      "id": "use-crowdsec",
+      "label": "Use CrowdSec",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CROWDSEC_API": {
+      "context": "global",
+      "default": "http://crowdsec:8080",
+      "help": "Address of the CrowdSec API.",
+      "id": "crowdsec-api",
+      "label": "CrowdSec API",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "CROWDSEC_API_KEY": {
+      "context": "global",
+      "default": "",
+      "help": "Key for the CrowdSec API given by cscli bouncer add.",
+      "id": "crowdsec-api-key",
+      "label": "CrowdSec API key",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "CROWDSEC_MODE": {
+      "context": "global",
+      "default": "stream",
+      "help": "Mode of the CrowdSec API (live or stream).",
+      "id": "crowdsec-mode",
+      "label": "CrowdSec Mode",
+      "regex": "^(live|stream)$",
+      "type": "select",
+      "select": ["live", "stream"]
+    },
+    "CROWDSEC_REQUEST_TIMEOUT": {
+      "context": "global",
+      "default": "1000",
+      "help": "Bouncer's request timeout in milliseconds.",
+      "id": "crowdsec-request-timeout",
+      "label": "CrowdSec request timeout",
+      "regex": "^\\d+$",
+      "type": "text"
+    },
+    "CROWDSEC_UPDATE_FREQUENCY": {
+      "context": "global",
+      "default": "10",
+      "help": "Bouncer's update frequency in stream mode, in second.",
+      "id": "crowdsec-update-frequency",
+      "label": "CrowdSec request timeout",
+      "regex": "^\\d+$",
+      "type": "text"
+    }
+  },
+  "jobs": [
+    {
+      "name": "crowdsec-conf",
+      "file": "crowdsec-conf.py",
+      "every": "once",
+      "reload": false
+    }
+  ]
 }
