@@ -25,32 +25,27 @@ func main() {
 	logger := log.New(os.Stdout, " - CORAZA - ", log.Ldate|log.Ltime)
 
 	logger.Print(" [INFO] Starting POC")
+	// Instanciate a new waf
+	waf, err := coraza.NewWAF(
+		coraza.NewWAFConfig().
+			WithRequestBodyAccess(coraza.NewRequestBodyConfig().WithInMemoryLimit(1000)).
+			WithDirectivesFromFile("coraza.conf").
+			WithDirectivesFromFile("files/coreruleset/crs-setup.conf.example").
+			WithDirectivesFromFile("files/coreruleset/rules/*.conf"))
+
+	if err != nil {
+		logger.Panic(err)
+	}
 	// Listen on port 8090 and respond
 	if err := http.ListenAndServe(":8090", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// Check the request type (conf or http)
-		if r.Header.Get("Conf-request") == "conf" {
-			//not done yet
-			logger.Print(" [CONF] CRS conf valid")
-			return
-		}
-		// Instanciate a new waf
-		waf, err := coraza.NewWAF(
-			coraza.NewWAFConfig().
-				WithRequestBodyAccess(coraza.NewRequestBodyConfig().WithInMemoryLimit(1000)).
-				WithDirectivesFromFile("coraza.conf").
-				WithDirectivesFromFile("files/coreruleset/crs-setup.conf.example").
-				WithDirectivesFromFile("files/coreruleset/rules/*.conf"))
-
-		if err != nil {
-			logger.Panic(err)
-		}
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
-		if r.Header.Get("Conf-request") == "client" {
+		if r.Header.Get("Request-type") == "client" {
+
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -110,16 +105,11 @@ func main() {
 }
 
 func processRequest(tx types.Transaction, data map[string]interface{}) (*types.Interruption, error) {
-	var (
-		client string
-		cport  int
-	)
 
-	client = data["X-Coraza-IP"].(string)
-	cport = 0
-	tx.ProcessConnection(client, cport, "", 0)
-	// Do a check if value == null not done yet
-	tx.ProcessURI(data["X-Coraza-URI"].(string), data["X-Coraza-MET"].(string), "http") //http par default since bunkerweb already do the job sinon on ajoute une var dans lua
+	client := data["X-Coraza-IP"].(string)
+
+	tx.ProcessConnection(client, 0, "", 0)
+	tx.ProcessURI(data["X-Coraza-URI"].(string), data["X-Coraza-MET"].(string), "HTTP/1.0") //http default since bunkerweb already do the job sinon on ajoute une var dans lua
 	headersMap := data["X-Coraza-HEAD"].(map[string]interface{})
 	for key, val := range headersMap {
 		// Convert the value to a string if possible, otherwise skip this header
