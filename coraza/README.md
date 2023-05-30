@@ -1,7 +1,7 @@
 # Coraza plugin
 
 <p align="center">
-	<img alt="BunkerWeb Coraza diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/dev/coraza/docs/diagram.png" />
+	<img alt="BunkerWeb Coraza diagram" src="https://github.com/gin-gitaxias/bunkerweb-plugins/blob/dev/coraza/docs/diagram.png" />
 </p>
 
 
