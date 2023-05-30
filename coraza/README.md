@@ -14,6 +14,7 @@ This [BunkerWeb](https://www.bunkerweb.io) will act as a Library of rule that ai
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
   * [Docker](#docker)
+  * [Dockerfile](#dockerfile)
 - [Settings](#settings)
   * [Plugin (BunkerWeb)](#plugin--bunkerweb-)
 - [TODO](#todo)
@@ -81,3 +82,10 @@ CMD ["go", "run", "/app/."]
 | `CORAZA_API` | `http://bunkerweb-golang-1:8090` | Address of the coraza library (request will be redirected there). |
 
 ! Disclamer the `CORAZA_API` port (by default 8090) can't be modified only in the plugin.json you also need to change it in the main.go (bw-data/plugins/coraza/confs/main.go)
+
+# TODO
+
+Fix the port problem.
+
+Add the conf request to personalize the coreruleset and other parameters directly from bunkerweb (not by hands).
+
