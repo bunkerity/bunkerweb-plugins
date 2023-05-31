@@ -1,6 +1,6 @@
 {
   "id": "crowdsec",
-  "stream": "partial",
+  "stream": "no",
   "name": "CrowdSec",
   "description": "CrowdSec bouncer for BunkerWeb.",
   "version": "1.0",
@@ -34,7 +34,7 @@
     },
     "CROWDSEC_MODE": {
       "context": "global",
-      "default": "stream",
+      "default": "live",
       "help": "Mode of the CrowdSec API (live or stream).",
       "id": "crowdsec-mode",
       "label": "CrowdSec Mode",

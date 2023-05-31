@@ -55,7 +55,7 @@ try:
         .read_bytes()
         .replace(b"%CROWDSEC_API%", getenv("CROWDSEC_API", "").encode())
         .replace(b"%CROWDSEC_API_KEY%", getenv("CROWDSEC_API_KEY", "").encode())
-        .replace(b"%CROWDSEC_MODE%", getenv("CROWDSEC_MODE", "stream").encode())
+        .replace(b"%CROWDSEC_MODE%", getenv("CROWDSEC_MODE", "live").encode())
         .replace(
             b"%CROWDSEC_REQUEST_TIMEOUT%",
             getenv("CROWDSEC_REQUEST_TIMEOUT", "1000").encode(),

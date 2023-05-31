@@ -2,7 +2,9 @@ local class      = require "middleclass"
 local plugin     = require "bunkerweb.plugin"
 local utils      = require "bunkerweb.utils"
 local cjson		 = require "cjson"
-local http		 = require "resty.http"
+local upload	 = require "resty.upload"
+local sha512	 = require "resty.sha512"
+local str		 = require "resty.string"
 
 local virustotal    = class("virustotal", plugin)
 
@@ -10,6 +12,73 @@ function virustotal:initialize()
 	-- Call parent initialize
 	plugin.initialize(self, "virustotal")
 end
+
+-- Todo : find a "ping" endpoint on VT API
+-- function virustotal:init_worker()
+
+-- end
+
+function virustotal:access()
+	-- Check if enabled
+	if self.variables["USE_VIRUSTOTAL"] ~= "yes" or (self.variables["VIRUSTOTAL_SCAN_IP"] ~= "yes" and self.variables["VIRUSTOTAL_SCAN_FILE"] ~= "yes") then
+		return self:ret(true, "virustotal plugin not enabled")
+	end
+
+	-- IP check
+	if self.variables["VIRUSTOTAL_SCAN_IP"] == "yes" and ngx.ctx.bw.ip_is_global then
+		local ok, report = self:check_ip()
+		if not ok then
+			return self:ret(false, "error while checking if IP is malicious : " .. report)
+		end
+		if report then
+			return self:ret(true, "IP " .. ngx.ctx.bw.remote_addr .. " is malicious : " .. report, utils.get_deny_status())
+		end
+	end
+
+	-- File check
+	if self.variables["VIRUSTOTAL_SCAN_FILE"] == "yes" then
+		-- Check if we have downloads
+		if not ngx.ctx.bw.http_content_type or (not ngx.ctx.bw.http_content_type:match("boundary") or not ngx.ctx.bw.http_content_type:match("multipart/form%-data")) then
+			return self:ret(true, "no file upload detected")
+		end
+		-- Perform the check
+		local ok, detected, checksum = self:check_file()
+		if not ok then
+			return self:ret(false, "error while checking if file is malicious : " .. detected)
+		end
+		-- Malicious case
+		if detected then
+			return self:ret(true, "file with checksum " .. checksum .. "is detected : " .. detected, utils.get_deny_status())
+		end
+	end
+	return self:ret(true, "no ip/file detected")
+end
+
+function virustotal:check_ip()
+	-- Check cache
+	local ok, detected = self:is_in_cache("ip_" .. ngx.ctx.bw.remote_addr)
+	if not ok then
+		return false, detected
+	end
+end
+
+function virustotal:is_in_cache(key)
+	local ok, data = self.cachestore:get("plugin_virustotal_" .. key)
+	if not ok then
+		return false, data
+	end
+	return true, data
+end
+
+function virustotal:add_to_cache(key, value)
+	local ok, err = self.cachestore:set("plugin_virustotal_" .. key, value, 86400)
+	if not ok then
+		return false, err
+	end
+	return true
+end
+
+
 
 function virustotal:init_worker()
 	-- Check if worker is needed

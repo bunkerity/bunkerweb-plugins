@@ -2,7 +2,7 @@
 	"id": "clamav",
 	"name": "ClamAV",
 	"description": "Automatic scan of uploaded files with ClamAV antivirus engine.",
-	"version": "1.0",
+	"version": "1.1",
 	"stream": "no",
 	"settings": {
 		"USE_CLAMAV": {
@@ -14,12 +14,30 @@
 			"regex": "^(yes|no)$",
 			"type": "check"
 		},
-		"CLAMAV_API": {
+		"CLAMAV_HOST": {
 			"context": "global",
-			"default": "http://clamav-api:8000",
-			"help": "Address of the ClamAV API.",
-			"id": "clamav-api",
-			"label": "ClamAV API",
+			"default": "clamav",
+			"help": "ClamAV hostname or IP address.",
+			"id": "clamav-host",
+			"label": "ClamAV host",
+			"regex": "^.*$",
+			"type": "text"
+		},
+		"CLAMAV_PORT": {
+			"context": "global",
+			"default": "3310",
+			"help": "ClamAV port.",
+			"id": "clamav-port",
+			"label": "ClamAV port",
+			"regex": "^.*$",
+			"type": "text"
+		},
+		"CLAMAV_TIMEOUT": {
+			"context": "global",
+			"default": "1000",
+			"help": "Network timeout (in ms) when communicating with ClamAV.",
+			"id": "clamav-timeout",
+			"label": "Network timeout",
 			"regex": "^.*$",
 			"type": "text"
 		}

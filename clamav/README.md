@@ -16,8 +16,6 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if an
   * [Swarm](#swarm)
   * [Kubernetes](#kubernetes)
 - [Settings](#settings)
-  * [Plugin (BunkerWeb)](#plugin--bunkerweb-)
-  * [bunkerweb-clamav (API)](#bunkerweb-clamav--api-)
 - [TODO](#todo)
 
 # Prerequisites
