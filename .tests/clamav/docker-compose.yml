@@ -12,7 +12,7 @@ services:
       - SERVER_NAME=www.example.com
       - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
       - USE_CLAMAV=yes
-      - CLAMAV_API=http://clamav-api:8000
+      - CLAMAV_HOST=clamav
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
       - USE_LIMIT_REQ=no
@@ -45,17 +45,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - CONTAINERS=1
+      - LOG_LEVEL=warning
     networks:
       - bw-docker
-
-  clamav-api:
-    build: bw-data/plugins/clamav/api
-    ports:
-      - 127.0.0.1:8000:8000
-    environment:
-      - CLAMAV_HOST=clamav
-    networks:
-      - bw-universe
 
   clamav:
     image: clamav/clamav:1.1

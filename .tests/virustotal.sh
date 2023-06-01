@@ -27,37 +27,6 @@ do_and_check_cmd wget -O /tmp/bunkerweb-plugins/virustotal/eicar.com https://sec
 cd /tmp/bunkerweb-plugins/virustotal
 do_and_check_cmd docker-compose up --build -d
 
-# Check that API is working
-echo "ℹ️ Testing API ..."
-success="ko"
-retry=0
-while [ $retry -lt 60 ] ; do
-	ret="$(curl -s -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/eicar.com" http://localhost:8000/check)"
-	check="$(echo "$ret" | grep "\"success\":true")"
-	if [ $? -eq 0 ] && [ "$check" != "" ] ; then
-		check="$(echo "$ret" | grep "\"detected\":true")"
-		if [ "$check" != "" ] ; then
-			success="ok"
-			break
-		fi
-	fi
-	retry=$(($retry + 1))
-	sleep 1
-done
-if [ $retry -eq 60 ] ; then
-	docker-compose logs
-	docker-compose down -v
-	echo "❌ Error timeout after 60s"
-	exit 1
-fi
-if [ "$success" == "ko" ] ; then
-	docker-compose logs
-	docker-compose down -v
-	echo "❌ Error EICAR not detected"
-	exit 1
-fi
-echo "ℹ️ API is working ..."
-
 # Wait until BW is started
 echo "ℹ️ Waiting for BW ..."
 success="ko"
