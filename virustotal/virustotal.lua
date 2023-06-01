@@ -3,8 +3,10 @@ local plugin     = require "bunkerweb.plugin"
 local utils      = require "bunkerweb.utils"
 local cjson		 = require "cjson"
 local upload	 = require "resty.upload"
-local sha512	 = require "resty.sha512"
+local sha256	 = require "resty.sha256"
 local str		 = require "resty.string"
+local http		 = require "resty.http"
+local env        = require "resty.env"
 
 local virustotal    = class("virustotal", plugin)
 
@@ -15,7 +17,6 @@ end
 
 -- Todo : find a "ping" endpoint on VT API
 -- function virustotal:init_worker()
-
 -- end
 
 function virustotal:access()
@@ -30,7 +31,7 @@ function virustotal:access()
 		if not ok then
 			return self:ret(false, "error while checking if IP is malicious : " .. report)
 		end
-		if report then
+		if report ~= "clean" then
 			return self:ret(true, "IP " .. ngx.ctx.bw.remote_addr .. " is malicious : " .. report, utils.get_deny_status())
 		end
 	end
@@ -56,10 +57,111 @@ end
 
 function virustotal:check_ip()
 	-- Check cache
-	local ok, detected = self:is_in_cache("ip_" .. ngx.ctx.bw.remote_addr)
+	local ok, report = self:is_in_cache("ip_" .. ngx.ctx.bw.remote_addr)
 	if not ok then
-		return false, detected
+		return false, report
 	end
+	if report then
+		return true, report
+	end
+	-- Ask VT API
+	local ok, found, response = self:request("/ip_addresses/" .. ngx.ctx.bw.remote_addr)
+	if not ok then
+		return false, response
+	end
+	local result = "clean"
+	if found then
+		result = self:get_result(response, "IP")
+	end
+	-- Add to cache
+	local ok, err = self:add_to_cache("ip_" .. ngx.ctx.bw.remote_addr, result)
+	if not ok then
+		return false, err
+	end
+	return true, result
+end
+
+function virustotal:check_file()
+	-- Loop on files
+	local form, err = upload:new(4096, 512, true)
+	if not form then
+		return false, err
+	end
+	local sha = sha256:new()
+	local processing = nil
+	while true do
+		-- Read part
+		local typ, res, err = form:read()
+		if not typ then
+			return false, "form:read() failed : " .. err
+		end
+		-- Header case : check if we have a filename
+		if typ == "header" then
+			local found = false
+			for i, header in ipairs(res) do
+				if header:find("^.*filename=\"(.*)\".*$") then
+					found = true
+					break
+				end
+			end
+			if found then
+				processing = true
+			end
+		-- Body case : update checksum
+		elseif typ == "body" and processing then
+			sha:update(res)
+		-- Part end case : get final checksum and clamav result
+		elseif typ == "part_end" and processing then
+			processing = nil
+			-- Compute checksum
+			local checksum = str.to_hex(sha:final())
+			sha:reset()
+			-- Check if file is in cache
+			local ok, cached = self:is_in_cache("file_" .. checksum)
+			if not ok then
+				self.logger:log(ngx.ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
+			elseif cached then
+				if cached ~= "clean" then
+					self:read_all(form)
+					return true, cached, checksum
+				end
+			else
+				-- Check if file is already present on VT
+				local ok, found, response = self:request("/files/" .. checksum)
+				if not ok then
+					self:read_all(form)
+					return false, found
+				end
+				local result = "clean"
+				if found then
+					result = self:get_result(response, "FILE")
+				end
+				-- Add to cache
+				local ok, err = self:add_to_cache("file_" .. checksum, result)
+				if not ok then
+					self:read_all(form)
+					return false, err
+				end
+				-- Stop here if one file is detected
+				if result ~= "clean" then
+					self:read_all(form)
+					return true, result, checksum
+				end
+			end
+		-- End of body case : no file detected
+		elseif typ == "eof" then
+			return true
+		end
+	end
+	return false, "malformed content"
+end
+
+function virustotal:get_result(response, type)
+	local result = "clean"
+	if response["suspicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_SUSPICIOUS"]) or response["malicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_MALICIOUS"]) then
+		result = tostring(response["suspicious"]) .. " suspicious and " .. tostring(response["malicious"]) .. " malicious"
+	end
+	return result
 end
 
 function virustotal:is_in_cache(key)
@@ -78,130 +180,56 @@ function virustotal:add_to_cache(key, value)
 	return true
 end
 
-
-
-function virustotal:init_worker()
-	-- Check if worker is needed
-	local init_needed, err = utils.has_variable("USE_VIRUSTOTAL", "yes")
-	if init_needed == nil then
-		return self:ret(false, "can't check USE_VIRUSTOTAL variable : " .. err)
-	end
-	if not init_needed or self.is_loading then
-		return self:ret(true, "init_worker not needed")
-	end
-	-- Send ping to VirusTotal API
-	local ok, err, status, data = self:request("GET", "/ping")
-	if not ok then
-		return self:ret(false, "error from request : " .. err)
-	end
-	if not data.success then
-		return self:ret(false, "received status code " .. tostring(status) .. " from VirusTotal API : " .. data.error)
-	end
-	self.logger:log(ngx.NOTICE, "connectivity with " .. self.variables["VIRUSTOTAL_API"] .. " successful")
-	return self:ret(true, "success")
-end
-
-function virustotal:access()
-	-- Check if enabled
-	if self.variables["USE_VIRUSTOTAL"] ~= "yes" or (self.variables["VIRUSTOTAL_SCAN_IP"] ~= "yes" and self.variables["VIRUSTOTAL_SCAN_FILE"] ~= "yes") then
-		return self:ret(true, "virustotal plugin not enabled")
-	end
-
-	-- IP check
-	if self.variables["VIRUSTOTAL_SCAN_IP"] == "yes" then
-		local ok, err, status, data = self:request("POST", "/check_ip", "ip")
-		if not ok then
-			return self:ret(false, "error from request : " .. err)
-		end
-		if not data.success then
-			return self:ret(false, "error from API : " .. data.error)
-		end
-		if data.detected then
-			self:ret(true, "ip " .. ngx.ctx.bw.remote_addr .. " is detected", utils.get_deny_status())
-		end
-	end
-
-	-- File check
-	if self.variables["VIRUSTOTAL_SCAN_FILE"] == "yes" then
-		-- Check if we have downloads
-		if not ngx.ctx.bw.http_content_type or (not ngx.ctx.bw.http_content_type:match("boundary") or not ngx.ctx.bw.http_content_type:match("multipart/form%-data")) then
-			return self:ret(true, "no file upload detected")
-		end
-		local ok, err, status, data = self:request("POST", "/check", "file")
-		if not ok then
-			return self:ret(false, "error from request : " .. err)
-		end
-		if not data.success then
-			return self:ret(false, "error from API : " .. data.error)
-		end
-		if data.detected then
-			return self:ret(true, "file with hash " .. data.hash .. " is detected", utils.get_deny_status())
-		end
-	end
-
-	return self:ret(true, "no ip/file detected")
-
-end
-
-function virustotal:request(method, url, type)
-	local api = self.variables["VIRUSTOTAL_API"]
+function virustotal:request(url)
+	-- Get object
 	local httpc, err = http.new()
 	if not httpc then
-		return false, "can't instantiate http object : " .. err, nil, nil
+		return false, err
 	end
-	local res = nil
-	local err_http = "unknown error"
-	if method == "GET" then
-		res, err_http = httpc:request_uri(api .. url, {
-			method = method,
-		})
-	else
-		local headers = {}
-		if type == "ip" then
-			headers["Content-Type"] = "application/json"
-			res, err_http = httpc:request_uri(api .. url, {
-				method = method,
-				headers = headers,
-				body = cjson.encode({
-					ip = ngx.ctx.bw.remote_addr
-				})
-			})
-		elseif type == "file" then
-			local body, err = httpc:get_client_body_reader()
-			if not body then
-				ngx.req.read_body()
-				body = ngx.req.get_body_data()
-				if not body then
-					local body_file = ngx.req.get_body_file()
-					if not body_file then
-						return false, "can't access client body", nil, nil
-					end
-					local f, err = io.open(body_file, "rb")
-					if not f then
-						return false, "can't read body from file " .. body_file .. " : " .. err, nil, nil
-					end
-					body = function()
-						return f:read(4096)
-					end
-				end
-			end
-			headers = ngx.req.get_headers()
-			res, err_http = httpc:request_uri(api .. url, {
-				method = method,
-				headers = headers,
-				body = body
-			})
+	-- Send request
+	local res, err = httpc:request_uri("https://www.virustotal.com/api/v3" .. url,
+		{
+			headers = {
+				["x-apikey"] = self.variables["VIRUSTOTAL_API_KEY"]
+			}
+		}
+	)
+	if not res then
+		return false, err
+	end
+	-- Check status
+	if res.status == 404 then
+		return true, false
+	end
+	if res.status ~= 200 then
+		local err = "received status " .. tostring(res.status) .. " from VT API"
+		local ok, data = pcall(cjson.decode, res.body)
+		if ok then
+			err = err .. " with data " .. data
+		end
+		return false, err
+	end
+	-- Get result
+	local ok, data = pcall(cjson.decode, res.body)
+	if not ok then
+		return false, data
+	end
+	if not data.data or not data.data.attributes or not data.data.attributes.last_analysis_stats then
+		return false, "malformed json response"
+	end
+	return true, true, data.data.attributes.last_analysis_stats
+end
+
+function virustotal:read_all(form)
+	while true do
+		local typ = form:read()
+		if not typ then
+			return
+		end
+		if typ == "eof" then
+			return
 		end
 	end
-	httpc:close()
-	if not res then
-		return false, "error while sending request : " .. err_http, nil, nil
-	end
-	local ok, ret = pcall(cjson.decode, res.body)
-	if not ok then
-		return false, "error while decoding json : " .. ret, nil, nil
-	end
-	return true, "success", res.status, ret
 end
 
 return virustotal

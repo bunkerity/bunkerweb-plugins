@@ -95,7 +95,10 @@ end
 function clamav:scan()
 	-- Loop on files
 	local form = upload:new(4096, 512, true)
-	local sha512 = sha512:new()
+	if not form then
+		return false, err
+	end
+	local sha = sha512:new()
 	local socket = nil
 	local err = nil
 	while true do
@@ -123,26 +126,29 @@ function clamav:scan()
 				end
 				socket, err = self:socket()
 				if not socket then
+					self:read_all(form)
 					return false, "socket failed : " .. err
 				end
 				local bytes, err = socket:send("nINSTREAM\n")
 				if not bytes then
 					socket:close()
+					self:read_all(form)
 					return false, "socket:send() failed : " .. err
 				end
 			end
 		-- Body case : update checksum and send to clamav
 		elseif typ == "body" and socket then
-			sha512:update(res)
+			sha:update(res)
 			local bytes, err = socket:send(self:stream_size(#res) .. res)
 			if not bytes then
 				socket:close()
+				self:read_all(form)
 				return false, "socket:send() failed : " .. err
 			end
 		-- Part end case : get final checksum and clamav result
 		elseif typ == "part_end" and socket then
-			local checksum = str.to_hex(sha512:final())
-			sha512:reset()
+			local checksum = str.to_hex(sha:final())
+			sha:reset()
 			-- Check if file is in cache
 			local ok, cached = self:is_in_cache(checksum)
 			if not ok then
@@ -151,6 +157,7 @@ function clamav:scan()
 				socket:close()
 				socket = nil
 				if cached ~= "clean" then
+					self:read_all(form)
 					return true, cached, checksum
 				end
 			else
@@ -158,12 +165,14 @@ function clamav:scan()
 				local bytes, err = socket:send(self:stream_size(0))
 				if not bytes then
 					socket:close()
+					self:read_all(form)
 					return false, "socket:send() failed : " .. err
 				end
 				-- Read result
 				local data, err, partial = socket:receive("*l")
 				if not data then
 					socket:close()
+					self:read_all(form)
 					return false, err
 				end
 				socket:close()
@@ -181,6 +190,7 @@ function clamav:scan()
 						self.logger:log(ngx.ERR, "can't cache result : " .. err)
 					end
 					if detected ~= "clean" then
+						self:read_all(form)
 						return true, detected, checksum
 					end
 				end
@@ -221,6 +231,18 @@ function clamav:add_to_cache(checksum, value)
 		return false, err
 	end
 	return true
+end
+
+function clamav:read_all(form)
+	while true do
+		local typ = form:read()
+		if not typ then
+			return
+		end
+		if typ == "eof" then
+			return
+		end
+	end
 end
 
 return clamav
