@@ -5,7 +5,7 @@
 </p>
 
 
-This [BunkerWeb](https://www.bunkerweb.io) will act as a Library of rule that aim to detect and deny malicious requests 
+This [Plugin](https://www.bunkerweb.io/latest/plugins) will act as a Library of rule that aim to detect and deny malicious requests 
 
 # Table of contents
 
