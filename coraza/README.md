@@ -62,9 +62,22 @@ services:
 
 ```yaml
 
+FROM golang:1.20-alpine AS builder
+
+WORKDIR /coraza
+
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY . .
+RUN go build -v -o /usr/local/bin/bw-coraza
+
 FROM golang:1.20-alpine
-WORKDIR /app
-COPY ./bw-data/plugins/coraza/confs/ /app
+
+COPY --from=builder 
+
+CMD ["bw-coraza"]
+
+COPY . /coraza
 RUN apk add git wget tar 
 RUN go install github.com/corazawaf/coraza-access
 RUN go mod tidy 

@@ -2,7 +2,7 @@
 	"id": "coraza",
 	"name": "Coraza",
 	"description": "Use Coraza as a library to inspect client request",
-	"version": "0.1",
+	"version": "1.2",
 	"stream":"no",
 	"settings": {
 		"USE_CORAZA": {
@@ -16,8 +16,8 @@
 		},
         "CORAZA_API": {
 			"context": "global",
-			"default": "http://bunkerweb-golang-1:8090",
-			"help": "Address of the CORAZA API.",
+			"default": "bw-coraza",
+			"help": "IP/hostname of the CORAZA API.",
 			"id": "coraza-api",
 			"label": "Coraza Api",
 			"regex": "^.*$",

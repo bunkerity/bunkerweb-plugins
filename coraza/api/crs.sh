@@ -5,14 +5,14 @@ function git_secure_clone() {
 	commit="$2"
 	folder="$(echo "$repo" | sed -E "s@https://github.com/.*/(.*)\.git@\1@")"
 	if [ ! -d "files/${folder}" ] ; then
-		output="$(git clone "$repo" "files/${folder}" 2>&1)"
+		output="$(git clone "$repo" "${folder}" 2>&1)"
 		if [ $? -ne 0 ] ; then
 			echo "❌ Error cloning $1"
 			echo "$output"
 			exit 1
 		fi
 		old_dir="$(pwd)"
-		cd "files/${folder}"
+		cd "${folder}"
 		output="$(git checkout "${commit}^{commit}" 2>&1)"
 		if [ $? -ne 0 ] ; then
 			echo "❌ Commit hash $commit is absent from repository $repo"
@@ -20,7 +20,7 @@ function git_secure_clone() {
 			exit 1
 		fi
 		cd "$old_dir"
-		output="$(rm -rf "files/${folder}/.git")"
+		output="$(rm -rf "${folder}/.git")"
 		if [ $? -ne 0 ] ; then
 			echo "❌ Can't delete .git from repository $repo"
 			echo "$output"
@@ -53,20 +53,16 @@ function remove_files(){
 		echo "$output"
 		exit 1
 	else
-		echo "⚠️ Skipping remove of $dir because target directory do not exist"
+		echo "⚠️ Skipping  remove of $dir because target directory do not exist"
 	fi
 }
 
-
 # CRS v3.3.4
 echo "ℹ️ Download CRS or Remove CRS"
-
 if [[ "$1" == "Remove" ]]; then
     remove_files
-
 elif [[ "$1" == "Download" ]]; then
-	git_secure_clone "https://github.com/coreruleset/coreruleset.git" "98b9d811f34a1aa72792aaf6245cb2f2c0f0a5b8"
-	do_and_check_cmd cp -r files/coreruleset/crs-setup.conf.example files/crs-setup.conf
+	git_secure_clone "https://github.com/coreruleset/coreruleset.git" "483630449e176cbd4e22571511acefaab5e5a870"
 else
 	echo "❌ Error wrong argument : $1 try Remove or Download"
 fi

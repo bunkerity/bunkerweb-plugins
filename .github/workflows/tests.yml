@@ -32,6 +32,9 @@ jobs:
       - name: Run ClamAV tests
         run: ./.tests/clamav.sh
 
+      - name: Run Coraza tests
+        run: ./.tests/coraza.sh
+
       - name: Run CrowdSec tests
         run: ./.tests/crowdsec.sh
 
