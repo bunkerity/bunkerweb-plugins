@@ -43,7 +43,7 @@ function slack:log(bypass_use_slack)
 	end
 end
 
-function slack:send(self, data)
+function slack.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)

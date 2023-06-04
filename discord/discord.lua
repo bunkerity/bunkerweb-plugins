@@ -43,7 +43,7 @@ function discord:log(bypass_use_discord)
 	end
 end
 
-function discord:send(self, data)
+function discord.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)
