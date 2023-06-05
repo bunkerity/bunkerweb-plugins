@@ -35,18 +35,12 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 	rules := tx.MatchedRules()
 	txid := tx.ID()
 	for _, rule := range rules {
-			if rule.Message() != "" {
-				WarningLogger.Printf("[%s] Matched rule %d %s in file %s", txid, rule.Rule().ID(), rule.Message(), rule.Rule().File())
-				for _, md := range rule.MatchedDatas() {
-					if md.Data() != "" {
-						WarningLogger.Printf("[%s] %s", txid, md.Data())
-					}
-				}
+			if rule.AuditLog() != "" {
+				WarningLogger.Printf(rule.AuditLog())
 			}
 	}
 	switch action {
 		case "block", "deny", "drop", "redirect", "reject":
-			WarningLogger.Printf("[%s] %s action from rule ID %d", txid, action, ruleid)
 			data := Resp{
 				Deny: true,
 				Msg: fmt.Sprintf("%s action from rule ID %d", action, ruleid),
@@ -54,7 +48,6 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 			json.NewEncoder(w).Encode(data)
 			return
 		case "allow":
-			InfoLogger.Printf("[%s] allow action from rule ID %d", txid, action, ruleid)
 			data := Resp{
 				Deny: false,
 				Msg: fmt.Sprintf("allow action from rule ID %d", ruleid),
