@@ -41,7 +41,7 @@ function clamav:access()
 	end
 
 	-- Check if we have downloads
-	if not ngx.ctx.bw.http_content_type or (not ngx.ctx.bw.http_content_type:match("boundary") or not ngx.ctx.bw.http_content_type:match("multipart/form%-data")) then
+	if not self.ctx.bw.http_content_type or (not self.ctx.bw.http_content_type:match("boundary") or not self.ctx.bw.http_content_type:match("multipart/form%-data")) then
 		return self:ret(true, "no file upload detected")
 	end
 

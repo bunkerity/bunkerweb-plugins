@@ -26,7 +26,7 @@ function slack:log(bypass_use_slack)
 	-- Compute data
 	local data = {}
 	data.content = "```Denied request for IP " ..
-			ngx.ctx.bw.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
+			self.ctx.bw.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
 	local headers, err = ngx.req.get_headers()
 	if not headers then
 		data.content = data.content .. "error while getting headers : " .. err

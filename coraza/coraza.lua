@@ -29,14 +29,14 @@ function coraza:access()
         return self:ret(true, "coraza not activated")
     end
     -- Generate transaction ID
-    ngx.ctx.bw.coraza_txid = utils.rand(16)
+    self.ctx.bw.coraza_txid = utils.rand(16)
     -- Process phases 1 (headers) and 2 (body)
     local ok, deny, data = self:process_request()
     if not ok then
         return self:ret(false, "error while processing request : " .. deny)
     end
     if deny then
-        return self:ret(true, "coraza denied request : " .. data, utils.get_deny_status())
+        return self:ret(true, "coraza denied request : " .. data, utils.get_deny_status(self.ctx))
     end
     return self:ret(true, "coraza accepted request")
 end
@@ -79,7 +79,7 @@ function coraza:process_request()
 	if not httpc then
 		return false, err
 	end
-    httpc:set_timeout(1000)
+    httpc:set_timeout(2500)
     -- Get request headers
     local headers, err = ngx.req.get_headers(nil, true)
     if err == "truncated" then
@@ -90,15 +90,20 @@ function coraza:process_request()
     end
     -- Compute API headers
     local headers = {
-        ["X-Coraza-ID"] = ngx.ctx.bw.coraza_txid,
-        ["X-Coraza-IP"] = ngx.ctx.bw.remote_addr,
-        ["X-Coraza-URI"] = ngx.ctx.bw.request_uri,
-        ["X-Coraza-METHOD"] = ngx.ctx.bw.request_method,
-        ["X-Coraza-VERSION"] = "HTTP/" .. tostring(ngx.ctx.bw.http_version),
+        ["X-Coraza-ID"] = self.ctx.bw.coraza_txid,
+        ["X-Coraza-IP"] = self.ctx.bw.remote_addr,
+        ["X-Coraza-URI"] = self.ctx.bw.request_uri,
+        ["X-Coraza-METHOD"] = self.ctx.bw.request_method,
+        ["X-Coraza-VERSION"] = "HTTP/" .. tostring(self.ctx.bw.http_version),
         ["X-Coraza-HEADERS"] = cjson.encode(headers)
     }
-    if ngx.ctx.bw.http_content_length then
-        headers["Content-Length"] = ngx.ctx.bw.http_content_length
+    local body = false
+    if ngx.var.http_transfer_encoding then
+        body = true
+        headers["Transfer-Encoding"] = ngx.var.http_transfer_encoding
+    elseif self.ctx.bw.http_content_length then
+        body = true
+        headers["Content-Length"] = self.ctx.bw.http_content_length
     end
     -- Get body reader
     local client_body_reader, err = httpc:get_client_body_reader()
@@ -106,7 +111,8 @@ function coraza:process_request()
         return false, err
     end
     local downstream_reader = nil
-    if pcall(ngx.req.init_body) then
+    if body then
+        ngx.req.init_body()
         downstream_reader = function()
             local chunk = client_body_reader(8192)
             if chunk then
@@ -161,7 +167,7 @@ function coraza:is_needed()
 		return false
 	end
 	-- Request phases (no default)
-	if self.is_request and (ngx.ctx.bw.server_name ~= "_") then
+	if self.is_request and (self.ctx.bw.server_name ~= "_") then
 		return self.variables["USE_CORAZA"] == "yes"
 	end
 	-- Other cases : at least one service uses it
