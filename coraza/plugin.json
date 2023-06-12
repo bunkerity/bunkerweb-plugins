@@ -1,27 +1,27 @@
 {
-	"id": "coraza",
-	"name": "Coraza",
-	"description": "Use Coraza as a library to inspect client request",
-	"version": "1.2",
-	"stream":"no",
-	"settings": {
-		"USE_CORAZA": {
-			"context": "multisite",
-			"default": "no",
-			"help": "Activate Coraza library",
-			"id": "use coraza library",
-			"label": "Coraza",
-			"regex": "^(no|yes)$",
-			"type": "check"
-		},
-        "CORAZA_API": {
-			"context": "global",
-			"default": "bw-coraza",
-			"help": "IP/hostname of the CORAZA API.",
-			"id": "coraza-api",
-			"label": "Coraza Api",
-			"regex": "^.*$",
-			"type": "text"
-		}
-	}
+  "id": "coraza",
+  "name": "Coraza",
+  "description": "Use Coraza as a library to inspect client request",
+  "version": "1.2",
+  "stream": "no",
+  "settings": {
+    "USE_CORAZA": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate Coraza library",
+      "id": "use coraza library",
+      "label": "Coraza",
+      "regex": "^(no|yes)$",
+      "type": "check"
+    },
+    "CORAZA_API": {
+      "context": "global",
+      "default": "http://bw-coraza:8080",
+      "help": "hostname of the CORAZA API.",
+      "id": "coraza-api",
+      "label": "Coraza Api",
+      "regex": "^.*$",
+      "type": "text"
+    }
+  }
 }
