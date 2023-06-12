@@ -32,13 +32,13 @@ var waf coraza.WAF
 func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.Interruption) {
 	action := it.Action
 	ruleid := it.RuleID
-	// rules := tx.MatchedRules()
+	rules := tx.MatchedRules()
 	txid := tx.ID()
-	// for _, rule := range rules {
-	// 		if rule.AuditLog() != "" {
-	// 			WarningLogger.Printf(rule.AuditLog())
-	// 		}
-	// }
+	for _, rule := range rules {
+			if rule.AuditLog() != "" {
+				WarningLogger.Printf(rule.AuditLog())
+			}
+	}
 	switch action {
 		case "block", "deny", "drop", "redirect", "reject":
 			data := Resp{
@@ -199,7 +199,7 @@ func main() {
 	router := httprouter.New()
     router.GET("/ping", handlePing)
     router.POST("/request", handleRequest)
-	// TODO : handle reponse too
+	// TODO : handle response too
 	srv := &http.Server{
 		Addr: ":8080",
 		Handler: router,

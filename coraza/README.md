@@ -1,7 +1,7 @@
 # Coraza plugin
 
 <p align="center">
-	<img alt="BunkerWeb Coraza diagram" src="https://github.com/gin-gitaxias/bunkerweb-plugins/blob/dev/coraza/docs/diagram.png" />
+	<img alt="BunkerWeb Coraza diagram" src="docs/diagram.png" />
 </p>
 
 
@@ -14,7 +14,6 @@ This [Plugin](https://www.bunkerweb.io/latest/plugins) will act as a Library of 
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
   * [Docker](#docker)
-  * [Dockerfile](#dockerfile)
 - [Settings](#settings)
   * [Plugin (BunkerWeb)](#plugin--bunkerweb-)
 - [TODO](#todo)
@@ -39,62 +38,26 @@ services:
     image: bunkerity/bunkerweb:1.5.0
     ...
     environment:
+      - USE_MODSECURITY: "no" # We don't need modsecurity anymore
       - USE_CORAZA: "yes"
-      - USE_MODSECURITY: "no"
-      - USE_MODSECURITY_CRS: "no"
     ...
-    bw-scheduler:
-        build:
-            context: .
-            dockerfile: src/scheduler/Dockerfile
-
-    ...
-    golang:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    networks:
-      - bw-services
+    bw-coraza:
+      build: /path/to/coraza-plugin
+      networks:
+        - bw-universe
 
 ```
 
-## golang Dockerfile
-
-```yaml
-
-FROM golang:1.20-alpine AS builder
-
-WORKDIR /coraza
-
-COPY go.mod go.sum ./
-RUN go mod download && go mod verify
-COPY . .
-RUN go build -v -o /usr/local/bin/bw-coraza
-
-FROM golang:1.20-alpine
-
-COPY --from=builder 
-
-CMD ["bw-coraza"]
-
-COPY . /coraza
-RUN apk add git wget tar 
-RUN go install github.com/corazawaf/coraza-access
-RUN go mod tidy 
-RUN apk remove git wget tar
-CMD ["go", "run", "/app/."]
-
-```
 # Settings
 
 ## Plugin (BunkerWeb)
 
 | Setting      | Default                  | Description                                                                                    |
 | :----------: | :----------------------: | :--------------------------------------------------------------------------------------------- |
-| `USE_CORAZA` | `no`                     | When set to `yes`, requests will be checked by coraza.                      |
-| `CORAZA_API` | `http://bunkerweb-golang-1:8090` | Address of the coraza library (request will be redirected there). |
+| `USE_CORAZA` | `no`                     | When set to `yes`, requests will be checked by coraza.                                         |
+| `CORAZA_API` | `http://bw-coraza:8080`  | Address of the coraza library (request will be redirected there).                              |
 
-! Disclaimer the `CORAZA_API` port (by default 8090) can't be modified only in the plugin.json. You also need to change it in the main.go (bw-data/plugins/coraza/confs/main.go)
+! Disclaimer the `CORAZA_API` port (by default 8080) can't be modified in the plugin.json. You also need to change it in the main.go (/data/plugins/coraza/confs/main.go)
 
 # TODO
 

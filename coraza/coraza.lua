@@ -1,19 +1,19 @@
-local class		= require "middleclass"
-local plugin	= require "bunkerweb.plugin"
-local utils     = require "bunkerweb.utils"
-local http		= require "resty.http"
-local cjson     = require "cjson"
-local coraza    = class("coraza", plugin)
+local class  = require "middleclass"
+local plugin = require "bunkerweb.plugin"
+local utils  = require "bunkerweb.utils"
+local http   = require "resty.http"
+local cjson  = require "cjson"
+local coraza = class("coraza", plugin)
 
 function coraza:initialize()
     -- Call parent initialize
-   plugin.initialize(self, "coraza")
+    plugin.initialize(self, "coraza")
 end
 
 function coraza:init_worker()
     -- Check if needed
     if not self:is_needed() then
-       return self:ret(true, "coraza not activated")
+        return self:ret(true, "coraza not activated")
     end
     -- Send ping request
     local ok, data = self:ping()
@@ -42,43 +42,43 @@ function coraza:access()
 end
 
 function coraza:ping()
-	-- Get http object
-	local httpc, err = http.new()
-	if not httpc then
-		return false, err
-	end
+    -- Get http object
+    local httpc, err = http.new()
+    if not httpc then
+        return false, err
+    end
     httpc:set_timeout(1000)
     -- Send ping
-    local res, err = httpc:request_uri("http://" .. self.variables["CORAZA_API"] .. ":8080/ping", {keepalive = false})
+    local res, err = httpc:request_uri(self.variables["CORAZA_API"] .. "/ping", { keepalive = false })
     if not res then
         return false, err
     end
-	-- Check status
-	if res.status ~= 200 then
-		local err = "received status " .. tostring(res.status) .. " from Coraza API"
-		local ok, data = pcall(cjson.decode, res.body)
-		if ok then
-			err = err .. " with data " .. data
-		end
-		return false, err
-	end
+    -- Check status
+    if res.status ~= 200 then
+        local err = "received status " .. tostring(res.status) .. " from Coraza API"
+        local ok, data = pcall(cjson.decode, res.body)
+        if ok then
+            err = err .. " with data " .. data
+        end
+        return false, err
+    end
     -- Get pong
-	local ok, data = pcall(cjson.decode, res.body)
-	if not ok then
-		return false, data
-	end
-	if data.pong == nil then
-		return false, "malformed json response"
-	end
+    local ok, data = pcall(cjson.decode, res.body)
+    if not ok then
+        return false, data
+    end
+    if data.pong == nil then
+        return false, "malformed json response"
+    end
     return true
 end
 
 function coraza:process_request()
-	-- Get http object
-	local httpc, err = http.new()
-	if not httpc then
-		return false, err
-	end
+    -- Get http object
+    local httpc, err = http.new()
+    if not httpc then
+        return false, err
+    end
     httpc:set_timeout(2500)
     -- Get request headers
     local headers, err = ngx.req.get_headers(nil, true)
@@ -106,6 +106,7 @@ function coraza:process_request()
         headers["Content-Length"] = self.ctx.bw.http_content_length
     end
     -- Get body reader
+    -- TODO Add support for HTTP/2.0
     local client_body_reader, err = httpc:get_client_body_reader()
     if err then
         return false, err
@@ -121,61 +122,58 @@ function coraza:process_request()
             return chunk
         end
     end
-	-- Send request
-	local res, err = httpc:request_uri("http://" .. self.variables["CORAZA_API"] .. ":8080/request",
-		{
+    -- Send request
+    local res, err = httpc:request_uri(self.variables["CORAZA_API"] .. "/request",
+        {
             method = "POST",
             body = downstream_reader,
-			headers = headers,
+            headers = headers,
             keepalive = false
-		}
-	)
-    if downstream_reader then
-        ngx.req.finish_body()
+        }
+    )
+    if not res then
+        httpc:close()
+        return false, err
     end
-	if not res then
+    -- Check status
+    if res.status ~= 200 then
+        local err = "received status " .. tostring(res.status) .. " from Coraza API"
+        local ok, data = pcall(cjson.decode, res.body)
+        if ok then
+            err = err .. " with data " .. data
+        end
         httpc:close()
-		return false, err
-	end
-	-- Check status
-	if res.status ~= 200 then
-		local err = "received status " .. tostring(res.status) .. " from Coraza API"
-		local ok, data = pcall(cjson.decode, res.body)
-		if ok then
-			err = err .. " with data " .. data
-		end
+        return false, err
+    end
+    -- Get result
+    local ok, data = pcall(cjson.decode, res.body)
+    if not ok then
         httpc:close()
-		return false, err
-	end
-	-- Get result
-	local ok, data = pcall(cjson.decode, res.body)
-	if not ok then
+        return false, data
+    end
+    if data.deny == nil or not data.msg then
         httpc:close()
-		return false, data
-	end
-	if data.deny == nil or not data.msg then
-        httpc:close()
-		return false, "malformed json response"
-	end
+        return false, "malformed json response"
+    end
     httpc:close()
-	return true, data.deny, data.msg
+    return true, data.deny, data.msg
 end
 
 function coraza:is_needed()
-	-- Loading case
-	if self.is_loading then
-		return false
-	end
-	-- Request phases (no default)
-	if self.is_request and (self.ctx.bw.server_name ~= "_") then
-		return self.variables["USE_CORAZA"] == "yes"
-	end
-	-- Other cases : at least one service uses it
-	local is_needed, err = utils.has_variable("USE_CORAZA", "yes")
-	if is_needed == nil then
-		self.logger:log(ngx.ERR, "can't check USE_CORAZA variable : " .. err)
-	end
-	return is_needed
+    -- Loading case
+    if self.is_loading then
+        return false
+    end
+    -- Request phases (no default)
+    if self.is_request and (self.ctx.bw.server_name ~= "_") then
+        return self.variables["USE_CORAZA"] == "yes"
+    end
+    -- Other cases : at least one service uses it
+    local is_needed, err = utils.has_variable("USE_CORAZA", "yes")
+    if is_needed == nil then
+        self.logger:log(ngx.ERR, "can't check USE_CORAZA variable : " .. err)
+    end
+    return is_needed
 end
 
 return coraza
