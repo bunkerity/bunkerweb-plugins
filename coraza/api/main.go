@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"fmt"
 	"os"
+	//"github.com/gorilla/mux"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
-	"github.com/julienschmidt/httprouter"
+	//"github.com/julienschmidt/httprouter"
 )
 
 var (
@@ -35,9 +36,9 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 	rules := tx.MatchedRules()
 	txid := tx.ID()
 	for _, rule := range rules {
-			if rule.AuditLog() != "" {
-				WarningLogger.Printf(rule.AuditLog())
-			}
+		if rule.AuditLog() != "" {
+			WarningLogger.Printf(rule.AuditLog())
+		}
 	}
 	switch action {
 		case "block", "deny", "drop", "redirect", "reject":
@@ -58,7 +59,7 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 	ErrorLogger.Printf("[%s] Unknown %s action from rule ID %d", txid, action, ruleid)
 }
 
-func handlePing(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func handlePing(w http.ResponseWriter, req *http.Request/*, _ httprouter.Params*/) {
 	// Send pong response
 	InfoLogger.Printf("GET /ping")
 	data := Pong{
@@ -67,22 +68,28 @@ func handlePing(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func handleRequest(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func handleRequest(w http.ResponseWriter, req *http.Request/*, _ httprouter.Params*/) {
 	// Get headers
+	//vars := mux.Vars(req)
 	InfoLogger.Printf("POST /request")
-	txid := req.Header.Get("X-Coraza-ID")
-	ip := req.Header.Get("X-Coraza-IP")
-	uri := req.Header.Get("X-Coraza-URI")
-	method := req.Header.Get("X-Coraza-METHOD")
-	version := req.Header.Get("X-Coraza-VERSION")
-	headers_str := req.Header.Get("X-Coraza-HEADERS")
-	var headers map[string]interface{}
-	err := json.Unmarshal([]byte(headers_str), &headers)
-	if err != nil {
-		ErrorLogger.Printf(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	txid := "toto" // req.Header.Get("X-Coraza-ID")
+	ip := "127.0.0.1" // req.Header.Get("X-Coraza-IP")
+	uri := req.RequestURI // req.Header.Get("X-Coraza-URI")
+	// if uri == "" {
+	// 	uri = "/"
+	// }
+ 	method := req.Method // req.Header.Get("X-Coraza-METHOD")
+	version := "HTTP/1.1" // req.Header.Get("X-Coraza-VERSION")
+	// Loop over header names
+
+	// headers_str := req.Header.Get("X-Coraza-HEADERS")
+	// var headers map[string]interface{}
+	// err := json.Unmarshal([]byte(headers_str), &headers)
+	// if err != nil {
+	// 	ErrorLogger.Printf(err.Error())
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// 	return
+	// }
 	// Create transaction
 	InfoLogger.Printf("[%s] Processing request with ip=%s, uri=%s, method=%s and version=%s", txid, ip, uri, method, version)
 	tx := waf.NewTransactionWithID(txid)
@@ -105,9 +112,15 @@ func handleRequest(w http.ResponseWriter, req *http.Request, _ httprouter.Params
 	InfoLogger.Printf("[%s] Processing phase 1", txid)
 	tx.ProcessConnection(ip, 42000, "", 0)
 	tx.ProcessURI(uri, method, version)
-	for key, value := range headers {
-		tx.AddRequestHeader(key, value.(string))
+	for name, values := range req.Header {
+		// Loop over all values for the name.
+		for _, value := range values {
+			tx.AddRequestHeader(name, value)
+		}
 	}
+	// for key, value := range headers {
+	// 	tx.AddRequestHeader(key, value.(string))
+	// }
 	if it := tx.ProcessRequestHeaders();it != nil {
 		processInterruption(w, tx, it)
 		return
@@ -196,14 +209,17 @@ func main() {
 	}
 
 	// Setup HTTP server
-	router := httprouter.New()
-    router.GET("/ping", handlePing)
-    router.POST("/request", handleRequest)
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", handleRequest)
+    mux.HandleFunc("/ping", handlePing)
+    // router.GET("/ping", handlePing)
+    // router.POST("/request", handleRequest)
 	// TODO : handle response too
-	srv := &http.Server{
-		Addr: ":8080",
-		Handler: router,
-	}
+	// srv := &http.Server{
+	// 	Addr: ":8080",
+	// 	Handler: router,
+	// }
+	// http.Handle("/", router)
 	InfoLogger.Printf("Coraza API is ready to handle requests")
-	srv.ListenAndServe()
+	http.ListenAndServe(":8080", mux)
 }

@@ -18,7 +18,7 @@ RUN addgroup -g 1000 coraza && \
 WORKDIR /coraza
 
 COPY --chown=0:1000 coreruleset ./coreruleset
-COPY --chown=0:1000 coraza.conf bunkerweb*.conf .
+COPY --chown=0:1000 coraza.conf bunkerweb*.conf ./
 
 VOLUME /rules-before /rules-after
 

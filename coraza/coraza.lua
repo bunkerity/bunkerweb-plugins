@@ -74,67 +74,84 @@ function coraza:ping()
 end
 
 function coraza:process_request()
-    -- Get http object
-    local httpc, err = http.new()
-    if not httpc then
-        return false, err
-    end
-    httpc:set_timeout(2500)
-    -- Get request headers
-    local headers, err = ngx.req.get_headers(nil, true)
-    if err == "truncated" then
-        return true, true, "too many headers"
-    end
-    if not headers then
-        return false, err
-    end
-    -- Compute API headers
-    local headers = {
-        ["X-Coraza-ID"] = self.ctx.bw.coraza_txid,
-        ["X-Coraza-IP"] = self.ctx.bw.remote_addr,
-        ["X-Coraza-URI"] = self.ctx.bw.request_uri,
-        ["X-Coraza-METHOD"] = self.ctx.bw.request_method,
-        ["X-Coraza-VERSION"] = "HTTP/" .. tostring(self.ctx.bw.http_version),
-        ["X-Coraza-HEADERS"] = cjson.encode(headers)
-    }
-    local body = false
-    if ngx.var.http_transfer_encoding then
-        body = true
-        headers["Transfer-Encoding"] = ngx.var.http_transfer_encoding
-    elseif self.ctx.bw.http_content_length then
-        body = true
-        headers["Content-Length"] = self.ctx.bw.http_content_length
-    end
-    -- Get body reader
-    -- TODO Add support for HTTP/2.0
-    local client_body_reader, err = httpc:get_client_body_reader()
-    if err then
-        return false, err
-    end
-    local downstream_reader = nil
-    if body then
-        ngx.req.init_body()
-        downstream_reader = function()
-            local chunk = client_body_reader(8192)
-            if chunk then
-                ngx.req.append_body(chunk)
-            end
-            return chunk
-        end
-    end
-    -- Send request
-    local res, err = httpc:request_uri(self.variables["CORAZA_API"] .. "/request",
-        {
-            method = "POST",
-            body = downstream_reader,
-            headers = headers,
-            keepalive = false
-        }
-    )
-    if not res then
-        httpc:close()
-        return false, err
-    end
+    -- -- Get http object
+    -- local httpc, err = http.new()
+    -- if not httpc then
+    --     return false, err
+    -- end
+    -- httpc:set_timeout(2500)
+    -- -- Get request headers
+    -- local headers, err = ngx.req.get_headers(nil, true)
+    -- if err == "truncated" then
+    --     return true, true, "too many headers"
+    -- end
+    -- if not headers then
+    --     return false, err
+    -- end
+    -- -- Compute API headers
+    -- -- local headers = {
+    -- --     ["X-Coraza-ID"] = self.ctx.bw.coraza_txid,
+    -- --     ["X-Coraza-IP"] = self.ctx.bw.remote_addr,
+    -- --     ["X-Coraza-URI"] = self.ctx.bw.request_uri,
+    -- --     ["X-Coraza-METHOD"] = self.ctx.bw.request_method,
+    -- --     ["X-Coraza-VERSION"] = "HTTP/" .. tostring(self.ctx.bw.http_version),
+    -- --     ["X-Coraza-HEADERS"] = cjson.encode(headers)
+    -- -- }
+    -- -- Compute body reader
+    -- local body = false
+    -- if ngx.var.http_transfer_encoding then
+    --     body = "chunked"
+    --     headers["Transfer-Encoding"] = ngx.var.http_transfer_encoding
+    -- elseif self.ctx.bw.http_content_length then
+    --     body = "length"
+    --     headers["Content-Length"] = self.ctx.bw.http_content_length
+    -- end
+    -- local downstream_reader = nil
+    -- if body then
+    --     -- local client_body_reader, err = httpc:get_client_body_reader()
+    --     -- if err then
+    --     --     return false, err
+    --     -- end
+    --     local sock, err = ngx.req.socket(true)
+    --     if not sock then
+    --         return false, err
+    --     end
+    --     local obj
+    --     ngx.req.init_body()
+    --     downstream_reader = function()
+    --         local data, err, partial = sock:receive(8192)
+    --         if data then
+    --             ngx.req.append_body(data)
+    --         end
+    --         return data
+    --     end
+    --     -- 
+    --     -- downstream_reader = function()
+    --     --     local chunk = client_body_reader(8192)
+    --     --     if chunk then
+    --     --         ngx.req.append_body(chunk)
+    --     --     end
+    --     --     return chunk
+    --     -- end
+    -- end
+    -- -- Send request
+    -- local res, err = httpc:request_uri(self.variables["CORAZA_API"] .. "/request",
+    --     {
+    --         method = "POST",
+    --         body = downstream_reader,
+    --         headers = headers,
+    --         keepalive = false
+    --     }
+    -- )
+    -- if not res then
+    --     httpc:close()
+    --     return false, err
+    -- end
+    -- Send subrequest
+    local res = ngx.location.capture("/bw/coraza" .. self.ctx.bw.request_uri, {
+        method = self.ctx.bw.request_method,
+        always_forward_body = true
+    })
     -- Check status
     if res.status ~= 200 then
         local err = "received status " .. tostring(res.status) .. " from Coraza API"
@@ -142,20 +159,20 @@ function coraza:process_request()
         if ok then
             err = err .. " with data " .. data
         end
-        httpc:close()
+        --httpc:close()
         return false, err
     end
     -- Get result
     local ok, data = pcall(cjson.decode, res.body)
     if not ok then
-        httpc:close()
+        --httpc:close()
         return false, data
     end
     if data.deny == nil or not data.msg then
-        httpc:close()
+        --httpc:close()
         return false, "malformed json response"
     end
-    httpc:close()
+    --httpc:close()
     return true, data.deny, data.msg
 end
 
