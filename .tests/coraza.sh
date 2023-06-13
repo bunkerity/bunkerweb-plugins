@@ -11,6 +11,7 @@ fi
 do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/coraza/bw-data/plugins
 do_and_check_cmd cp -r ./coraza /tmp/bunkerweb-plugins/coraza/bw-data/plugins
 do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/coraza/bw-data
+do_and_check_cmd cp -r ./coraza/api /tmp/bunkerweb-plugins/coraza
 
 # Copy compose
 do_and_check_cmd cp .tests/coraza/docker-compose.yml /tmp/bunkerweb-plugins/coraza
