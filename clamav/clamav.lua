@@ -51,7 +51,7 @@ function clamav:access()
 		return self:ret(false, "error while scanning file(s) : " .. detected)
 	end
 	if detected then
-		return self:ret(true, "file with checksum " .. checksum .. "is detected : " .. detected, utils.get_deny_status())
+		return self:ret(true, "file with checksum " .. checksum .. "is detected : " .. detected, utils.get_deny_status(self.ctx))
 	end
 	return self:ret(true, "no file detected")
 end

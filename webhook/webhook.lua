@@ -4,18 +4,18 @@ local utils   = require "bunkerweb.utils"
 local cjson   = require "cjson"
 local http    = require "resty.http"
 
-local discord = class("discord", plugin)
+local webhook = class("webhook", plugin)
 
-function discord:initialize()
+function webhook:initialize()
 	-- Call parent initialize
-	plugin.initialize(self, "discord")
+	plugin.initialize(self, "webhook")
 end
 
-function discord:log(bypass_use_discord)
-	-- Check if discord is enabled
-	if not bypass_use_discord then
-		if self.variables["USE_DISCORD"] ~= "yes" then
-			return self:ret(true, "discord plugin not enabled")
+function webhook:log(bypass_use_webhook)
+	-- Check if webhook is enabled
+	if not bypass_use_webhook then
+		if self.variables["USE_WEBHOOK"] ~= "yes" then
+			return self:ret(true, "webhook plugin not enabled")
 		end
 	end
 	-- Check if request is denied
@@ -43,12 +43,12 @@ function discord:log(bypass_use_discord)
 	end
 end
 
-function discord.send(premature, self, data)
+function webhook.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)
 	end
-	local res, err_http = httpc:request_uri(self.variables["DISCORD_WEBHOOK_URL"], {
+	local res, err_http = httpc:request_uri(self.variables["WEBHOOK_URL"], {
 		method = "POST",
 		headers = {
 			["Content-Type"] = "application/json",
@@ -59,9 +59,9 @@ function discord.send(premature, self, data)
 	if not res then
 		self.logger:log(ngx.ERR, "error while sending request : " .. err_http)
 	end
-	if self.variables["DISCORD_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
+	if self.variables["WEBHOOK_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
 		self.logger:log(ngx.WARN,
-			"Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
+			"HTTP endpoint is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
 		local hdr, err = ngx.timer.at(res.headers["Retry-After"], self.send, self, data)
 		if not hdr then
 			self.logger:log(ngx.ERR, "can't create report timer : " .. err)
@@ -76,14 +76,14 @@ function discord.send(premature, self, data)
 	self.logger:log(ngx.INFO, "request sent to webhook")
 end
 
-function discord:log_default()
-	-- Check if discord is activated
-	local check, err = utils.has_variable("USE_DISCORD", "yes")
+function webhook:log_default()
+	-- Check if webhook is activated
+	local check, err = utils.has_variable("USE_WEBHOOK", "yes")
 	if check == nil then
-		return self:ret(false, "error while checking variable USE_DISCORD (" .. err .. ")")
+		return self:ret(false, "error while checking variable USE_WEBHOOK (" .. err .. ")")
 	end
 	if not check then
-		return self:ret(true, "Discord plugin not enabled")
+		return self:ret(true, "webhook plugin not enabled")
 	end
 	-- Check if default server is disabled
 	local check, err = utils.get_variable("DISABLE_DEFAULT_SERVER", false)
@@ -97,4 +97,4 @@ function discord:log_default()
 	return self:log(true)
 end
 
-return discord
+return webhook

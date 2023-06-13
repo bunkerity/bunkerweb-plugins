@@ -19,7 +19,7 @@ function slack:log(bypass_use_slack)
 		end
 	end
 	-- Check if request is denied
-	local reason = utils.get_reason()
+	local reason = utils.get_reason(self.ctx)
 	if reason == nil then
 		return self:ret(true, "request not denied")
 	end

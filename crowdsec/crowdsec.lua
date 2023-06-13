@@ -39,7 +39,7 @@ function crowdsec:access()
 		return self:ret(false, "Error while executing CrowdSec bouncer : " .. err)
 	end
 	if not allowed then
-		return self:ret(true, "CrowSec bouncer denied request", utils.get_deny_status())
+		return self:ret(true, "CrowSec bouncer denied request", utils.get_deny_status(self.ctx))
 	end
 
 	return self:ret(true, "Not denied by CrowdSec bouncer")
