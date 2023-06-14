@@ -4,7 +4,7 @@
 	<img alt="BunkerWeb WebHook diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/webhook/docs/diagram.svg" />
 </p>
 
-This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you attack notifications on a custom HTTP endpoint of your choice using webhook.
+This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you attack notifications on a custom HTTP endpoint of your choice using a webhook.
 
 # Table of contents
 
@@ -12,7 +12,11 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you at
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
+  - [Docker](#docker)
+  - [Swarm](#swarm)
+  - [Kubernetes](#kubernetes)
 - [Settings](#settings)
+- [TODO](#todo)
 
 # Prerequisites
 
@@ -51,7 +55,7 @@ services:
     image: bunkerity/bunkerweb:1.5.1
     ...
     environment:
-      - USE_WEBHOOKS=yes
+      - USE_WEBHOOK=yes
       - WEBHOOK_URL=https://api.example.com/bw
     ...
 ```

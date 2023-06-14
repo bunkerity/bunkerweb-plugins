@@ -12,7 +12,12 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you at
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
+  - [Docker](#docker)
+  - [Swarm](#swarm)
+  - [Kubernetes](#kubernetes)
 - [Settings](#settings)
+- [TODO](#todo)
+
 
 # Prerequisites
 
@@ -34,7 +39,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.1
     ...
     environment:
       - USE_SLACK=yes
@@ -50,7 +55,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.1
     ...
     environment:
       - USE_SLACK=yes
@@ -73,11 +78,11 @@ metadata:
 
 # Settings
 
-| Setting | Default | Description |
-| :-----: | :-----: | :---------- |
-| `USE_SLACK` | `no` | When set to `yes`, notifications of denied requests will be sent to a Slack webhook. |
-| `SLACK_WEBHOOK_URL` | `https://api.slack.com/messaging/webhooks/...` | Address of the Slack webhook where notifications will be sent to. |
-| `SLACK_RETRY_IF_LIMITED` | `no` | Slack is applying a rate-limit ton their API. When this settings is set to `yes`, the plugin will retry to send the notification later. It may consumes some resources if you are under heavy attacks by the way. |
+|        Setting         |               Default                | Context |Multiple|                                        Description                                         |
+|------------------------|--------------------------------------|---------|--------|--------------------------------------------------------------------------------------------|
+|`USE_SLACK`             |`no`                                  |multisite|no      |Enable sending alerts to a Slack channel.                                                   |
+|`SLACK_WEBHOOK_URL`     |`https://hooks.slack.com/services/...`|global   |no      |Address of the Slack Webhook.                                                               |
+|`SLACK_RETRY_IF_LIMITED`|`no`                                  |global   |no      |Retry to send the request if Slack API is rate limiting us (may consume a lot of resources).|
 
 # TODO
 

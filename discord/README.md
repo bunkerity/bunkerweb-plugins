@@ -12,7 +12,11 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you at
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
+  - [Docker](#docker)
+  - [Swarm](#swarm)
+  - [Kubernetes](#kubernetes)
 - [Settings](#settings)
+- [TODO](#todo)
 
 # Prerequisites
 
@@ -34,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.1
     ...
     environment:
       - USE_DISCORD=yes
@@ -50,7 +54,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.4.2
+    image: bunkerity/bunkerweb:1.5.1
     ...
     environment:
       - USE_DISCORD=yes
@@ -83,11 +87,11 @@ metadata:
 
 # Settings
 
-| Setting | Default | Description |
-| :-----: | :-----: | :---------- |
-| `USE_DISCORD` | `no` | When set to `yes`, notifications of denied requests will be sent to a Discord webhook. |
-| `DISCORD_WEBHOOK_URL` | `https://discordapp.com/api/webhooks/...` | Address of the Discord webhook where notifications will be sent to. |
-| `DISCORD_RETRY_IF_LIMITED` | `no` | Discord is applying a rate-limit ton their API. When this settings is set to `yes`, the plugin will retry to send the notification later. It may consumes some resources if you are under heavy attacks by the way. |
+|         Setting          |                 Default                 | Context |Multiple|                                         Description                                          |
+|--------------------------|-----------------------------------------|---------|--------|----------------------------------------------------------------------------------------------|
+|`USE_DISCORD`             |`no`                                     |multisite|no      |Enable sending alerts to a Discord channel.                                                   |
+|`DISCORD_WEBHOOK_URL`     |`https://discordapp.com/api/webhooks/...`|global   |no      |Address of the Discord Webhook.                                                               |
+|`DISCORD_RETRY_IF_LIMITED`|`no`                                     |global   |no      |Retry to send the request if Discord API is rate limiting us (may consume a lot of resources).|
 
 # TODO
 

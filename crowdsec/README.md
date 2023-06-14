@@ -16,7 +16,6 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
   - [Linux](#linux)
   - [Kubernetes](#kubernetes)
 - [Settings](#settings)
-- [TODO](#todo)
 
 # Prerequisites
 
@@ -69,7 +68,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.0
+    image: bunkerity/bunkerweb:1.5.1
     ports:
       - 80:8080
       - 443:8443
@@ -153,10 +152,6 @@ volumes:
   bw-logs:
   cs-data:
 ```
-
-## Linux
-
-TODO
 
 ## Kubernetes
 
