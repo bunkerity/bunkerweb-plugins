@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"fmt"
 	"os"
+
 	//"github.com/gorilla/mux"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
@@ -15,8 +16,8 @@ import (
 
 var (
 	InfoLogger    *log.Logger
-    WarningLogger *log.Logger
-    ErrorLogger   *log.Logger
+	WarningLogger *log.Logger
+	ErrorLogger   *log.Logger
 )
 
 type Pong struct {
@@ -24,8 +25,8 @@ type Pong struct {
 }
 
 type Resp struct {
-	Deny bool `json:"deny"`
-	Msg string `json:"msg"`
+	Deny bool   `json:"deny"`
+	Msg  string `json:"msg"`
 }
 
 var waf coraza.WAF
@@ -41,25 +42,25 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 		}
 	}
 	switch action {
-		case "block", "deny", "drop", "redirect", "reject":
-			data := Resp{
-				Deny: true,
-				Msg: fmt.Sprintf("%s action from rule ID %d", action, ruleid),
-			}
-			json.NewEncoder(w).Encode(data)
-			return
-		case "allow":
-			data := Resp{
-				Deny: false,
-				Msg: fmt.Sprintf("allow action from rule ID %d", ruleid),
-			}
-			json.NewEncoder(w).Encode(data)
-			return
-  	}
+	case "block", "deny", "drop", "redirect", "reject":
+		data := Resp{
+			Deny: true,
+			Msg:  fmt.Sprintf("%s action from rule ID %d", action, ruleid),
+		}
+		json.NewEncoder(w).Encode(data)
+		return
+	case "allow":
+		data := Resp{
+			Deny: false,
+			Msg:  fmt.Sprintf("allow action from rule ID %d", ruleid),
+		}
+		json.NewEncoder(w).Encode(data)
+		return
+	}
 	ErrorLogger.Printf("[%s] Unknown %s action from rule ID %d", txid, action, ruleid)
 }
 
-func handlePing(w http.ResponseWriter, req *http.Request/*, _ httprouter.Params*/) {
+func handlePing(w http.ResponseWriter, req *http.Request /*, _ httprouter.Params*/) {
 	// Send pong response
 	InfoLogger.Printf("GET /ping")
 	data := Pong{
@@ -68,17 +69,17 @@ func handlePing(w http.ResponseWriter, req *http.Request/*, _ httprouter.Params*
 	json.NewEncoder(w).Encode(data)
 }
 
-func handleRequest(w http.ResponseWriter, req *http.Request/*, _ httprouter.Params*/) {
+func handleRequest(w http.ResponseWriter, req *http.Request /*, _ httprouter.Params*/) {
 	// Get headers
 	//vars := mux.Vars(req)
 	InfoLogger.Printf("POST /request")
-	txid := "toto" // req.Header.Get("X-Coraza-ID")
-	ip := "127.0.0.1" // req.Header.Get("X-Coraza-IP")
+	txid := "toto"        // req.Header.Get("X-Coraza-ID")
+	ip := "127.0.0.1"     // req.Header.Get("X-Coraza-IP")
 	uri := req.RequestURI // req.Header.Get("X-Coraza-URI")
 	// if uri == "" {
 	// 	uri = "/"
 	// }
- 	method := req.Method // req.Header.Get("X-Coraza-METHOD")
+	method := req.Method  // req.Header.Get("X-Coraza-METHOD")
 	version := "HTTP/1.1" // req.Header.Get("X-Coraza-VERSION")
 	// Loop over header names
 
@@ -103,15 +104,16 @@ func handleRequest(w http.ResponseWriter, req *http.Request/*, _ httprouter.Para
 		InfoLogger.Printf("[%s] Rule engine is set to off", txid)
 		data := Resp{
 			Deny: false,
-			Msg: "rule engine is set to off",
+			Msg:  "rule engine is set to off",
 		}
 		json.NewEncoder(w).Encode(data)
 		return
 	}
 	// Phase 1
 	InfoLogger.Printf("[%s] Processing phase 1", txid)
-	tx.ProcessConnection(ip, 42000, "", 0)
-	tx.ProcessURI(uri, method, version)
+
+	tx.ProcessConnection(req.Header.Get("X_CORAZA_IP"), 42000, "", 0)
+	tx.ProcessURI(uri, req.Header.Get("X_CORAZA_METHOD"), version)
 	for name, values := range req.Header {
 		// Loop over all values for the name.
 		for _, value := range values {
@@ -121,7 +123,7 @@ func handleRequest(w http.ResponseWriter, req *http.Request/*, _ httprouter.Para
 	// for key, value := range headers {
 	// 	tx.AddRequestHeader(key, value.(string))
 	// }
-	if it := tx.ProcessRequestHeaders();it != nil {
+	if it := tx.ProcessRequestHeaders(); it != nil {
 		processInterruption(w, tx, it)
 		return
 	}
@@ -168,7 +170,7 @@ func handleRequest(w http.ResponseWriter, req *http.Request/*, _ httprouter.Para
 	} else {
 		InfoLogger.Printf("[%s] Not reading body (%s)", txid, bodyreason)
 	}
-	it, err := tx.ProcessRequestBody();
+	it, err := tx.ProcessRequestBody()
 	if it != nil {
 		processInterruption(w, tx, it)
 		return
@@ -180,7 +182,7 @@ func handleRequest(w http.ResponseWriter, req *http.Request/*, _ httprouter.Para
 	}
 	data := Resp{
 		Deny: false,
-		Msg: "pass",
+		Msg:  "pass",
 	}
 	json.NewEncoder(w).Encode(data)
 	InfoLogger.Printf("[%s] Request processed", txid)
@@ -197,23 +199,23 @@ func main() {
 	var err error
 	waf, err = coraza.NewWAF(
 		coraza.NewWAFConfig().
-		WithDirectivesFromFile("coraza.conf").
-		WithDirectivesFromFile("bunkerweb.conf").
-		WithDirectivesFromFile("/rules-before/*.conf").
-		WithDirectivesFromFile("coreruleset/crs-setup.conf.example").
-		WithDirectivesFromFile("coreruleset/rules/*.conf").
-		WithDirectivesFromFile("/rules-after/*.conf"))
+			WithDirectivesFromFile("coraza.conf").
+			WithDirectivesFromFile("bunkerweb.conf").
+			WithDirectivesFromFile("/rules-before/*.conf").
+			WithDirectivesFromFile("coreruleset/crs-setup.conf.example").
+			WithDirectivesFromFile("coreruleset/rules/*.conf").
+			WithDirectivesFromFile("/rules-after/*.conf"))
 	if err != nil {
 		ErrorLogger.Printf("Error while initalizing Coraza : %s", err.Error())
 		os.Exit(1)
 	}
 
 	// Setup HTTP server
-    mux := http.NewServeMux()
-    mux.HandleFunc("/", handleRequest)
-    mux.HandleFunc("/ping", handlePing)
-    // router.GET("/ping", handlePing)
-    // router.POST("/request", handleRequest)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleRequest)
+	mux.HandleFunc("/ping", handlePing)
+	// router.GET("/ping", handlePing)
+	// router.POST("/request", handleRequest)
 	// TODO : handle response too
 	// srv := &http.Server{
 	// 	Addr: ":8080",

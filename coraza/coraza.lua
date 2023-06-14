@@ -148,9 +148,15 @@ function coraza:process_request()
     --     return false, err
     -- end
     -- Send subrequest
+    local vars = {
+        coraza_request_method = self.ctx.bw.request_method,
+        coraza_request_ip = self.ctx.bw.remote_addr
+        
+    }
     local res = ngx.location.capture("/bw/coraza" .. self.ctx.bw.request_uri, {
-        method = self.ctx.bw.request_method,
-        always_forward_body = true
+        method = ngx.HTTP_GET,
+        always_forward_body = true,
+        vars = vars
     })
     -- Check status
     if res.status ~= 200 then
