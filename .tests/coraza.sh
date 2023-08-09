@@ -69,7 +69,7 @@ fi
 # Payload in POST arg
 echo "ℹ️ Testing with POST payload ..."
 success="ko"
-ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -X POST http://localhost/ -d "id=/etc/passwd")"
+ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -X POST http://localhost/ -d 'id=/etc/passwd')"
 if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
 	success="ok"
 fi
