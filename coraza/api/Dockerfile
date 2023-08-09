@@ -2,7 +2,8 @@ FROM golang:1.20-alpine AS builder
 
 WORKDIR /usr/src/app
 
-COPY go.mod go.sum main.go ./
+COPY go.mod main.go ./
+RUN go get -d ./...
 RUN go mod download && go mod verify
 RUN go build -v -tags=coraza.rule.multiphase_evaluation -o /usr/local/bin/bw-coraza
 

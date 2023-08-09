@@ -38,8 +38,6 @@ function coraza:access()
         return self:ret(true, "coraza denied request : " .. data, utils.get_deny_status(self.ctx))
     end
 
-    
-
     return self:ret(true, "coraza accepted request")
 end
 
@@ -80,9 +78,11 @@ function coraza:process_request()
 
 
     local vars = {
+        coraza_request_version = ngx.req.http_version(),
         coraza_request_method = self.ctx.bw.request_method,
         coraza_request_ip = self.ctx.bw.remote_addr,
         coraza_request_id =  utils.rand(16),
+        coraza_request_host = self.ctx.bw.http_host
     }
     ngx.req.read_body()
 

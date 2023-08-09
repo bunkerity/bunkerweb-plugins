@@ -9,9 +9,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
+	"time"
+	"golang.org/x/exp/slices"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
+	"github.com/gorilla/mux"
+	"github.com/gorilla/handlers"
 )
 
 var (
@@ -37,38 +40,35 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 	rules := tx.MatchedRules()
 	txid := tx.ID()
 
-	var triggeredRules []string
 	for _, rule := range rules {
 		if rule.Message() != "" {
-			triggeredRules = append(triggeredRules, rule.AuditLog())
+			WarningLogger.Printf(rule.AuditLog())
 		}
-	}
-
-	if len(triggeredRules) > 0 {
-		InfoLogger.Printf("Règles déclenchées: %s\n", strings.Join(triggeredRules, ", "))
 	}
 
 	switch action {
-	case "block", "deny", "drop", "redirect", "reject":
-		data := Resp{
-			Deny: true,
-			Msg:  fmt.Sprintf("%s action from rule ID %d", action, ruleid),
-		}
-		json.NewEncoder(w).Encode(data)
-		return
-	case "allow":
-		data := Resp{
-			Deny: false,
-			Msg:  fmt.Sprintf("allow action from rule ID %d", ruleid),
-		}
-		json.NewEncoder(w).Encode(data)
-		return
+		case "block", "deny", "drop", "redirect", "reject":
+			WarningLogger.Printf("[%s] %s action from rule ID %d", txid, action, ruleid)
+			data := Resp{
+				Deny: true,
+				Msg:  fmt.Sprintf("%s action from rule ID %d", action, ruleid),
+			}
+			json.NewEncoder(w).Encode(data)
+			return
+		case "allow":
+			InfoLogger.Printf("[%s] %s action from rule ID %d", txid, action, ruleid)
+			data := Resp{
+				Deny: false,
+				Msg:  fmt.Sprintf("allow action from rule ID %d", ruleid),
+			}
+			json.NewEncoder(w).Encode(data)
+			return
 	}
 	ErrorLogger.Printf("[%s] Unknown %s action from rule ID %d", txid, action, ruleid)
 }
 
 func handlePing(w http.ResponseWriter, req *http.Request) {
-	InfoLogger.Printf("GET /ping")
+	InfoLogger.Printf("Ping received")
 	data := Pong{
 		Pong: "ok",
 	}
@@ -76,14 +76,15 @@ func handlePing(w http.ResponseWriter, req *http.Request) {
 }
 
 func handleRequest(w http.ResponseWriter, req *http.Request) {
-	InfoLogger.Printf("POST /request")
-	uri := req.RequestURI
-
-	version := "HTTP/1.1"
-
+	InfoLogger.Printf("Request received")
+	uri := strings.Replace(req.RequestURI, "/request", "", 1)
+	version := req.Header.Get("X_CORAZA_VERSION")
+	method := req.Header.Get("X_CORAZA_METHOD")
+	ip := req.Header.Get("X_CORAZA_IP")
 	txid := req.Header.Get("X_CORAZA_ID")
 
-	InfoLogger.Printf("[%s] Processing request with ip=%s, uri=%s, method=%s and version=%s", txid, req.Header.Get("X_CORAZA_IP"), uri, req.Header.Get("X_CORAZA_METHOD"), version)
+	InfoLogger.Printf("Host = %s", req.Host)
+	InfoLogger.Printf("[%s] Processing request with ip=%s, uri=%s, method=%s and version=%s", txid, ip, uri, method, version)
 	tx := waf.NewTransactionWithID(txid)
 	defer func() {
 		tx.ProcessLogging()
@@ -103,13 +104,17 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 
 	InfoLogger.Printf("[%s] Processing phase 1", txid)
 
-	tx.ProcessConnection(req.Header.Get("X_CORAZA_IP"), 42000, "", 0)
-	tx.ProcessURI(uri, req.Header.Get("X_CORAZA_METHOD"), version)
+	tx.ProcessConnection(ip, 42000, "", 0)
+	tx.ProcessURI(uri, method, version)
+	coraza_headers := []string{"X_CORAZA_VERSION", "X_CORAZA_METHOD", "X_CORAZA_IP", "X_CORAZA_ID"}
 	for name, values := range req.Header {
-		for _, value := range values {
-			tx.AddRequestHeader(name, value)
+		if !slices.Contains(coraza_headers, strings.ToUpper(name)) {
+			for _, value := range values {
+				tx.AddRequestHeader(name, value)
+			}
 		}
 	}
+	tx.AddRequestHeader("Host", req.Host)
 	if it := tx.ProcessRequestHeaders(); it != nil {
 		processInterruption(w, tx, it)
 		return
@@ -128,8 +133,9 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 
 		bodyBytes, err := ioutil.ReadAll(req.Body)
 		if err != nil {
-			InfoLogger.Printf("ici le body [%s]", "erreur")
-
+			ErrorLogger.Printf("[%s] Error while reading body : %s", txid, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		bodyString := string(bodyBytes)
@@ -170,7 +176,6 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 	}
 	it, err := tx.ProcessRequestBody()
 	if it != nil {
-
 		processInterruption(w, tx, it)
 		return
 	}
@@ -179,13 +184,16 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	InfoLogger.Printf("[%s] Request processed without action", txid)
 	data := Resp{
 		Deny: false,
 		Msg:  "pass",
 	}
-
 	json.NewEncoder(w).Encode(data)
-	InfoLogger.Printf("[%s] Request processed", txid)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+    return handlers.LoggingHandler(os.Stdout, next)
 }
 
 func main() {
@@ -205,8 +213,19 @@ func main() {
 		ErrorLogger.Printf("Error while initalizing Coraza : %s", err.Error())
 		os.Exit(1)
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleRequest)
+	r := mux.NewRouter()
+	// request := r.PathPrefix("/request").Subrouter()
+	// request.Path("/{uri}").HandlerFunc(handleRequest)
+	r.PathPrefix("/request").HandlerFunc(handleRequest)
+	r.HandleFunc("/ping", handlePing)
+	r.Use(loggingMiddleware)
+	r.NotFoundHandler = r.NewRoute().HandlerFunc(http.NotFound).GetHandler()
 	InfoLogger.Printf("Coraza API is ready to handle requests")
-	http.ListenAndServe(":8080", mux)
+	srv := &http.Server{
+        Handler:      r,
+        Addr:         "0.0.0.0:8080",
+        WriteTimeout: 15 * time.Second,
+        ReadTimeout:  15 * time.Second,
+    }
+	srv.ListenAndServe()
 }
