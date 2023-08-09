@@ -75,11 +75,11 @@ metadata:
 
 # Settings
 
-| Setting | Default | Description |
-| :-----: | :-----: | :---------- |
-| `USE_WEBHOOK` | `no` | When set to `yes`, notifications of denied requests will be sent to a custom HTTP endpoint using webhook. |
-| `WEBHOOK_URL` | `https://discordapp.com/api/webhooks/...` | Address of the HTTP endpoint where webhooks will be sent to. |
-| `WEBHOOK_RETRY_IF_LIMITED` | `no` | When this settings is set to `yes`, the plugin will retry to send the notification later in case we are rate limited. It may consumes some resources if you are under heavy attacks by the way. |
+|         Setting          |          Default           | Context |Multiple|                                            Description                                             |
+|--------------------------|----------------------------|---------|--------|----------------------------------------------------------------------------------------------------|
+|`USE_WEBHOOK`             |`no`                        |multisite|no      |Enable sending alerts to a custom webhook.                                                          |
+|`WEBHOOK_URL`             |`https://api.example.com/bw`|global   |no      |Address of the webhook.                                                                             |
+|`WEBHOOK_RETRY_IF_LIMITED`|`no`                        |global   |no      |Retry to send the request if the remote server is rate limiting us (may consume a lot of resources).|
 
 # TODO
 

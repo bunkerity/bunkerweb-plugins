@@ -57,12 +57,12 @@ function remove_files(){
 	fi
 }
 
-# CRS v3.3.4
+# CRS v4
 echo "ℹ️ Download CRS or Remove CRS"
 if [[ "$1" == "Remove" ]]; then
     remove_files
 elif [[ "$1" == "Download" ]]; then
-	git_secure_clone "https://github.com/coreruleset/coreruleset.git" "483630449e176cbd4e22571511acefaab5e5a870"
+	git_secure_clone "https://github.com/coreruleset/coreruleset.git" "e36f27e1429a841e91996f4a521d40c996ec74eb"
 else
 	echo "❌ Error wrong argument : $1 try Remove or Download"
 fi

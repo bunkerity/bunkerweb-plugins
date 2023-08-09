@@ -1,7 +1,7 @@
 # Coraza plugin
 
 <p align="center">
-	<img alt="BunkerWeb Coraza diagram" src="docs/diagram.png" />
+	<img alt="BunkerWeb Coraza diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/coraza/docs/diagram.png" />
 </p>
 
 
@@ -35,14 +35,15 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.0
+    image: bunkerity/bunkerweb:1.5.1
     ...
     environment:
       - USE_MODSECURITY: "no" # We don't need modsecurity anymore
       - USE_CORAZA: "yes"
+      - CORAZA_API: "http://bw-coraza:8080"
     ...
     bw-coraza:
-      build: /path/to/coraza-plugin
+      image: /path/to/coraza-plugin
       networks:
         - bw-universe
 
@@ -50,18 +51,13 @@ services:
 
 # Settings
 
-## Plugin (BunkerWeb)
-
-| Setting      | Default                  | Description                                                                                    |
-| :----------: | :----------------------: | :--------------------------------------------------------------------------------------------- |
-| `USE_CORAZA` | `no`                     | When set to `yes`, requests will be checked by coraza.                                         |
-| `CORAZA_API` | `http://bw-coraza:8080`  | Address of the coraza library (request will be redirected there).                              |
-
-! Disclaimer the `CORAZA_API` port (by default 8080) can't be modified in the plugin.json. You also need to change it in the main.go (/data/plugins/coraza/confs/main.go)
+|  Setting   |        Default        | Context |Multiple|        Description        |
+|------------|-----------------------|---------|--------|---------------------------|
+|`USE_CORAZA`|`no`                   |multisite|no      |Activate Coraza library    |
+|`CORAZA_API`|`http://bw-coraza:8080`|global   |no      |hostname of the CORAZA API.|
 
 # TODO
 
-Fix the port problem.
-
-Add the conf request to personalize the coreruleset and other parameters directly from bunkerweb (not by hands).
+- Don't use API container
+- More documentation
 

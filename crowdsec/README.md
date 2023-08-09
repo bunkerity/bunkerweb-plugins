@@ -92,7 +92,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.0
+    image: bunkerity/bunkerweb-scheduler:1.5.1
     depends_on:
       - bunkerweb
       - bw-docker
