@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"golang.org/x/exp/slices"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
 	"github.com/gorilla/mux"
@@ -77,13 +76,12 @@ func handlePing(w http.ResponseWriter, req *http.Request) {
 
 func handleRequest(w http.ResponseWriter, req *http.Request) {
 	InfoLogger.Printf("Request received")
-	uri := strings.Replace(req.RequestURI, "/request", "", 1)
-	version := req.Header.Get("X_CORAZA_VERSION")
-	method := req.Header.Get("X_CORAZA_METHOD")
-	ip := req.Header.Get("X_CORAZA_IP")
-	txid := req.Header.Get("X_CORAZA_ID")
+	version := req.Header.Get("X-Coraza-Version")
+	method := req.Header.Get("X-Coraza-Method")
+	ip := req.Header.Get("X-Coraza-Ip")
+	txid := req.Header.Get("X-Coraza-Id")
+	uri := req.Header.Get("X-Coraza-Uri")
 
-	InfoLogger.Printf("Host = %s", req.Host)
 	InfoLogger.Printf("[%s] Processing request with ip=%s, uri=%s, method=%s and version=%s", txid, ip, uri, method, version)
 	tx := waf.NewTransactionWithID(txid)
 	defer func() {
@@ -106,15 +104,13 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 
 	tx.ProcessConnection(ip, 42000, "", 0)
 	tx.ProcessURI(uri, method, version)
-	coraza_headers := []string{"X_CORAZA_VERSION", "X_CORAZA_METHOD", "X_CORAZA_IP", "X_CORAZA_ID"}
 	for name, values := range req.Header {
-		if !slices.Contains(coraza_headers, strings.ToUpper(name)) {
+		if strings.HasPrefix(name, "X-Coraza-Header-") {
 			for _, value := range values {
-				tx.AddRequestHeader(name, value)
+				tx.AddRequestHeader(strings.Replace(name, "X-Coraza-Header-", "", 1), value)
 			}
 		}
 	}
-	tx.AddRequestHeader("Host", req.Host)
 	if it := tx.ProcessRequestHeaders(); it != nil {
 		processInterruption(w, tx, it)
 		return
@@ -214,10 +210,8 @@ func main() {
 		os.Exit(1)
 	}
 	r := mux.NewRouter()
-	// request := r.PathPrefix("/request").Subrouter()
-	// request.Path("/{uri}").HandlerFunc(handleRequest)
-	r.PathPrefix("/request").HandlerFunc(handleRequest)
 	r.HandleFunc("/ping", handlePing)
+	r.HandleFunc("/request", handleRequest)
 	r.Use(loggingMiddleware)
 	r.NotFoundHandler = r.NewRoute().HandlerFunc(http.NotFound).GetHandler()
 	InfoLogger.Printf("Coraza API is ready to handle requests")

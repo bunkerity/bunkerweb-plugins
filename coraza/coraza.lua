@@ -74,23 +74,75 @@ function coraza:ping()
 end
 
 function coraza:process_request()
-
-
-
-    local vars = {
-        coraza_request_version = ngx.req.http_version(),
-        coraza_request_method = self.ctx.bw.request_method,
-        coraza_request_ip = self.ctx.bw.remote_addr,
-        coraza_request_id =  utils.rand(16),
-        coraza_request_host = self.ctx.bw.http_host
+    -- Instantiate lua-resty-http obj
+    local httpc, err = http.new()
+    if not httpc then
+        return false, err
+    end
+    -- Variables to pass to coraza
+    local data = {
+        ["X-Coraza-Version"] = ngx.req.http_version(),
+        ["X-Coraza-Method"] = self.ctx.bw.request_method,
+        ["X-Coraza-Ip"] = self.ctx.bw.remote_addr,
+        ["X-Coraza-Id"] =  utils.rand(16),
+        ["X-Coraza-Uri"] = self.ctx.bw.request_uri
     }
+    -- Compute headers
+    local headers, err = ngx.req.get_headers()
+    if err == "truncated" then
+        return true, true, "too many headers"
+    end 
+    for header, value in pairs(headers) do
+        data["X-Coraza-Header-" .. header] = value
+    end
+    -- Body setup
     ngx.req.read_body()
-
-    local res = ngx.location.capture("/bw/coraza" .. self.ctx.bw.request_uri, {
-        method = ngx.HTTP_GET,
-        always_forward_body = true,
-        vars = vars
-    })
+    local body = ngx.req.get_body_data()
+    if not body then
+        local file = ngx.req.get_body_file()
+        if file then
+            local handle, err = io.open(file)
+            if handle then
+                data["Content-Length"] = tostring(handle:seek("end"))
+                handle:close()
+            end
+            body = function()
+                local handle, err = io.open(file)
+                if not handle then
+                    return nil, err
+                end
+                local cbody = function()
+                    while true do
+                        local chunk = handle:read(8192)
+                        if not chunk then
+                            break
+                        end
+                        coroutine.yield(chunk)
+                    end
+                    handle:close()
+                end
+                local co = coroutine.create(cbody)
+                return function(...)
+                    local ok, ret = coroutine.resume(co, ...)
+                    if ok then
+                        return ret
+                    end
+                    return nil, ret
+                end
+            end
+        end
+    end
+    local res, err = httpc:request_uri(
+        self.variables["CORAZA_API"] .. "/request",
+        {
+            method = "POST",
+            headers = data,
+            body = body()
+        }
+    )
+    if not res then
+        return false, err
+    end
     -- Check status
     if res.status ~= 200 then
         local err = "received status " .. tostring(res.status) .. " from Coraza API"
@@ -98,20 +150,16 @@ function coraza:process_request()
         if ok then
             err = err .. " with data " .. data
         end
-        --httpc:close()
         return false, err
     end
     -- Get result
     local ok, data = pcall(cjson.decode, res.body)
     if not ok then
-        --httpc:close()
         return false, data
     end
     if data.deny == nil or not data.msg then
-        --httpc:close()
         return false, "malformed json response"
     end
-    --httpc:close()
     return true, data.deny, data.msg
 end
 
@@ -122,7 +170,7 @@ function coraza:is_needed()
     end
     -- Request phases (no default)
     if self.is_request and (self.ctx.bw.server_name ~= "_") then
-        return self.variables["USE_CORAZA"] == "yes"
+        return self.variables["USE_CORAZA"] == "yes" and not ngx.req.is_internal()
     end
     -- Other cases : at least one service uses it
     local is_needed, err = utils.has_variable("USE_CORAZA", "yes")
