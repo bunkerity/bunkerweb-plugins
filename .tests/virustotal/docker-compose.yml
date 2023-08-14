@@ -12,10 +12,11 @@ services:
       - SERVER_NAME=www.example.com
       - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
       - USE_VIRUSTOTAL=yes
-      - VIRUSTOTAL_API=http://virustotal-api:8000
+      - VIRUSTOTAL_API_KEY=%VTKEY%
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
       - USE_LIMIT_REQ=no
+      - USE_LIMIT_CONN=no
       - USE_BUNKERNET=no
       - USE_BLACKLIST=no
       - USE_MODSECURITY=no
@@ -27,7 +28,7 @@ services:
       - bw-services
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.0
+    image: bunkerity/bunkerweb-scheduler:1.5.1
     depends_on:
       - bunkerweb
       - bw-docker
@@ -47,15 +48,6 @@ services:
       - CONTAINERS=1
     networks:
       - bw-docker
-
-  virustotal-api:
-    build: bw-data/plugins/virustotal/api
-    ports:
-      - 127.0.0.1:8000:8000
-    environment:
-      - API_KEY=%VTKEY%
-    networks:
-      - bw-universe
 
   hello:
     image: tutum/hello-world

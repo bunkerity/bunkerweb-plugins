@@ -27,49 +27,15 @@ cd /tmp/bunkerweb-plugins/clamav
 echo "ℹ️ Running compose ..."
 do_and_check_cmd docker-compose up --build -d
 
-# Check that API is working
-echo "ℹ️ Testing API ..."
-success="ko"
-retry=0
-while [ $retry -lt 60 ] ; do
-	ret="$(curl -s -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" http://localhost:8000/check)"
-	check="$(echo "$ret" | grep "\"success\":true")"
-	if [ $? -eq 0 ] && [ "$check" != "" ] ; then
-		check="$(echo "$ret" | grep "\"detected\":true")"
-		if [ "$check" != "" ] ; then
-			success="ok"
-			break
-		fi
-	fi
-	retry=$(($retry + 1))
-	sleep 1
-done
-if [ $retry -eq 60 ] ; then
-	echo "❌ Error timeout after 120s"
-	docker-compose logs
-	docker-compose down -v
-	exit 1
-fi
-if [ "$success" == "ko" ] ; then
-	echo "❌ Error EICAR not detected"
-	docker-compose logs
-	docker-compose down -v
-	exit 1
-fi
-echo "ℹ️ API is working ..."
-
 # Wait until BW is started
 echo "ℹ️ Waiting for BW ..."
 success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
-	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
-	if [ $? -eq 0 ] && [ $ret -eq 200 ] ; then
-		ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
-		if [ "$ret" != "" ] ; then
-			success="ok"
-			break
-		fi
+	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
+		success="ok"
+		break
 	fi
 	retry=$(($retry + 1))
 	sleep 1

@@ -19,14 +19,14 @@ function discord:log(bypass_use_discord)
 		end
 	end
 	-- Check if request is denied
-	local reason = utils.get_reason()
+	local reason = utils.get_reason(self.ctx)
 	if reason == nil then
 		return self:ret(true, "request not denied")
 	end
 	-- Compute data
 	local data = {}
 	data.content = "```Denied request for IP " ..
-			ngx.ctx.bw.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
+			self.ctx.bw.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
 	local headers, err = ngx.req.get_headers()
 	if not headers then
 		data.content = data.content .. "error while getting headers : " .. err
@@ -43,7 +43,7 @@ function discord:log(bypass_use_discord)
 	end
 end
 
-function discord:send(self, data)
+function discord.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)

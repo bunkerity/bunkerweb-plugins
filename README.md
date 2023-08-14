@@ -3,9 +3,10 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb-1.5.0-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb-1.5.1-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
-	<img src="https://img.shields.io/github/workflow/status/bunkerity/bunkerweb-plugins/Tests?label=tests" />
+	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=dev&label=CI%2FCD%20dev" />
+	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=main&label=CI%2FCD%20main" />
 	<img src="https://img.shields.io/github/issues/bunkerity/bunkerweb-plugins">
 	<img src="https://img.shields.io/github/issues-pr/bunkerity/bunkerweb-plugins">
 </p>
@@ -22,9 +23,11 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 
 * [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
 * [CrowdSec](https://github.com/bunkerity/bunkerweb-plugins/tree/main/crowdsec)
+* [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 * [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
 * [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
 * [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
+* [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)
 
 # Support
 

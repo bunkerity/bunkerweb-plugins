@@ -15,7 +15,7 @@ jobs:
       - name: Get BW tag
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=master" >> $GITHUB_ENV
+            echo "BW_TAG=1.5.1" >> $GITHUB_ENV
           else
             echo "BW_TAG=dev" >> $GITHUB_ENV
           fi
@@ -32,6 +32,9 @@ jobs:
       - name: Run ClamAV tests
         run: ./.tests/clamav.sh
 
+      - name: Run Coraza tests
+        run: ./.tests/coraza.sh
+
       - name: Run CrowdSec tests
         run: ./.tests/crowdsec.sh
 
@@ -42,4 +45,4 @@ jobs:
 
       - name: Build and push APIs
         if: env.BW_TAG == 'master'
-        run: ./.tests/build-push.sh
+        run: ./.tests/build-push.sh "${{ env.BW_TAG }}"
