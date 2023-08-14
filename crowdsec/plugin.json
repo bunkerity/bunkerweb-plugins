@@ -39,8 +39,7 @@
       "id": "crowdsec-mode",
       "label": "CrowdSec Mode",
       "regex": "^(live|stream)$",
-      "type": "select",
-      "select": ["live", "stream"]
+      "type": "text"
     },
     "CROWDSEC_REQUEST_TIMEOUT": {
       "context": "global",
