@@ -106,7 +106,7 @@ function coraza:process_request()
                 data["Content-Length"] = tostring(handle:seek("end"))
                 handle:close()
             end
-            body = function()
+            local fbody = function()
                 local handle, err = io.open(file)
                 if not handle then
                     return nil, err
@@ -130,6 +130,7 @@ function coraza:process_request()
                     return nil, ret
                 end
             end
+            body = fbody()
         end
     end
     local res, err = httpc:request_uri(
@@ -137,7 +138,7 @@ function coraza:process_request()
         {
             method = "POST",
             headers = data,
-            body = body()
+            body = body
         }
     )
     if not res then
