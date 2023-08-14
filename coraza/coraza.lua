@@ -25,7 +25,7 @@ end
 
 function coraza:access()
     -- Check if needed
-    if not self.is_needed then
+    if not self:is_needed() then
         return self:ret(true, "coraza not activated")
     end
     -- Process phases 1 (headers) and 2 (body)
