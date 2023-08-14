@@ -44,5 +44,5 @@ jobs:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       - name: Build and push APIs
-        if: env.BW_TAG == 'master'
+        if: env.BW_TAG == '1.5.1'
         run: ./.tests/build-push.sh "${{ env.BW_TAG }}"
