@@ -4,7 +4,7 @@
 	<img alt="BunkerWeb ClamAV diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/clamav/docs/diagram.svg" />
 </p>
 
-This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is detect by the ClamAV antivirus engine and deny the request if that's the case.
+This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is detected by the ClamAV antivirus engine and deny the request if that's the case.
 
 # Table of contents
 
