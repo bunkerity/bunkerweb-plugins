@@ -30,7 +30,7 @@ function clamav:init_worker()
 	if data ~= "PONG" then
 		return self:ret(false, "wrong data received from ClamAV : " .. data)
 	end
-	self.logger:log(ngx.NOTICE, "connectivity with " .. self.variables["CLAMAV_API"] .. ":" .. self.variables["CLAMAV_PORT"] .. " is successful")
+	self.logger:log(ngx.NOTICE, "connectivity with " .. self.variables["CLAMAV_HOST"] .. ":" .. self.variables["CLAMAV_PORT"] .. " is successful")
 	return self:ret(true, "success")
 end
 
