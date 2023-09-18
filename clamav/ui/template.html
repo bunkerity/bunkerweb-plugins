@@ -57,28 +57,61 @@
       trojans, viruses, malware &amp; other malicious threats.
     </p>
   </div>
-  {% if result %}
-  <div class="center">
-    {% if result == "ok" %}
-    <h4 class="green">The plugin is successfully installed!</h4>
-    {% else %}
-    <h4 class="red">The plugin check failed!</h4>
-    {% if error %}
-    <p>{{ error }}</p>
-    {% else %}
-    <p>
+  <div id="response-div" class="center" hidden>
+    <h4 id="response-success" class="green" hidden>
+      The plugin is successfully installed!
+    </h4>
+    <h4 id="response-failed" class="red" hidden>The plugin check failed!</h4>
+    <p id="response-none" hidden>
       The plugin check failed. If you need help, please visit the
       <a href="https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav"
         >ClamAV plugin page</a
       >.
     </p>
-    {% endif %} {% endif %}
   </div>
-  {% endif %}
-  <div class="center test-button">
-    <form action="{{ url_for('plugins') }}/clamav" method="POST">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <input type="submit" class="button" value="Test the plugin" />
-    </form>
-  </div>
+  <button class="center test-button button" onclick="send_test()">
+    Test the plugin
+  </button>
+
+  <script async>
+    // Test file from https://www.eicar.com/download-anti-malware-testfile/ encoded in base64
+    const coded_content =
+      "WDVPIVAlQEFQWzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCo=";
+    const binary_content = atob(coded_content);
+
+    function send_test() {
+      let data = new FormData();
+      data.set(
+        "file",
+        new Blob([binary_content], { type: "text/plain" }),
+        "eicar.txt"
+      );
+      data.set("csrf_token", "{{ csrf_token() }}");
+
+      let xhr = new XMLHttpRequest();
+      xhr.open("POST", "{{ url_for('plugins') }}/clamav", true);
+      xhr.send(data);
+
+      xhr.onload = function () {
+        document.getElementById("response-div").removeAttribute("hidden");
+        if (xhr.status == 200) {
+          document.getElementById("response-failed").removeAttribute("hidden");
+          document.getElementById("response-none").setAttribute("hidden", "");
+          document
+            .getElementById("response-success")
+            .setAttribute("hidden", "");
+        } else if (xhr.status == 403) {
+          document.getElementById("response-success").removeAttribute("hidden");
+          document.getElementById("response-none").setAttribute("hidden", "");
+          document.getElementById("response-failed").setAttribute("hidden", "");
+        } else {
+          document.getElementById("response-none").removeAttribute("hidden");
+          document
+            .getElementById("response-success")
+            .setAttribute("hidden", "");
+          document.getElementById("response-failed").setAttribute("hidden", "");
+        }
+      };
+    }
+  </script>
 </div>
