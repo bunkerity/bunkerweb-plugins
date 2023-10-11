@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  # GHA
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    assignees:
+      - "fl0ppy-d1sk"
+    commit-message:
+      prefix: "deps/gha"
+    target-branch: "dev"
+
+  # Coraza
+  - package-ecosystem: "docker"
+    directory: "/coraza/api"
+    schedule:
+      interval: "daily"
+    assignees:
+      - "TheophileDiot"
+    commit-message:
+      prefix: "deps/coraza/api"
+    target-branch: "dev"
+  - package-ecosystem: "gomod"
+    directory: "/coraza/api"
+    schedule:
+      interval: "daily"
+    assignees:
+      - "TheophileDiot"
+    commit-message:
+      prefix: "deps/coraza/api"
+    target-branch: "dev"
