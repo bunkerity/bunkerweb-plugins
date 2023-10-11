@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck disable=SC1091
 . .tests/utils.sh
 
 echo "ℹ️ Starting ClamAV tests ..."
@@ -23,7 +24,7 @@ do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-schedule
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/clamav/eicar.com https://secure.eicar.org/eicar.com
 
 # Do the tests
-cd /tmp/bunkerweb-plugins/clamav
+cd /tmp/bunkerweb-plugins/clamav || exit 1
 echo "ℹ️ Running compose ..."
 do_and_check_cmd docker-compose up --build -d
 
@@ -33,11 +34,12 @@ success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
 		success="ok"
 		break
 	fi
-	retry=$(($retry + 1))
+	retry=$((retry + 1))
 	sleep 1
 done
 
@@ -61,11 +63,12 @@ success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" http://localhost)"
-	if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
+	# shellcheck disable=SC2181
+	if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 		success="ok"
 		break
 	fi
-	retry=$(($retry + 1))
+	retry=$((retry + 1))
 	sleep 1
 done
 

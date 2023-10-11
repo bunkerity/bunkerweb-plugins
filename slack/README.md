@@ -18,7 +18,6 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you at
 - [Settings](#settings)
 - [TODO](#todo)
 
-
 # Prerequisites
 
 Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
@@ -73,25 +72,24 @@ metadata:
   annotations:
     bunkerweb.io/USE_SLACK: "yes"
     bunkerweb.io/SLACK_WEBHOOK_URL: "https://api.slack.com/messaging/webhooks/..."
-...
 ```
 
 # Settings
 
-|        Setting         |               Default                | Context |Multiple|                                        Description                                         |
-|------------------------|--------------------------------------|---------|--------|--------------------------------------------------------------------------------------------|
-|`USE_SLACK`             |`no`                                  |multisite|no      |Enable sending alerts to a Slack channel.                                                   |
-|`SLACK_WEBHOOK_URL`     |`https://hooks.slack.com/services/...`|global   |no      |Address of the Slack Webhook.                                                               |
-|`SLACK_RETRY_IF_LIMITED`|`no`                                  |global   |no      |Retry to send the request if Slack API is rate limiting us (may consume a lot of resources).|
+| Setting                  | Default                                | Context   | Multiple | Description                                                                                  |
+| ------------------------ | -------------------------------------- | --------- | -------- | -------------------------------------------------------------------------------------------- |
+| `USE_SLACK`              | `no`                                   | multisite | no       | Enable sending alerts to a Slack channel.                                                    |
+| `SLACK_WEBHOOK_URL`      | `https://hooks.slack.com/services/...` | global    | no       | Address of the Slack Webhook.                                                                |
+| `SLACK_RETRY_IF_LIMITED` | `no`                                   | global    | no       | Retry to send the request if Slack API is rate limiting us (may consume a lot of resources). |
 
 # TODO
 
-* Add more info in notification :
-  * Date
-  * Country of IP
-  * ASN of IP
-  * ...
-* Add settings to control what details to send :
-  * Anonymize IP
-  * Add body
-  * Add headers
+- Add more info in notification :
+  - Date
+  - Country of IP
+  - ASN of IP
+  - ...
+- Add settings to control what details to send :
+  - Anonymize IP
+  - Add body
+  - Add headers

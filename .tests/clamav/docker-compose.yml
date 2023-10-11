@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 services:
   bunkerweb:
@@ -64,7 +64,6 @@ services:
 volumes:
   bw-data:
   clamav-data:
-
 
 networks:
   bw-universe:

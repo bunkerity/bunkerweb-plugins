@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck disable=SC1091
 . .tests/utils.sh
 
 echo "ℹ️ Pulling images ..."

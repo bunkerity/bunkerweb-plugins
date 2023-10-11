@@ -91,7 +91,7 @@ function coraza:process_request()
     local headers, err = ngx.req.get_headers()
     if err == "truncated" then
         return true, true, "too many headers"
-    end 
+    end
     for header, value in pairs(headers) do
         data["X-Coraza-Header-" .. header] = value
     end

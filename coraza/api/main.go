@@ -206,7 +206,7 @@ func main() {
 			WithDirectivesFromFile("coreruleset/rules/*.conf").
 			WithDirectivesFromFile("/rules-after/*.conf"))
 	if err != nil {
-		ErrorLogger.Printf("Error while initalizing Coraza : %s", err.Error())
+		ErrorLogger.Printf("Error while initializing Coraza : %s", err.Error())
 		os.Exit(1)
 	}
 	r := mux.NewRouter()

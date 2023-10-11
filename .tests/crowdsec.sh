@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck disable=SC1091
 . .tests/utils.sh
 
 echo "ℹ️ Starting CrowdSec tests ..."
@@ -24,7 +25,7 @@ do_and_check_cmd cp .tests/crowdsec/acquis.yaml /tmp/bunkerweb-plugins/crowdsec
 do_and_check_cmd cp .tests/crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowdsec
 
 # Do the tests
-cd /tmp/bunkerweb-plugins/crowdsec/
+cd /tmp/bunkerweb-plugins/crowdsec/ || exit 1
 do_and_check_cmd docker-compose up -d
 
 # Wait until BW is started
@@ -33,11 +34,12 @@ success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
 		success="ok"
 		break
 	fi
-	retry=$(($retry + 1))
+	retry=$((retry + 1))
 	sleep 1
 done
 
@@ -64,7 +66,8 @@ dirb http://localhost -H "Host: www.example.com" -H "User-Agent: LegitOne" > /de
 echo "ℹ️ Checking CS ..."
 success="ko"
 ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
-if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
+# shellcheck disable=SC2181
+if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 	success="ok"
 fi
 

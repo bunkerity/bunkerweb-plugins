@@ -82,25 +82,24 @@ metadata:
   annotations:
     bunkerweb.io/USE_DISCORD: "yes"
     bunkerweb.io/DISCORD_WEBHOOK_URL: "https://discordapp.com/api/webhooks/..."
-...
 ```
 
 # Settings
 
-|         Setting          |                 Default                 | Context |Multiple|                                         Description                                          |
-|--------------------------|-----------------------------------------|---------|--------|----------------------------------------------------------------------------------------------|
-|`USE_DISCORD`             |`no`                                     |multisite|no      |Enable sending alerts to a Discord channel.                                                   |
-|`DISCORD_WEBHOOK_URL`     |`https://discordapp.com/api/webhooks/...`|global   |no      |Address of the Discord Webhook.                                                               |
-|`DISCORD_RETRY_IF_LIMITED`|`no`                                     |global   |no      |Retry to send the request if Discord API is rate limiting us (may consume a lot of resources).|
+| Setting                    | Default                                   | Context   | Multiple | Description                                                                                    |
+| -------------------------- | ----------------------------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `USE_DISCORD`              | `no`                                      | multisite | no       | Enable sending alerts to a Discord channel.                                                    |
+| `DISCORD_WEBHOOK_URL`      | `https://discordapp.com/api/webhooks/...` | global    | no       | Address of the Discord Webhook.                                                                |
+| `DISCORD_RETRY_IF_LIMITED` | `no`                                      | global    | no       | Retry to send the request if Discord API is rate limiting us (may consume a lot of resources). |
 
 # TODO
 
-* Add more info in notification :
-  * Date
-  * Country of IP
-  * ASN of IP
-  * ...
-* Add settings to control what details to send :
-  * Anonymize IP
-  * Add body
-  * Add headers
+- Add more info in notification :
+  - Date
+  - Country of IP
+  - ASN of IP
+  - ...
+- Add settings to control what details to send :
+  - Anonymize IP
+  - Add body
+  - Add headers

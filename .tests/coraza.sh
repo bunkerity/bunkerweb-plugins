@@ -21,7 +21,7 @@ do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunk
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/coraza/docker-compose.yml
 
 # Do the tests
-cd /tmp/bunkerweb-plugins/coraza/
+cd /tmp/bunkerweb-plugins/coraza/ || exit 1
 do_and_check_cmd docker-compose up -d
 
 # Wait until BW is started
@@ -30,11 +30,12 @@ success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
 		success="ok"
 		break
 	fi
-	retry=$(($retry + 1))
+	retry=$((retry + 1))
 	sleep 1
 done
 
@@ -56,7 +57,8 @@ fi
 echo "ℹ️ Testing with GET payload ..."
 success="ko"
 ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost/?id=/etc/passwd)"
-if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
+# shellcheck disable=SC2181
+if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 	success="ok"
 fi
 if [ "$success" == "ko" ] ; then
@@ -70,7 +72,8 @@ fi
 echo "ℹ️ Testing with POST payload ..."
 success="ko"
 ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -X POST http://localhost/ -d 'id=/etc/passwd')"
-if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
+# shellcheck disable=SC2181
+if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 	success="ok"
 fi
 if [ "$success" == "ko" ] ; then

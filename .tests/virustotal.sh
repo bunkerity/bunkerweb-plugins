@@ -24,7 +24,7 @@ do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugi
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/virustotal/eicar.com https://secure.eicar.org/eicar.com
 
 # Do the tests
-cd /tmp/bunkerweb-plugins/virustotal
+cd /tmp/bunkerweb-plugins/virustotal || exit 1
 do_and_check_cmd docker-compose up --build -d
 
 # Wait until BW is started
@@ -33,11 +33,12 @@ success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
 		success="ok"
 		break
 	fi
-	retry=$(($retry + 1))
+	retry=$((retry + 1))
 	sleep 1
 done
 
@@ -61,11 +62,12 @@ success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
 	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/eicar.com" http://localhost)"
-	if [ $? -eq 0 ] && [ $ret -eq 403 ] ; then
+	# shellcheck disable=SC2181
+	if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 		success="ok"
 		break
 	fi
-	retry=$(($retry + 1))
+	retry=$((retry + 1))
 	sleep 1
 done
 

@@ -1,7 +1,6 @@
-version: '3'
+version: "3"
 
 services:
-
   bunkerweb:
     image: bunkerity/bunkerweb:1.5.1
     ports:

@@ -1,81 +1,81 @@
 {
-	"id": "virustotal",
-	"name": "VirusTotal",
-	"description": "Automatic scan of uploaded files and ips optionaly with the VirusTotal API.",
-	"version": "1.1",
-	"stream": "partial",
-	"settings": {
-		"USE_VIRUSTOTAL": {
-			"context": "multisite",
-			"default": "no",
-			"help": "Activate VirusTotal integration.",
-			"id": "use-virustotal",
-			"label": "Use VirusTotal",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"VIRUSTOTAL_API_KEY": {
-			"context": "global",
-			"default": "",
-			"help": "Key to authenticate with VirusTotal API.",
-			"id": "virustotal-api-key",
-			"label": "API key",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"VIRUSTOTAL_SCAN_FILE": {
-			"context": "multisite",
-			"default": "yes",
-			"help": "Activate automatic scan of uploaded files with VirusTotal (only existing files).",
-			"id": "virustotal-scan-file",
-			"label": "Scan files",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"VIRUSTOTAL_SCAN_IP": {
-			"context": "multisite",
-			"default": "yes",
-			"help": "Activate automatic scan of uploaded ips with VirusTotal.",
-			"id": "virustotal-scan-ip",
-			"label": "Scan IP addresses",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"VIRUSTOTAL_IP_SUSPICIOUS": {
-			"context": "global",
-			"default": "5",
-			"help": "Minimum number of suspicious reports before considering IP as bad.",
-			"id": "virustotal-ip-suspicious",
-			"label": "Suspicious IP number",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"VIRUSTOTAL_IP_MALICIOUS": {
-			"context": "global",
-			"default": "3",
-			"help": "Minimum number of malicious reports before considering IP as bad.",
-			"id": "virustotal-ip-malicious",
-			"label": "Malicious IP number",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"VIRUSTOTAL_FILE_SUSPICIOUS": {
-			"context": "global",
-			"default": "5",
-			"help": "Minimum number of suspicious reports before considering file as bad.",
-			"id": "virustotal-file-suspicious",
-			"label": "Suspicious file number",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"VIRUSTOTAL_FILE_MALICIOUS": {
-			"context": "global",
-			"default": "3",
-			"help": "Minimum number of malicious reports before considering file as bad.",
-			"id": "virustotal-file-malicious",
-			"label": "Malicious file number",
-			"regex": "^.*$",
-			"type": "text"
-		}
-	}
+  "id": "virustotal",
+  "name": "VirusTotal",
+  "description": "Automatic scan of uploaded files and ips optionally with the VirusTotal API.",
+  "version": "1.1",
+  "stream": "partial",
+  "settings": {
+    "USE_VIRUSTOTAL": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate VirusTotal integration.",
+      "id": "use-virustotal",
+      "label": "Use VirusTotal",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "VIRUSTOTAL_API_KEY": {
+      "context": "global",
+      "default": "",
+      "help": "Key to authenticate with VirusTotal API.",
+      "id": "virustotal-api-key",
+      "label": "API key",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "VIRUSTOTAL_SCAN_FILE": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Activate automatic scan of uploaded files with VirusTotal (only existing files).",
+      "id": "virustotal-scan-file",
+      "label": "Scan files",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "VIRUSTOTAL_SCAN_IP": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Activate automatic scan of uploaded ips with VirusTotal.",
+      "id": "virustotal-scan-ip",
+      "label": "Scan IP addresses",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "VIRUSTOTAL_IP_SUSPICIOUS": {
+      "context": "global",
+      "default": "5",
+      "help": "Minimum number of suspicious reports before considering IP as bad.",
+      "id": "virustotal-ip-suspicious",
+      "label": "Suspicious IP number",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "VIRUSTOTAL_IP_MALICIOUS": {
+      "context": "global",
+      "default": "3",
+      "help": "Minimum number of malicious reports before considering IP as bad.",
+      "id": "virustotal-ip-malicious",
+      "label": "Malicious IP number",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "VIRUSTOTAL_FILE_SUSPICIOUS": {
+      "context": "global",
+      "default": "5",
+      "help": "Minimum number of suspicious reports before considering file as bad.",
+      "id": "virustotal-file-suspicious",
+      "label": "Suspicious file number",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "VIRUSTOTAL_FILE_MALICIOUS": {
+      "context": "global",
+      "default": "3",
+      "help": "Minimum number of malicious reports before considering file as bad.",
+      "id": "virustotal-file-malicious",
+      "label": "Malicious file number",
+      "regex": "^.*$",
+      "type": "text"
+    }
+  }
 }

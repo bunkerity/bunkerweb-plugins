@@ -14,7 +14,7 @@ def print_md_table(settings) -> MarkdownTableWriter:
                 f"`{setting}`",
                 "" if data["default"] == "" else f"`{data['default']}`",
                 data["context"],
-                "no" if not "multiple" in data else "yes",
+                "no" if "multiple" not in data else "yes",
                 data["help"],
             ]
             for setting, data in settings.items()

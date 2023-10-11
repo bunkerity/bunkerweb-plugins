@@ -14,9 +14,9 @@ At the moment, submission of new file is not supported, it only checks if files 
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
-  * [Docker](#docker)
-  * [Swarm](#swarm)
-  * [Kubernetes](#kubernetes)
+  - [Docker](#docker)
+  - [Swarm](#swarm)
+  - [Kubernetes](#kubernetes)
 - [Settings](#settings)
 
 # Prerequisites
@@ -76,18 +76,17 @@ metadata:
   annotations:
     bunkerweb.io/USE_VIRUSTOTAL: "yes"
     bunkerweb.io/VIRUSTOTAL_API_KEY: "mykey"
-...
 ```
 
 # Settings
 
-|          Setting           |Default| Context |Multiple|                                  Description                                   |
-|----------------------------|-------|---------|--------|--------------------------------------------------------------------------------|
-|`USE_VIRUSTOTAL`            |`no`   |multisite|no      |Activate VirusTotal integration.                                                |
-|`VIRUSTOTAL_API_KEY`        |       |global   |no      |Key to authenticate with VirusTotal API.                                        |
-|`VIRUSTOTAL_SCAN_FILE`      |`yes`  |multisite|no      |Activate automatic scan of uploaded files with VirusTotal (only existing files).|
-|`VIRUSTOTAL_SCAN_IP`        |`yes`  |multisite|no      |Activate automatic scan of uploaded ips with VirusTotal.                        |
-|`VIRUSTOTAL_IP_SUSPICIOUS`  |`5`    |global   |no      |Minimum number of suspicious reports before considering IP as bad.              |
-|`VIRUSTOTAL_IP_MALICIOUS`   |`3`    |global   |no      |Minimum number of malicious reports before considering IP as bad.               |
-|`VIRUSTOTAL_FILE_SUSPICIOUS`|`5`    |global   |no      |Minimum number of suspicious reports before considering file as bad.            |
-|`VIRUSTOTAL_FILE_MALICIOUS` |`3`    |global   |no      |Minimum number of malicious reports before considering file as bad.             |
+| Setting                      | Default | Context   | Multiple | Description                                                                      |
+| ---------------------------- | ------- | --------- | -------- | -------------------------------------------------------------------------------- |
+| `USE_VIRUSTOTAL`             | `no`    | multisite | no       | Activate VirusTotal integration.                                                 |
+| `VIRUSTOTAL_API_KEY`         |         | global    | no       | Key to authenticate with VirusTotal API.                                         |
+| `VIRUSTOTAL_SCAN_FILE`       | `yes`   | multisite | no       | Activate automatic scan of uploaded files with VirusTotal (only existing files). |
+| `VIRUSTOTAL_SCAN_IP`         | `yes`   | multisite | no       | Activate automatic scan of uploaded ips with VirusTotal.                         |
+| `VIRUSTOTAL_IP_SUSPICIOUS`   | `5`     | global    | no       | Minimum number of suspicious reports before considering IP as bad.               |
+| `VIRUSTOTAL_IP_MALICIOUS`    | `3`     | global    | no       | Minimum number of malicious reports before considering IP as bad.                |
+| `VIRUSTOTAL_FILE_SUSPICIOUS` | `5`     | global    | no       | Minimum number of suspicious reports before considering file as bad.             |
+| `VIRUSTOTAL_FILE_MALICIOUS`  | `3`     | global    | no       | Minimum number of malicious reports before considering file as bad.              |

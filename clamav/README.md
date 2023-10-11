@@ -12,9 +12,9 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if an
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
-  * [Docker](#docker)
-  * [Swarm](#swarm)
-  * [Kubernetes](#kubernetes)
+  - [Docker](#docker)
+  - [Swarm](#swarm)
+  - [Kubernetes](#kubernetes)
 - [Settings](#settings)
 - [TODO](#todo)
 
@@ -88,6 +88,7 @@ networks:
 ## Kubernetes
 
 First you will need to deploy the dependencies :
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -104,8 +105,8 @@ spec:
         app: bunkerweb-clamav
     spec:
       containers:
-      - name: bunkerweb-clamav
-        image: clamav/clamav:1.1
+        - name: bunkerweb-clamav
+          image: clamav/clamav:1.1
 ---
 apiVersion: v1
 kind: Service
@@ -121,6 +122,7 @@ spec:
 ```
 
 Then you can configure the plugin :
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -129,20 +131,19 @@ metadata:
   annotations:
     bunkerweb.io/USE_CLAMAV: "yes"
     bunkerweb.io/CLAMAV_HOST: "svc-bunkerweb-clamav.default.svc.cluster.local"
-...
 ```
 
 # Settings
 
-|    Setting     |Default | Context |Multiple|                      Description                      |
-|----------------|--------|---------|--------|-------------------------------------------------------|
-|`USE_CLAMAV`    |`no`    |multisite|no      |Activate automatic scan of uploaded files with ClamAV. |
-|`CLAMAV_HOST`   |`clamav`|global   |no      |ClamAV hostname or IP address.                         |
-|`CLAMAV_PORT`   |`3310`  |global   |no      |ClamAV port.                                           |
-|`CLAMAV_TIMEOUT`|`1000`  |global   |no      |Network timeout (in ms) when communicating with ClamAV.|
+| Setting          | Default  | Context   | Multiple | Description                                             |
+| ---------------- | -------- | --------- | -------- | ------------------------------------------------------- |
+| `USE_CLAMAV`     | `no`     | multisite | no       | Activate automatic scan of uploaded files with ClamAV.  |
+| `CLAMAV_HOST`    | `clamav` | global    | no       | ClamAV hostname or IP address.                          |
+| `CLAMAV_PORT`    | `3310`   | global    | no       | ClamAV port.                                            |
+| `CLAMAV_TIMEOUT` | `1000`   | global    | no       | Network timeout (in ms) when communicating with ClamAV. |
 
 # TODO
 
-* Test and document clustered mode
-* Custom ClamAV configuration
-* Document Linux integration
+- Test and document clustered mode
+- Custom ClamAV configuration
+- Document Linux integration

@@ -110,7 +110,7 @@ function clamav:scan()
 			end
 			return false, "form:read() failed : " .. err
 		end
-		
+
 		-- Header case : check if we have a filename
 		if typ == "header" then
 			local found = false

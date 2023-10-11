@@ -1,36 +1,36 @@
 {
-	"id": "webhook",
-	"name": "WebHook",
-	"description": "Send alerts to a custom webhook.",
-	"version": "1.1",
-	"stream": "yes",
-	"settings": {
-		"USE_WEBHOOK": {
-			"context": "multisite",
-			"default": "no",
-			"help": "Enable sending alerts to a custom webhook.",
-			"id": "use-webhook",
-			"label": "Use webhook",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"WEBHOOK_URL": {
-			"context": "global",
-			"default": "https://api.example.com/bw",
-			"help": "Address of the webhook.",
-			"id": "webhook-url",
-			"label": "Webhook URL",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"WEBHOOK_RETRY_IF_LIMITED": {
-			"context": "global",
-			"default": "no",
-			"help": "Retry to send the request if the remote server is rate limiting us (may consume a lot of resources).",
-			"id": "webhook-retry-if-limited",
-			"label": "Retry if limited by webhook",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		}
-	}
+  "id": "webhook",
+  "name": "WebHook",
+  "description": "Send alerts to a custom webhook.",
+  "version": "1.1",
+  "stream": "yes",
+  "settings": {
+    "USE_WEBHOOK": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Enable sending alerts to a custom webhook.",
+      "id": "use-webhook",
+      "label": "Use webhook",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "WEBHOOK_URL": {
+      "context": "global",
+      "default": "https://api.example.com/bw",
+      "help": "Address of the webhook.",
+      "id": "webhook-url",
+      "label": "Webhook URL",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "WEBHOOK_RETRY_IF_LIMITED": {
+      "context": "global",
+      "default": "no",
+      "help": "Retry to send the request if the remote server is rate limiting us (may consume a lot of resources).",
+      "id": "webhook-retry-if-limited",
+      "label": "Retry if limited by webhook",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    }
+  }
 }

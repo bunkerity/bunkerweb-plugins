@@ -1,36 +1,36 @@
 {
-	"id": "slack",
-	"name": "Slack",
-	"description": "Send alerts to a Slack channel (using webhooks).",
-	"version": "1.2",
-	"stream": "partial",
-	"settings": {
-		"USE_SLACK": {
-			"context": "multisite",
-			"default": "no",
-			"help": "Enable sending alerts to a Slack channel.",
-			"id": "use-slack",
-			"label": "Use Slack",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"SLACK_WEBHOOK_URL": {
-			"context": "global",
-			"default": "https://hooks.slack.com/services/...",
-			"help": "Address of the Slack Webhook.",
-			"id": "slack-webhook-url",
-			"label": "Slack webhook URL",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"SLACK_RETRY_IF_LIMITED": {
-			"context": "global",
-			"default": "no",
-			"help": "Retry to send the request if Slack API is rate limiting us (may consume a lot of resources).",
-			"id": "slack-retry-if-limited",
-			"label": "Retry if limited by Slack",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		}
-	}
+  "id": "slack",
+  "name": "Slack",
+  "description": "Send alerts to a Slack channel (using webhooks).",
+  "version": "1.2",
+  "stream": "partial",
+  "settings": {
+    "USE_SLACK": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Enable sending alerts to a Slack channel.",
+      "id": "use-slack",
+      "label": "Use Slack",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "SLACK_WEBHOOK_URL": {
+      "context": "global",
+      "default": "https://hooks.slack.com/services/...",
+      "help": "Address of the Slack Webhook.",
+      "id": "slack-webhook-url",
+      "label": "Slack webhook URL",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "SLACK_RETRY_IF_LIMITED": {
+      "context": "global",
+      "default": "no",
+      "help": "Retry to send the request if Slack API is rate limiting us (may consume a lot of resources).",
+      "id": "slack-retry-if-limited",
+      "label": "Retry if limited by Slack",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    }
+  }
 }

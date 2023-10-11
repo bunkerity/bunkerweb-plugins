@@ -21,7 +21,7 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 
 Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first and refer to the [CrowdSec documentation](https://docs.crowdsec.net/) if you are not familiar with it.
 
-You will need to run CrowdSec instance and configure it to parse BunkerWeb logs. Because BunkerWeb is based on NGINX, you can use the `nginx` value for the `type` parameter in your acquisition file (assuming that BunkerWeb logs are stored "as is" without additionnal data) :
+You will need to run CrowdSec instance and configure it to parse BunkerWeb logs. Because BunkerWeb is based on NGINX, you can use the `nginx` value for the `type` parameter in your acquisition file (assuming that BunkerWeb logs are stored "as is" without additional data) :
 
 ```yaml
 filenames:
@@ -51,8 +51,8 @@ destination d_file {
 };
 
 log {
-  source(s_net); 
-  destination(d_file); 
+  source(s_net);
+  destination(d_file);
 };
 ```
 
@@ -63,10 +63,9 @@ See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the Bunke
 ## Docker
 
 ```yaml
-version: '3'
+version: "3"
 
 services:
-
   bunkerweb:
     image: bunkerity/bunkerweb:1.5.1
     ports:
@@ -158,32 +157,36 @@ volumes:
 The recommended way of installing CrowdSec in your Kubernetes cluster is by using their official [helm chart](https://github.com/crowdsecurity/helm-charts). You will find a tutorial [here](https://crowdsec.net/blog/kubernetes-crowdsec-integration/) for more information. By doing so, a syslog service is no more mandatory because agents will forward BunkerWeb logs to the CS API.
 
 The first step is to add the CrowdSec chart repository :
+
 ```shell
 helm repo add crowdsec https://crowdsecurity.github.io/helm-charts && helm repo update
 ```
 
 Now we can create the config file named **crowdsec-values.yml** that will be used to configure the chart :
+
 ```yaml
 agent:
   acquisition:
-      # Namespace of BunkerWeb
+    # Namespace of BunkerWeb
     - namespace: default
       # Pod names of BunkerWeb
       podName: bunkerweb-*
       program: nginx
   env:
-  - name: BOUNCER_KEY_bunkerweb
-    value: "s3cr3tb0unc3rk3y"
-  - name: COLLECTIONS
-    value: "crowdsecurity/nginx"
+    - name: BOUNCER_KEY_bunkerweb
+      value: "s3cr3tb0unc3rk3y"
+    - name: COLLECTIONS
+      value: "crowdsecurity/nginx"
 ```
 
 After the **crowdsec-values.yml** file is created, you can now deploy the CrowdSec stack :
+
 ```shell
 helm install crowdsec crowdsec/crowdsec -f crowdsec-values.yaml
 ```
 
-And finaly you can configure the plugin :
+And finally you can configure the plugin :
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -193,16 +196,15 @@ metadata:
     bunkerweb.io/USE_CROWDSEC: "yes"
     bunkerweb.io/CROWDSEC_API: "http://crowdsec-service.default.svc.cluster.local"
     bunkerweb.io/CROWDSEC_API_KEY: "s3cr3tb0unc3rk3y"
-...
 ```
 
 # Settings
 
-|          Setting          |       Default        | Context |Multiple|                     Description                     |
-|---------------------------|----------------------|---------|--------|-----------------------------------------------------|
-|`USE_CROWDSEC`             |`no`                  |multisite|no      |Activate CrowdSec bouncer.                           |
-|`CROWDSEC_API`             |`http://crowdsec:8080`|global   |no      |Address of the CrowdSec API.                         |
-|`CROWDSEC_API_KEY`         |                      |global   |no      |Key for the CrowdSec API given by cscli bouncer add. |
-|`CROWDSEC_MODE`            |`live`                |global   |no      |Mode of the CrowdSec API (live or stream).           |
-|`CROWDSEC_REQUEST_TIMEOUT` |`1000`                |global   |no      |Bouncer's request timeout in milliseconds.           |
-|`CROWDSEC_UPDATE_FREQUENCY`|`10`                  |global   |no      |Bouncer's update frequency in stream mode, in second.|
+| Setting                     | Default                | Context   | Multiple | Description                                           |
+| --------------------------- | ---------------------- | --------- | -------- | ----------------------------------------------------- |
+| `USE_CROWDSEC`              | `no`                   | multisite | no       | Activate CrowdSec bouncer.                            |
+| `CROWDSEC_API`              | `http://crowdsec:8080` | global    | no       | Address of the CrowdSec API.                          |
+| `CROWDSEC_API_KEY`          |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.  |
+| `CROWDSEC_MODE`             | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).            |
+| `CROWDSEC_REQUEST_TIMEOUT`  | `1000`                 | global    | no       | Bouncer's request timeout in milliseconds.            |
+| `CROWDSEC_UPDATE_FREQUENCY` | `10`                   | global    | no       | Bouncer's update frequency in stream mode, in second. |

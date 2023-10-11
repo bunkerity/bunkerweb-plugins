@@ -70,25 +70,24 @@ metadata:
   annotations:
     bunkerweb.io/USE_WEBHOOK: "yes"
     bunkerweb.io/WEBHOOK_URL: "https://api.example.com/bw"
-...
 ```
 
 # Settings
 
-|         Setting          |          Default           | Context |Multiple|                                            Description                                             |
-|--------------------------|----------------------------|---------|--------|----------------------------------------------------------------------------------------------------|
-|`USE_WEBHOOK`             |`no`                        |multisite|no      |Enable sending alerts to a custom webhook.                                                          |
-|`WEBHOOK_URL`             |`https://api.example.com/bw`|global   |no      |Address of the webhook.                                                                             |
-|`WEBHOOK_RETRY_IF_LIMITED`|`no`                        |global   |no      |Retry to send the request if the remote server is rate limiting us (may consume a lot of resources).|
+| Setting                    | Default                      | Context   | Multiple | Description                                                                                          |
+| -------------------------- | ---------------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `USE_WEBHOOK`              | `no`                         | multisite | no       | Enable sending alerts to a custom webhook.                                                           |
+| `WEBHOOK_URL`              | `https://api.example.com/bw` | global    | no       | Address of the webhook.                                                                              |
+| `WEBHOOK_RETRY_IF_LIMITED` | `no`                         | global    | no       | Retry to send the request if the remote server is rate limiting us (may consume a lot of resources). |
 
 # TODO
 
-* Add more info in notification :
-  * Date
-  * Country of IP
-  * ASN of IP
-  * ...
-* Add settings to control what details to send :
-  * Anonymize IP
-  * Add body
-  * Add headers
+- Add more info in notification :
+  - Date
+  - Country of IP
+  - ASN of IP
+  - ...
+- Add settings to control what details to send :
+  - Anonymize IP
+  - Add body
+  - Add headers

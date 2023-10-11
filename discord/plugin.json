@@ -1,36 +1,36 @@
 {
-	"id": "discord",
-	"name": "Discord",
-	"description": "Send alerts to a Discord channel (using webhooks).",
-	"version": "1.1",
-	"stream": "yes",
-	"settings": {
-		"USE_DISCORD": {
-			"context": "multisite",
-			"default": "no",
-			"help": "Enable sending alerts to a Discord channel.",
-			"id": "use-discord",
-			"label": "Use Discord",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		},
-		"DISCORD_WEBHOOK_URL": {
-			"context": "global",
-			"default": "https://discordapp.com/api/webhooks/...",
-			"help": "Address of the Discord Webhook.",
-			"id": "discord-webhook-url",
-			"label": "Discord webhook URL",
-			"regex": "^.*$",
-			"type": "text"
-		},
-		"DISCORD_RETRY_IF_LIMITED": {
-			"context": "global",
-			"default": "no",
-			"help": "Retry to send the request if Discord API is rate limiting us (may consume a lot of resources).",
-			"id": "discord-retry-if-limited",
-			"label": "Retry if limited by Discord",
-			"regex": "^(yes|no)$",
-			"type": "check"
-		}
-	}
+  "id": "discord",
+  "name": "Discord",
+  "description": "Send alerts to a Discord channel (using webhooks).",
+  "version": "1.1",
+  "stream": "yes",
+  "settings": {
+    "USE_DISCORD": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Enable sending alerts to a Discord channel.",
+      "id": "use-discord",
+      "label": "Use Discord",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "DISCORD_WEBHOOK_URL": {
+      "context": "global",
+      "default": "https://discordapp.com/api/webhooks/...",
+      "help": "Address of the Discord Webhook.",
+      "id": "discord-webhook-url",
+      "label": "Discord webhook URL",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "DISCORD_RETRY_IF_LIMITED": {
+      "context": "global",
+      "default": "no",
+      "help": "Retry to send the request if Discord API is rate limiting us (may consume a lot of resources).",
+      "id": "discord-retry-if-limited",
+      "label": "Retry if limited by Discord",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    }
+  }
 }

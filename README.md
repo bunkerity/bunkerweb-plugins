@@ -21,13 +21,13 @@ The installation of external plugins is covered in the [plugins section](https:/
 
 Each plugin is located in a subdirectory of this repository. A README file located in each subdirectory contains documentation about the plugin. Here is the list :
 
-* [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
-* [CrowdSec](https://github.com/bunkerity/bunkerweb-plugins/tree/main/crowdsec)
-* [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
-* [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
-* [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
-* [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
-* [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)
+- [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
+- [CrowdSec](https://github.com/bunkerity/bunkerweb-plugins/tree/main/crowdsec)
+- [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
+- [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
+- [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
+- [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
+- [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)
 
 # Support
 
@@ -35,21 +35,21 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 
 We offer professional services related to BunkerWeb like :
 
-* Consulting
-* Support
-* Custom development
-* Partnership
+- Consulting
+- Support
+- Custom development
+- Partnership
 
 Please contact us at contact \[@\] bunkerity.com if you are interested.
 
 ## Community
 
-To get free community support you can use the following medias :
+To get free community support you can use the following media :
 
-* The #help channel of BunkerWeb in the [Discord server](https://discord.com/invite/fTf46FmtyD)
-* The help category of [GitHub dicussions](https://github.com/bunkerity/bunkerweb-plugins/discussions)
-* The [/r/BunkerWeb](https://www.reddit.com/r/BunkerWeb) subreddit
-* The [Server Fault](https://serverfault.com/) and [Super User](https://superuser.com/) forums
+- The #help channel of BunkerWeb in the [Discord server](https://discord.com/invite/fTf46FmtyD)
+- The help category of [GitHub discussions](https://github.com/bunkerity/bunkerweb-plugins/discussions)
+- The [/r/BunkerWeb](https://www.reddit.com/r/BunkerWeb) subreddit
+- The [Server Fault](https://serverfault.com/) and [Super User](https://superuser.com/) forums
 
 Please don't use [GitHub issues](https://github.com/bunkerity/bunkerweb-plugins/issues) to ask for help, use it only for bug reports and feature requests.
 
