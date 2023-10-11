@@ -1,0 +1,35 @@
+name: ➕ New Plugin
+description: Suggest an idea for a new plugin
+title: "[PLUGIN] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        #### Before submitting a feature request, please make sure the feature hasn't been already addressed by searching through [the existing and past feature requests](https://github.com/bunkerity/bunkerweb-plugins/issues?q=is%3Aissue+sort%3Acreated-desc+%5BPLUGIN%5D+in%3Atitle).
+  - type: textarea
+    id: plugin
+    attributes:
+      label: Plugin
+      description: Explain the goal of the plugin and the benefit of adding it to the official BunkerWeb plugins. List any useful links or resources about the underlying technology if any.
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings (optional)
+      description: List the settings you would like to have to configure the plugin.
+      render: JSON
+  - type: textarea
+    id: implementations-ideas
+    attributes:
+      label: Implementations ideas (optional)
+      description: How it should be used and integrated into the project ? List some posts, research papers or codes that we can use as implementation.
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this feature request, you agree to follow our [Code of Conduct](https://github.com/bunkerity/bunkerweb-plugins/blob/master/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
