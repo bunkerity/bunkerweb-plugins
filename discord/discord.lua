@@ -50,7 +50,7 @@ function discord:log(bypass_use_discord)
 end
 
 -- luacheck: ignore 212
-function discord.send(premature, self, data) -- TODO: premature is not used, remove it if possible
+function discord.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)

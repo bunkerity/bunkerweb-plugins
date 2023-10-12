@@ -50,7 +50,7 @@ function slack:log(bypass_use_slack)
 end
 
 -- luacheck: ignore 212
-function slack.send(premature, self, data) -- TODO: premature is not used, remove it if possible
+function slack.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)

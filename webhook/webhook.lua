@@ -50,7 +50,7 @@ function webhook:log(bypass_use_webhook)
 end
 
 -- luacheck: ignore 212
-function webhook.send(premature, self, data) -- TODO: premature is not used, remove it if possible
+function webhook.send(premature, self, data)
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)
