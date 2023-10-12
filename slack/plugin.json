@@ -21,7 +21,7 @@
       "id": "slack-webhook-url",
       "label": "Slack webhook URL",
       "regex": "^.*$",
-      "type": "text"
+      "type": "password"
     },
     "SLACK_RETRY_IF_LIMITED": {
       "context": "global",

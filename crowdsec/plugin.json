@@ -30,7 +30,7 @@
       "id": "crowdsec-api-key",
       "label": "CrowdSec API key",
       "regex": "^.*$",
-      "type": "text"
+      "type": "password"
     },
     "CROWDSEC_MODE": {
       "context": "global",
@@ -39,7 +39,8 @@
       "id": "crowdsec-mode",
       "label": "CrowdSec Mode",
       "regex": "^(live|stream)$",
-      "type": "text"
+      "type": "select",
+      "select": ["live", "stream"]
     },
     "CROWDSEC_REQUEST_TIMEOUT": {
       "context": "global",

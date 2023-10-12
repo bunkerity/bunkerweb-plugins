@@ -21,7 +21,7 @@
       "id": "discord-webhook-url",
       "label": "Discord webhook URL",
       "regex": "^.*$",
-      "type": "text"
+      "type": "password"
     },
     "DISCORD_RETRY_IF_LIMITED": {
       "context": "global",
