@@ -24,23 +24,72 @@ function discord:log(bypass_use_discord)
 		return self:ret(true, "request not denied")
 	end
 	-- Compute data
-	local data = {}
-	data.content = "```Denied request for IP "
-		.. self.ctx.bw.remote_addr
-		.. " (reason = "
-		.. reason
-		.. ").\n\nRequest data :\n\n"
-		.. ngx.var.request
-		.. "\n"
-	local headers, err = ngx.req.get_headers()
-	if not headers then
-		data.content = data.content .. "error while getting headers : " .. err
-	else
-		for header, value in pairs(headers) do
-			data.content = data.content .. header .. ": " .. value .. "\n"
+	local timestamp = ngx.req.start_time()
+	local formattedTimestamp = os.date("!%Y-%m-%dT%H:%M:%S", timestamp)
+	local milliseconds = math.floor((timestamp - math.floor(timestamp)) * 1000)
+	local formatField = function(inputString)
+		if string.len(inputString) <= 1021 then
+			return inputString
+		else
+			return string.sub(inputString, 1, 1021) .. "..."
 		end
 	end
-	data.content = data.content .. "```"
+
+	local data = {
+		username = "BunkerWeb",
+		embeds = {
+			{
+				title = "Denied request for IP " .. self.ctx.bw.remote_addr,
+				timestamp = formattedTimestamp .. "." .. string.format("%03d", milliseconds) .. "Z",
+				color = 0x125678,
+				provider = {
+					name = "BunkerWeb",
+					url = "https://github.com/bunkerity/bunkerweb",
+				},
+				author = {
+					name = "BunkerWeb's Discord plugin",
+					url = "https://github.com/bunkerity/bunkerweb",
+					icon_url = "https://raw.githubusercontent.com/bunkerity/bunkerweb-plugins/main/logo.png",
+				},
+				fields = {
+					{
+						name = "Request data",
+						value = formatField(ngx.var.request),
+						inline = false,
+					},
+					{
+						name = "Reason",
+						value = formatField(reason),
+						inline = false,
+					},
+				},
+			},
+		},
+	}
+	local headers, err = ngx.req.get_headers()
+	if not headers then
+		data.embeds[1].description = "**error while getting headers : " .. err .. "**"
+	else
+		local count = 0
+		for _ in pairs(headers) do
+			count = count + 1
+		end
+		if count > 23 then
+			data.embeds[1].description = "Headers :\n```"
+			for header, value in pairs(headers) do
+				data.embeds[1].description = data.embeds[1].description .. header .. ": " .. value .. "\n"
+			end
+			data.embeds[1].description = data.embeds[1].description .. "```"
+		else
+			for header, value in pairs(headers) do
+				table.insert(data.embeds[1].fields, {
+					name = header,
+					value = formatField(value),
+					inline = true,
+				})
+			end
+		end
+	end
 	-- Send request
 	local hdr
 	hdr, err = ngx.timer.at(0, self.send, self, data)
