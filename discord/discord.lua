@@ -1,8 +1,8 @@
-local class   = require "middleclass"
-local plugin  = require "bunkerweb.plugin"
-local utils   = require "bunkerweb.utils"
-local cjson   = require "cjson"
-local http    = require "resty.http"
+local cjson = require("cjson")
+local class = require("middleclass")
+local http = require("resty.http")
+local plugin = require("bunkerweb.plugin")
+local utils = require("bunkerweb.utils")
 
 local discord = class("discord", plugin)
 
@@ -25,8 +25,13 @@ function discord:log(bypass_use_discord)
 	end
 	-- Compute data
 	local data = {}
-	data.content = "```Denied request for IP " ..
-			self.ctx.bw.remote_addr .. " (reason = " .. reason .. ").\n\nRequest data :\n\n" .. ngx.var.request .. "\n"
+	data.content = "```Denied request for IP "
+		.. self.ctx.bw.remote_addr
+		.. " (reason = "
+		.. reason
+		.. ").\n\nRequest data :\n\n"
+		.. ngx.var.request
+		.. "\n"
 	local headers, err = ngx.req.get_headers()
 	if not headers then
 		data.content = data.content .. "error while getting headers : " .. err
@@ -37,13 +42,15 @@ function discord:log(bypass_use_discord)
 	end
 	data.content = data.content .. "```"
 	-- Send request
-	local hdr, err = ngx.timer.at(0, self.send, self, data)
+	local hdr
+	hdr, err = ngx.timer.at(0, self.send, self, data)
 	if not hdr then
 		return self:ret(true, "can't create report timer : " .. err)
 	end
 end
 
-function discord.send(premature, self, data)
+-- luacheck: ignore 212
+function discord.send(premature, self, data) -- TODO: premature is not used, remove it if possible
 	local httpc, err = http.new()
 	if not httpc then
 		self.logger:log(ngx.ERR, "can't instantiate http object : " .. err)
@@ -53,16 +60,16 @@ function discord.send(premature, self, data)
 		headers = {
 			["Content-Type"] = "application/json",
 		},
-		body = cjson.encode(data)
+		body = cjson.encode(data),
 	})
 	httpc:close()
 	if not res then
 		self.logger:log(ngx.ERR, "error while sending request : " .. err_http)
 	end
 	if self.variables["DISCORD_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
-		self.logger:log(ngx.WARN,
-			"Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
-		local hdr, err = ngx.timer.at(res.headers["Retry-After"], self.send, self, data)
+		self.logger:log(ngx.WARN, "Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
+		local hdr
+		hdr, err = ngx.timer.at(res.headers["Retry-After"], self.send, self, data)
 		if not hdr then
 			self.logger:log(ngx.ERR, "can't create report timer : " .. err)
 			return
@@ -86,7 +93,7 @@ function discord:log_default()
 		return self:ret(true, "Discord plugin not enabled")
 	end
 	-- Check if default server is disabled
-	local check, err = utils.get_variable("DISABLE_DEFAULT_SERVER", false)
+	check, err = utils.get_variable("DISABLE_DEFAULT_SERVER", false)
 	if check == nil then
 		return self:ret(false, "error while getting variable DISABLE_DEFAULT_SERVER (" .. err .. ")")
 	end

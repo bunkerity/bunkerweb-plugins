@@ -1,13 +1,25 @@
-local class      = require "middleclass"
-local plugin     = require "bunkerweb.plugin"
-local utils      = require "bunkerweb.utils"
-local cjson		 = require "cjson"
-local upload	 = require "resty.upload"
-local http		 = require "resty.http"
-local sha256	 = require "resty.sha256"
-local str		 = require "resty.string"
+local cjson = require("cjson")
+local class = require("middleclass")
+local http = require("resty.http")
+local plugin = require("bunkerweb.plugin")
+local sha256 = require("resty.sha256")
+local str = require("resty.string")
+local upload = require("resty.upload")
+local utils = require("bunkerweb.utils")
 
-local virustotal    = class("virustotal", plugin)
+local virustotal = class("virustotal", plugin)
+
+local read_all = function(form)
+	while true do
+		local typ = form:read()
+		if not typ then
+			return
+		end
+		if typ == "eof" then
+			return
+		end
+	end
+end
 
 function virustotal:initialize()
 	-- Call parent initialize
@@ -20,7 +32,10 @@ end
 
 function virustotal:access()
 	-- Check if enabled
-	if self.variables["USE_VIRUSTOTAL"] ~= "yes" or (self.variables["VIRUSTOTAL_SCAN_IP"] ~= "yes" and self.variables["VIRUSTOTAL_SCAN_FILE"] ~= "yes") then
+	if
+		self.variables["USE_VIRUSTOTAL"] ~= "yes"
+		or (self.variables["VIRUSTOTAL_SCAN_IP"] ~= "yes" and self.variables["VIRUSTOTAL_SCAN_FILE"] ~= "yes")
+	then
 		return self:ret(true, "virustotal plugin not enabled")
 	end
 
@@ -31,14 +46,24 @@ function virustotal:access()
 			return self:ret(false, "error while checking if IP is malicious : " .. report)
 		end
 		if report and report ~= "clean" then
-			return self:ret(true, "IP " .. self.ctx.bw.remote_addr .. " is malicious : " .. report, utils.get_deny_status(self.ctx))
+			return self:ret(
+				true,
+				"IP " .. self.ctx.bw.remote_addr .. " is malicious : " .. report,
+				utils.get_deny_status(self.ctx)
+			)
 		end
 	end
 
 	-- File check
 	if self.variables["VIRUSTOTAL_SCAN_FILE"] == "yes" then
 		-- Check if we have downloads
-		if not self.ctx.bw.http_content_type or (not self.ctx.bw.http_content_type:match("boundary") or not self.ctx.bw.http_content_type:match("multipart/form%-data")) then
+		if
+			not self.ctx.bw.http_content_type
+			or (
+				not self.ctx.bw.http_content_type:match("boundary")
+				or not self.ctx.bw.http_content_type:match("multipart/form%-data")
+			)
+		then
 			return self:ret(true, "no file upload detected")
 		end
 		-- Perform the check
@@ -48,7 +73,11 @@ function virustotal:access()
 		end
 		-- Malicious case
 		if detected and detected ~= "clean" then
-			return self:ret(true, "file with checksum " .. checksum .. "is detected : " .. detected, utils.get_deny_status(self.ctx))
+			return self:ret(
+				true,
+				"file with checksum " .. checksum .. "is detected : " .. detected,
+				utils.get_deny_status(self.ctx)
+			)
 		end
 	end
 	return self:ret(true, "no ip/file detected")
@@ -64,7 +93,8 @@ function virustotal:check_ip()
 		return true, report
 	end
 	-- Ask VT API
-	local ok, found, response = self:request("/ip_addresses/" .. self.ctx.bw.remote_addr)
+	local found, response
+	ok, found, response = self:request("/ip_addresses/" .. self.ctx.bw.remote_addr)
 	if not ok then
 		return false, response
 	end
@@ -73,7 +103,8 @@ function virustotal:check_ip()
 		result = self:get_result(response, "IP")
 	end
 	-- Add to cache
-	local ok, err = self:add_to_cache("ip_" .. ngx.ctx.bw.remote_addr, result)
+	local err
+	ok, err = self:add_to_cache("ip_" .. ngx.ctx.bw.remote_addr, result)
 	if not ok then
 		return false, err
 	end
@@ -90,15 +121,17 @@ function virustotal:check_file()
 	local processing = nil
 	while true do
 		-- Read part
-		local typ, res, err = form:read()
+		local typ, res
+		typ, res, err = form:read()
 		if not typ then
 			return false, "form:read() failed : " .. err
 		end
 		-- Header case : check if we have a filename
 		if typ == "header" then
 			local found = false
+			-- luacheck: ignore 213
 			for i, header in ipairs(res) do
-				if header:find("^.*filename=\"(.*)\".*$") then
+				if header:find('^.*filename="(.*)".*$') then
 					found = true
 					break
 				end
@@ -106,10 +139,10 @@ function virustotal:check_file()
 			if found then
 				processing = true
 			end
-		-- Body case : update checksum
+			-- Body case : update checksum
 		elseif typ == "body" and processing then
 			sha:update(res)
-		-- Part end case : get final checksum and clamav result
+			-- Part end case : get final checksum and clamav result
 		elseif typ == "part_end" and processing then
 			processing = nil
 			-- Compute checksum
@@ -118,17 +151,21 @@ function virustotal:check_file()
 			-- Check if file is in cache
 			local ok, cached = self:is_in_cache("file_" .. checksum)
 			if not ok then
-				self.logger:log(ngx.ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
+				self.logger:log(
+					ngx.ERR,
+					"can't check if file with checksum " .. checksum .. " is in cache : " .. cached
+				)
 			elseif cached then
 				if cached ~= "clean" then
-					self:read_all(form)
+					read_all(form)
 					return true, cached, checksum
 				end
 			else
 				-- Check if file is already present on VT
-				local ok, found, response = self:request("/files/" .. checksum)
+				local found, response
+				ok, found, response = self:request("/files/" .. checksum)
 				if not ok then
-					self:read_all(form)
+					read_all(form)
 					return false, found
 				end
 				local result = "clean"
@@ -136,29 +173,36 @@ function virustotal:check_file()
 					result = self:get_result(response, "FILE")
 				end
 				-- Add to cache
-				local ok, err = self:add_to_cache("file_" .. checksum, result)
+				ok, err = self:add_to_cache("file_" .. checksum, result)
 				if not ok then
-					self:read_all(form)
+					read_all(form)
 					return false, err
 				end
 				-- Stop here if one file is detected
 				if result ~= "clean" then
-					self:read_all(form)
+					read_all(form)
 					return true, result, checksum
 				end
 			end
-		-- End of body case : no file detected
+			-- End of body case : no file detected
 		elseif typ == "eof" then
 			return true
 		end
 	end
+	-- luacheck: ignore 511
 	return false, "malformed content"
 end
 
 function virustotal:get_result(response, type)
 	local result = "clean"
-	if response["suspicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_SUSPICIOUS"]) or response["malicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_MALICIOUS"]) then
-		result = tostring(response["suspicious"]) .. " suspicious and " .. tostring(response["malicious"]) .. " malicious"
+	if
+		response["suspicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_SUSPICIOUS"])
+		or response["malicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_MALICIOUS"])
+	then
+		result = tostring(response["suspicious"])
+			.. " suspicious and "
+			.. tostring(response["malicious"])
+			.. " malicious"
 	end
 	return result
 end
@@ -186,13 +230,12 @@ function virustotal:request(url)
 		return false, err
 	end
 	-- Send request
-	local res, err = httpc:request_uri("https://www.virustotal.com/api/v3" .. url,
-		{
-			headers = {
-				["x-apikey"] = self.variables["VIRUSTOTAL_API_KEY"]
-			}
-		}
-	)
+	local res
+	res, err = httpc:request_uri("https://www.virustotal.com/api/v3" .. url, {
+		headers = {
+			["x-apikey"] = self.variables["VIRUSTOTAL_API_KEY"],
+		},
+	})
 	if not res then
 		return false, err
 	end
@@ -201,7 +244,7 @@ function virustotal:request(url)
 		return true, false
 	end
 	if res.status ~= 200 then
-		local err = "received status " .. tostring(res.status) .. " from VT API"
+		err = "received status " .. tostring(res.status) .. " from VT API"
 		local ok, data = pcall(cjson.decode, res.body)
 		if ok then
 			err = err .. " with data " .. data
@@ -217,18 +260,6 @@ function virustotal:request(url)
 		return false, "malformed json response"
 	end
 	return true, true, data.data.attributes.last_analysis_stats
-end
-
-function virustotal:read_all(form)
-	while true do
-		local typ = form:read()
-		if not typ then
-			return
-		end
-		if typ == "eof" then
-			return
-		end
-	end
 end
 
 return virustotal

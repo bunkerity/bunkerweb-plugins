@@ -1,11 +1,9 @@
-local class      = require "middleclass"
-local plugin     = require "bunkerweb.plugin"
-local utils      = require "bunkerweb.utils"
-local cachestore = require "bunkerweb.cachestore"
-local cjson      = require "cjson"
-local cs         = require "crowdsec.lib.bouncer"
+local class = require("middleclass")
+local cs = require("crowdsec.lib.bouncer")
+local plugin = require("bunkerweb.plugin")
+local utils = require("bunkerweb.utils")
 
-local crowdsec   = class("crowdsec", plugin)
+local crowdsec = class("crowdsec", plugin)
 
 function crowdsec:initialize()
 	-- Call parent initialize
@@ -22,7 +20,8 @@ function crowdsec:init()
 		return self:ret(true, "init not needed")
 	end
 	-- Init CS
-	local ok, err = cs.init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.0")
+	local ok
+	ok, err = cs.init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.0")
 	if not ok then
 		self.logger:log(ngx.ERR, "error while initializing bouncer : " .. err)
 	end
