@@ -155,8 +155,7 @@ function clamav:scan()
 		-- Header case : check if we have a filename
 		if typ == "header" then
 			local found = false
-			-- luacheck: ignore 213
-			for i, header in ipairs(res) do
+			for _, header in ipairs(res) do
 				if header:find('^.*filename="(.*)".*$') then
 					found = true
 					break
