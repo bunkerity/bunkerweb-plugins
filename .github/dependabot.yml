@@ -6,8 +6,12 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+      time: "09:00"
+      timezone: "Europe/Paris"
     assignees:
-      - "fl0ppy-d1sk"
+      - "TheophileDiot"
+    reviewers:
+      - "TheophileDiot"
     commit-message:
       prefix: "deps/gha"
     target-branch: "dev"
@@ -17,7 +21,11 @@ updates:
     directory: "/coraza/api"
     schedule:
       interval: "daily"
+      time: "09:00"
+      timezone: "Europe/Paris"
     assignees:
+      - "TheophileDiot"
+    reviewers:
       - "TheophileDiot"
     commit-message:
       prefix: "deps/coraza/api"
@@ -26,7 +34,11 @@ updates:
     directory: "/coraza/api"
     schedule:
       interval: "daily"
+      time: "09:00"
+      timezone: "Europe/Paris"
     assignees:
+      - "TheophileDiot"
+    reviewers:
       - "TheophileDiot"
     commit-message:
       prefix: "deps/coraza/api"
