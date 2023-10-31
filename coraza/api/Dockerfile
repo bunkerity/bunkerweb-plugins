@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -7,7 +7,12 @@ RUN go get -d ./...
 RUN go mod download && go mod verify
 RUN go build -v -tags=coraza.rule.multiphase_evaluation -o /usr/local/bin/bw-coraza
 
-FROM golang:1.20-alpine
+COPY crs.sh .
+RUN apk add bash git && \
+    chmod +x crs.sh && \
+    ./crs.sh Download
+
+FROM golang:1.21-alpine
 
 COPY --from=builder --chown=0:0 /usr/local/bin/bw-coraza /usr/local/bin/bw-coraza
 
@@ -18,7 +23,7 @@ RUN addgroup -g 1000 coraza && \
 
 WORKDIR /coraza
 
-COPY --chown=0:1000 coreruleset ./coreruleset
+COPY --from=builder --chown=0:1000 /usr/src/app/coreruleset ./coreruleset
 COPY --chown=0:1000 coraza.conf bunkerweb*.conf ./
 
 VOLUME /rules-before /rules-after

@@ -66,7 +66,7 @@ echo "ℹ️ Download CRS or Remove CRS"
 if [[ "$1" == "Remove" ]]; then
   remove_coreruleset
 elif [[ "$1" == "Download" ]]; then
-	git_secure_clone "https://github.com/coreruleset/coreruleset.git" "e36f27e1429a841e91996f4a521d40c996ec74eb"
+	git_secure_clone "https://github.com/coreruleset/coreruleset.git" "2b92d53ea708babbca8da06cd13decffbc9e31b5"
 else
 	echo "❌ Error wrong argument : $1 try Remove or Download"
 fi

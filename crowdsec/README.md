@@ -72,10 +72,9 @@ services:
       - 80:8080
       - 443:8443
     labels:
-      - "bunkerweb.INSTANCE"
+      - "bunkerweb.INSTANCE=yes"
     environment:
       - SERVER_NAME=www.example.com
-      - EXTERNAL_PLUGIN_URLS=https://github.com/bunkerity/bunkerweb-plugins/archive/refs/tags/v1.2.zip
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
@@ -102,7 +101,7 @@ services:
       - bw-docker
 
   bw-docker:
-    image: tecnativa/docker-socket-proxy
+    image: tecnativa/docker-socket-proxy:nightly
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
@@ -112,7 +111,7 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.5.2
+    image: crowdsecurity/crowdsec:v1.5.5
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -124,7 +123,7 @@ services:
       - bw-universe
 
   syslog:
-    image: balabit/syslog-ng:4.2.0
+    image: balabit/syslog-ng:4.4.0
     volumes:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log

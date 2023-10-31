@@ -44,14 +44,11 @@ services:
     ...
 
   clamav:
-    image: clamav/clamav:1.1
+    image: clamav/clamav:1.2
     volumes:
       - ./clamav-data:/var/lib/clamav
     networks:
       - bw-plugins
-
-  redis:
-    image: redis:7-alpine
 ```
 
 ## Swarm
@@ -73,7 +70,7 @@ services:
     ...
 
   clamav:
-    image: clamav/clamav:1.1
+    image: clamav/clamav:1.2
     networks:
       - bw-plugins
 
@@ -106,7 +103,7 @@ spec:
     spec:
       containers:
         - name: bunkerweb-clamav
-          image: clamav/clamav:1.1
+          image: clamav/clamav:1.2
 ---
 apiVersion: v1
 kind: Service

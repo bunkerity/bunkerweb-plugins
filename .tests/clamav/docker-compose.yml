@@ -50,7 +50,7 @@ services:
       - bw-docker
 
   clamav:
-    image: clamav/clamav:1.1
+    image: clamav/clamav:1.2
     volumes:
       - clamav-data:/var/lib/clamav
     networks:
