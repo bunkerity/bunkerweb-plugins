@@ -67,7 +67,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.1
+    image: bunkerity/bunkerweb:1.5.3
     ports:
       - 80:8080
       - 443:8443
@@ -75,7 +75,7 @@ services:
       - "bunkerweb.INSTANCE"
     environment:
       - SERVER_NAME=www.example.com
-      - EXTERNAL_PLUGIN_URLS=https://github.com/bunkerity/bunkerweb-plugins/archive/refs/tags/v1.1.zip
+      - EXTERNAL_PLUGIN_URLS=https://github.com/bunkerity/bunkerweb-plugins/archive/refs/tags/v1.2.zip
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
@@ -91,7 +91,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.1
+    image: bunkerity/bunkerweb-scheduler:1.5.3
     depends_on:
       - bunkerweb
       - bw-docker

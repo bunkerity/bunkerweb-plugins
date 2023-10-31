@@ -34,7 +34,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.1
+    image: bunkerity/bunkerweb:1.5.3
     ...
     environment:
       - USE_CLAMAV=yes
@@ -62,7 +62,7 @@ version: '3'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.1
+    image: bunkerity/bunkerweb:1.5.3
     ...
     environment:
       - USE_CLAMAV=yes

@@ -34,7 +34,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.1
+    image: bunkerity/bunkerweb:1.5.3
     ...
     environment:
       - USE_MODSECURITY: "no" # We don't need modsecurity anymore
@@ -42,7 +42,7 @@ services:
       - CORAZA_API: "http://bw-coraza:8080"
     ...
     bw-coraza:
-      image: /path/to/coraza-plugin
+      image: bunkerity/bunkerweb-coraza:latest
       networks:
         - bw-universe
 
