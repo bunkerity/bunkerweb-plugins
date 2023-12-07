@@ -232,8 +232,7 @@ function clamav:scan()
 					)
 				else
 					-- luacheck: ignore iend
-					local istart
-					istart, iend, data = data:find("^stream: (.*) FOUND$")
+					local istart, iend, data = data:find("^stream: (.*) FOUND$")
 					local detected = "clean"
 					if istart then
 						detected = data

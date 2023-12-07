@@ -3,7 +3,7 @@
   "stream": "no",
   "name": "CrowdSec",
   "description": "CrowdSec bouncer for BunkerWeb.",
-  "version": "1.1",
+  "version": "1.2",
   "settings": {
     "USE_CROWDSEC": {
       "context": "multisite",
