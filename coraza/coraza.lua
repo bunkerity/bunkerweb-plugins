@@ -3,11 +3,26 @@ local class = require("middleclass")
 local http = require("resty.http")
 local plugin = require("bunkerweb.plugin")
 local utils = require("bunkerweb.utils")
+
 local coraza = class("coraza", plugin)
 
-function coraza:initialize()
+local ngx = ngx
+local ngx_req = ngx.req
+local ERR = ngx.ERR
+local http_new = http.new
+local has_variable = utils.has_variable
+local get_deny_status = utils.get_deny_status
+local rand = utils.rand
+local tostring = tostring
+local decode = cjson.decode
+local open = io.open
+local coroutine_create = coroutine.create
+local coroutine_yield = coroutine.yield
+local coroutine_resume = coroutine.resume
+
+function coraza:initialize(ctx)
 	-- Call parent initialize
-	plugin.initialize(self, "coraza")
+	plugin.initialize(self, "coraza", ctx)
 end
 
 function coraza:init_worker()
@@ -35,7 +50,7 @@ function coraza:access()
 		return self:ret(false, "error while processing request : " .. deny)
 	end
 	if deny then
-		return self:ret(true, "coraza denied request : " .. data, utils.get_deny_status(self.ctx))
+		return self:ret(true, "coraza denied request : " .. data, get_deny_status(), nil, { id = "raw", data = data })
 	end
 
 	return self:ret(true, "coraza accepted request")
@@ -43,7 +58,7 @@ end
 
 function coraza:ping()
 	-- Get http object
-	local httpc, err = http.new()
+	local httpc, err = http_new()
 	if not httpc then
 		return false, err
 	end
@@ -57,14 +72,14 @@ function coraza:ping()
 	-- Check status
 	if res.status ~= 200 then
 		err = "received status " .. tostring(res.status) .. " from Coraza API"
-		local ok, data = pcall(cjson.decode, res.body)
+		local ok, data = pcall(decode, res.body)
 		if ok then
 			err = err .. " with data " .. data
 		end
 		return false, err
 	end
 	-- Get pong
-	local ok, data = pcall(cjson.decode, res.body)
+	local ok, data = pcall(decode, res.body)
 	if not ok then
 		return false, data
 	end
@@ -76,21 +91,21 @@ end
 
 function coraza:process_request()
 	-- Instantiate lua-resty-http obj
-	local httpc, err = http.new()
+	local httpc, err = http_new()
 	if not httpc then
 		return false, err
 	end
 	-- Variables to pass to coraza
 	local data = {
-		["X-Coraza-Version"] = ngx.req.http_version(),
+		["X-Coraza-Version"] = self.ctx.bw.http_version,
 		["X-Coraza-Method"] = self.ctx.bw.request_method,
 		["X-Coraza-Ip"] = self.ctx.bw.remote_addr,
-		["X-Coraza-Id"] = utils.rand(16),
+		["X-Coraza-Id"] = rand(16),
 		["X-Coraza-Uri"] = self.ctx.bw.request_uri,
 	}
 	-- Compute headers
 	local headers
-	headers, err = ngx.req.get_headers()
+	headers, err = ngx_req.get_headers()
 	if err == "truncated" then
 		return true, true, "too many headers"
 	end
@@ -98,20 +113,20 @@ function coraza:process_request()
 		data["X-Coraza-Header-" .. header] = value
 	end
 	-- Body setup
-	ngx.req.read_body()
-	local body = ngx.req.get_body_data()
+	ngx_req.read_body()
+	local body = ngx_req.get_body_data()
 	if not body then
-		local file = ngx.req.get_body_file()
+		local file = ngx_req.get_body_file()
 		if file then
 			local handle
 			-- luacheck: ignore err
-			handle, err = io.open(file)
+			handle, err = open(file)
 			if handle then
 				data["Content-Length"] = tostring(handle:seek("end"))
 				handle:close()
 			end
 			local fbody = function()
-				handle, err = io.open(file)
+				handle, err = open(file)
 				if not handle then
 					return nil, err
 				end
@@ -121,13 +136,13 @@ function coraza:process_request()
 						if not chunk then
 							break
 						end
-						coroutine.yield(chunk)
+						coroutine_yield(chunk)
 					end
 					handle:close()
 				end
-				local co = coroutine.create(cbody)
+				local co = coroutine_create(cbody)
 				return function(...)
-					local ok, ret = coroutine.resume(co, ...)
+					local ok, ret = coroutine_resume(co, ...)
 					if ok then
 						return ret
 					end
@@ -149,7 +164,7 @@ function coraza:process_request()
 	if res.status ~= 200 then
 		local err = "received status " .. tostring(res.status) .. " from Coraza API"
 		local ok
-		ok, data = pcall(cjson.decode, res.body)
+		ok, data = pcall(decode, res.body)
 		if ok then
 			err = err .. " with data " .. data
 		end
@@ -157,7 +172,7 @@ function coraza:process_request()
 	end
 	-- Get result
 	local ok
-	ok, data = pcall(cjson.decode, res.body)
+	ok, data = pcall(decode, res.body)
 	if not ok then
 		return false, data
 	end
@@ -174,12 +189,12 @@ function coraza:is_needed()
 	end
 	-- Request phases (no default)
 	if self.is_request and (self.ctx.bw.server_name ~= "_") then
-		return self.variables["USE_CORAZA"] == "yes" and not ngx.req.is_internal()
+		return self.variables["USE_CORAZA"] == "yes" and not ngx_req.is_internal()
 	end
 	-- Other cases : at least one service uses it
-	local is_needed, err = utils.has_variable("USE_CORAZA", "yes")
+	local is_needed, err = has_variable("USE_CORAZA", "yes")
 	if is_needed == nil then
-		self.logger:log(ngx.ERR, "can't check USE_CORAZA variable : " .. err)
+		self.logger:log(ERR, "can't check USE_CORAZA variable : " .. err)
 	end
 	return is_needed
 end

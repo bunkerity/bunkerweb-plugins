@@ -7,8 +7,17 @@ local utils = require("bunkerweb.utils")
 
 local clamav = class("clamav", plugin)
 
+local ngx = ngx
+local NOTICE = ngx.NOTICE
+local ERR = ngx.ERR
+local socket = ngx.socket
+local to_hex = str.to_hex
+local has_variable = utils.has_variable
+local get_deny_status = utils.get_deny_status
+local tonumber = tonumber
+local floor = math.floor
+
 local stream_size = function(size)
-	local floor = math.floor
 	return ("%c%c%c%c")
 		:format(
 			size % 0x100,
@@ -31,14 +40,14 @@ local read_all = function(form)
 	end
 end
 
-function clamav:initialize()
+function clamav:initialize(ctx)
 	-- Call parent initialize
-	plugin.initialize(self, "clamav")
+	plugin.initialize(self, "clamav", ctx)
 end
 
 function clamav:init_worker()
 	-- Check if worker is needed
-	local init_needed, err = utils.has_variable("USE_CLAMAV", "yes")
+	local init_needed, err = has_variable("USE_CLAMAV", "yes")
 	if init_needed == nil then
 		return self:ret(false, "can't check USE_CLAMAV variable : " .. err)
 	end
@@ -54,7 +63,7 @@ function clamav:init_worker()
 		return self:ret(false, "wrong data received from ClamAV : " .. data)
 	end
 	self.logger:log(
-		ngx.NOTICE,
+		NOTICE,
 		"connectivity with "
 			.. self.variables["CLAMAV_HOST"]
 			.. ":"
@@ -90,7 +99,13 @@ function clamav:access()
 		return self:ret(
 			true,
 			"file with checksum " .. checksum .. "is detected : " .. detected,
-			utils.get_deny_status(self.ctx)
+			get_deny_status(),
+			nil,
+			{
+				id = "detected",
+				checksum = checksum,
+				signature = detected
+			}
 		)
 	end
 	return self:ret(true, "no file detected")
@@ -123,7 +138,7 @@ end
 
 function clamav:socket()
 	-- Init socket
-	local socket = ngx.socket.tcp()
+	local socket = socket.tcp()
 	socket:settimeout(tonumber(self.variables["CLAMAV_TIMEOUT"]))
 	local ok, err = socket:connect(self.variables["CLAMAV_HOST"], tonumber(self.variables["CLAMAV_PORT"]))
 	if not ok then
@@ -188,7 +203,7 @@ function clamav:scan()
 			end
 			-- Part end case : get final checksum and clamav result
 		elseif typ == "part_end" and socket then
-			local checksum = str.to_hex(sha:final())
+			local checksum = to_hex(sha:final())
 			sha:reset()
 			-- Check if file is in cache
 			local ok, cached = self:is_in_cache(checksum)
@@ -225,7 +240,7 @@ function clamav:scan()
 				socket = nil
 				if data:match("^.*INSTREAM size limit exceeded.*$") then
 					self.logger:log(
-						ngx.ERR,
+						ERR,
 						"can't scan file with checksum "
 							.. checksum
 							.. " because size exceeded StreamMaxLength in clamd.conf"
@@ -239,7 +254,7 @@ function clamav:scan()
 					end
 					ok, err = self:add_to_cache(checksum, detected)
 					if not ok then
-						self.logger:log(ngx.ERR, "can't cache result : " .. err)
+						self.logger:log(ERR, "can't cache result : " .. err)
 					end
 					if detected ~= "clean" then
 						read_all(form)

@@ -9,6 +9,14 @@ local utils = require("bunkerweb.utils")
 
 local virustotal = class("virustotal", plugin)
 
+local ngx = ngx
+local ERR = ngx.ERR
+local to_hex = str.to_hex
+local http_new = http.new
+local get_deny_status = utils.get_deny_status
+local tostring = tostring
+local decode = cjson.decode
+
 local read_all = function(form)
 	while true do
 		local typ = form:read()
@@ -21,9 +29,9 @@ local read_all = function(form)
 	end
 end
 
-function virustotal:initialize()
+function virustotal:initialize(ctx)
 	-- Call parent initialize
-	plugin.initialize(self, "virustotal")
+	plugin.initialize(self, "virustotal", ctx)
 end
 
 -- Todo : find a "ping" endpoint on VT API
@@ -49,7 +57,12 @@ function virustotal:access()
 			return self:ret(
 				true,
 				"IP " .. self.ctx.bw.remote_addr .. " is malicious : " .. report,
-				utils.get_deny_status(self.ctx)
+				get_deny_status(),
+				nil,
+				{
+					id = "ip",
+					report = report
+				}
 			)
 		end
 	end
@@ -76,7 +89,13 @@ function virustotal:access()
 			return self:ret(
 				true,
 				"file with checksum " .. checksum .. "is detected : " .. detected,
-				utils.get_deny_status(self.ctx)
+				get_deny_status(),
+				nil,
+				{
+					id = "file",
+					checksum = checksum,
+					detected = detected
+				}
 			)
 		end
 	end
@@ -104,7 +123,7 @@ function virustotal:check_ip()
 	end
 	-- Add to cache
 	local err
-	ok, err = self:add_to_cache("ip_" .. ngx.ctx.bw.remote_addr, result)
+	ok, err = self:add_to_cache("ip_" .. self.ctx.bw.remote_addr, result)
 	if not ok then
 		return false, err
 	end
@@ -145,13 +164,13 @@ function virustotal:check_file()
 		elseif typ == "part_end" and processing then
 			processing = nil
 			-- Compute checksum
-			local checksum = str.to_hex(sha:final())
+			local checksum = to_hex(sha:final())
 			sha:reset()
 			-- Check if file is in cache
 			local ok, cached = self:is_in_cache("file_" .. checksum)
 			if not ok then
 				self.logger:log(
-					ngx.ERR,
+					ERR,
 					"can't check if file with checksum " .. checksum .. " is in cache : " .. cached
 				)
 			elseif cached then
@@ -224,7 +243,7 @@ end
 
 function virustotal:request(url)
 	-- Get object
-	local httpc, err = http.new()
+	local httpc, err = http_new()
 	if not httpc then
 		return false, err
 	end
@@ -244,14 +263,14 @@ function virustotal:request(url)
 	end
 	if res.status ~= 200 then
 		err = "received status " .. tostring(res.status) .. " from VT API"
-		local ok, data = pcall(cjson.decode, res.body)
+		local ok, data = pcall(decode, res.body)
 		if ok then
 			err = err .. " with data " .. data
 		end
 		return false, err
 	end
 	-- Get result
-	local ok, data = pcall(cjson.decode, res.body)
+	local ok, data = pcall(decode, res.body)
 	if not ok then
 		return false, data
 	end

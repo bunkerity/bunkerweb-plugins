@@ -5,14 +5,21 @@ local utils = require("bunkerweb.utils")
 
 local crowdsec = class("crowdsec", plugin)
 
-function crowdsec:initialize()
+local ngx = ngx
+local ERR = ngx.ERR
+local has_variable = utils.has_variable
+local get_deny_status = utils.get_deny_status
+local cs_init = cs.init
+local cs_allowed = cs.allowed
+
+function crowdsec:initialize(ctx)
 	-- Call parent initialize
-	plugin.initialize(self, "crowdsec")
+	plugin.initialize(self, "crowdsec", ctx)
 end
 
 function crowdsec:init()
 	-- Check if init is needed
-	local init_needed, err = utils.has_variable("USE_CROWDSEC", "yes")
+	local init_needed, err = has_variable("USE_CROWDSEC", "yes")
 	if init_needed == nil then
 		return self:ret(false, "can't check USE_CROWDSEC variable : " .. err)
 	end
@@ -21,9 +28,9 @@ function crowdsec:init()
 	end
 	-- Init CS
 	local ok
-	ok, err = cs.init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.0")
+	ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.0")
 	if not ok then
-		self.logger:log(ngx.ERR, "error while initializing bouncer : " .. err)
+		self.logger:log(ERR, "error while initializing bouncer : " .. err)
 	end
 end
 
@@ -33,12 +40,12 @@ function crowdsec:access()
 		return self:ret(true, "CrowdSec plugin not enabled")
 	end
 	-- Do the check
-	local ok, err, allowed = cs.allowed()
+	local ok, err, allowed = cs_allowed()
 	if not ok then
 		return self:ret(false, "Error while executing CrowdSec bouncer : " .. err)
 	end
 	if not allowed then
-		return self:ret(true, "CrowSec bouncer denied request", utils.get_deny_status(self.ctx))
+		return self:ret(true, "CrowSec bouncer denied request", get_deny_status())
 	end
 
 	return self:ret(true, "Not denied by CrowdSec bouncer")
