@@ -66,10 +66,10 @@ function csmod.init(configFile, userAgent)
   end
 
 
-  local err = ban.new(runtime.conf["BAN_TEMPLATE_PATH"], runtime.conf["REDIRECT_LOCATION"], runtime.conf["RET_CODE"])
-  if err ~= nil then
-    --ngx.log(ngx.ERR, "error loading ban plugins: " .. err)
-  end
+  -- local err = ban.new(runtime.conf["BAN_TEMPLATE_PATH"], runtime.conf["REDIRECT_LOCATION"], runtime.conf["RET_CODE"])
+  -- if err ~= nil then
+    -- ngx.log(ngx.ERR, "error loading ban plugins: " .. err)
+  -- end
 
   if runtime.conf["REDIRECT_LOCATION"] ~= "" then
     table.insert(runtime.conf["EXCLUDE_LOCATION"], runtime.conf["REDIRECT_LOCATION"])
