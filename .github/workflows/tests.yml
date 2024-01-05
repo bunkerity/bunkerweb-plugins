@@ -22,7 +22,7 @@ jobs:
       - name: Get BW tag
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=1.5.3" >> $GITHUB_ENV
+            echo "BW_TAG=1.5.5" >> $GITHUB_ENV
           else
             echo "BW_TAG=dev" >> $GITHUB_ENV
           fi
@@ -42,8 +42,11 @@ jobs:
       - name: Run Coraza tests
         run: ./.tests/coraza.sh
 
-      - name: Run CrowdSec tests
-        run: ./.tests/crowdsec.sh
+      - name: Run CrowdSec live tests
+        run: ./.tests/crowdsec.sh live
+
+      - name: Run CrowdSec stream tests
+        run: ./.tests/crowdsec.sh stream
 
       - name: Run VirusTotal tests
         run: ./.tests/virustotal.sh
@@ -51,5 +54,5 @@ jobs:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       - name: Build and push APIs
-        if: env.BW_TAG == '1.5.3'
+        if: env.BW_TAG == '1.5.5'
         run: ./.tests/build-push.sh "${{ env.BW_TAG }}"

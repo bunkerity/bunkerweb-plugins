@@ -2,7 +2,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.3
+    image: bunkerity/bunkerweb:1.5.5
     ports:
       - 80:8080
       - 443:8443
@@ -14,6 +14,7 @@ services:
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
+      - CROWDSEC_MODE=
       - LOG_LEVEL=info
       - USE_MODSECURITY=no
       - USE_BLACKLIST=no
@@ -33,7 +34,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.3
+    image: bunkerity/bunkerweb-scheduler:1.5.5
     depends_on:
       - bunkerweb
       - bw-docker

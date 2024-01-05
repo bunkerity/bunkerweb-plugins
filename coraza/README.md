@@ -34,7 +34,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.3
+    image: bunkerity/bunkerweb:1.5.5
     ...
     environment:
       - USE_MODSECURITY: "no" # We don't need modsecurity anymore

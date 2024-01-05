@@ -67,7 +67,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.3
+    image: bunkerity/bunkerweb:1.5.5
     ports:
       - 80:8080
       - 443:8443
@@ -90,7 +90,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.3
+    image: bunkerity/bunkerweb-scheduler:1.5.5
     depends_on:
       - bunkerweb
       - bw-docker
@@ -199,11 +199,12 @@ metadata:
 
 # Settings
 
-| Setting                     | Default                | Context   | Multiple | Description                                           |
-| --------------------------- | ---------------------- | --------- | -------- | ----------------------------------------------------- |
-| `USE_CROWDSEC`              | `no`                   | multisite | no       | Activate CrowdSec bouncer.                            |
-| `CROWDSEC_API`              | `http://crowdsec:8080` | global    | no       | Address of the CrowdSec API.                          |
-| `CROWDSEC_API_KEY`          |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.  |
-| `CROWDSEC_MODE`             | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).            |
-| `CROWDSEC_REQUEST_TIMEOUT`  | `1000`                 | global    | no       | Bouncer's request timeout in milliseconds.            |
-| `CROWDSEC_UPDATE_FREQUENCY` | `10`                   | global    | no       | Bouncer's update frequency in stream mode, in second. |
+|             Setting             |       Default        | Context |Multiple|                      Description                       |
+|---------------------------------|----------------------|---------|--------|--------------------------------------------------------|
+|`USE_CROWDSEC`                   |`no`                  |multisite|no      |Activate CrowdSec bouncer.                              |
+|`CROWDSEC_API`                   |`http://crowdsec:8080`|global   |no      |Address of the CrowdSec API.                            |
+|`CROWDSEC_API_KEY`               |                      |global   |no      |Key for the CrowdSec API given by cscli bouncer add.    |
+|`CROWDSEC_MODE`                  |`live`                |global   |no      |Mode of the CrowdSec API (live or stream).              |
+|`CROWDSEC_REQUEST_TIMEOUT`       |`500`                 |global   |no      |Bouncer's request timeout in milliseconds (live mode).  |
+|`CROWDSEC_STREAM_REQUEST_TIMEOUT`|`15000`               |global   |no      |Bouncer's request timeout in milliseconds (stream mode).|
+|`CROWDSEC_UPDATE_FREQUENCY`      |`10`                  |global   |no      |Bouncer's update frequency in stream mode, in second.   |

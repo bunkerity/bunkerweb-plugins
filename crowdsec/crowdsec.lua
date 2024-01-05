@@ -10,7 +10,7 @@ local ERR = ngx.ERR
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local cs_init = cs.init
-local cs_allowed = cs.allowed
+local cs_allow = cs.Allow
 
 function crowdsec:initialize(ctx)
 	-- Call parent initialize
@@ -28,7 +28,7 @@ function crowdsec:init()
 	end
 	-- Init CS
 	local ok
-	ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.0")
+	ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.1")
 	if not ok then
 		self.logger:log(ERR, "error while initializing bouncer : " .. err)
 	end
@@ -40,11 +40,11 @@ function crowdsec:access()
 		return self:ret(true, "CrowdSec plugin not enabled")
 	end
 	-- Do the check
-	local ok, err, allowed = cs_allowed()
+	local ok, err, banned = cs_allow(self.ctx.bw.remote_addr)
 	if not ok then
 		return self:ret(false, "Error while executing CrowdSec bouncer : " .. err)
 	end
-	if not allowed then
+	if banned then
 		return self:ret(true, "CrowSec bouncer denied request", get_deny_status())
 	end
 

@@ -3,7 +3,7 @@
 # shellcheck disable=SC1091
 . .tests/utils.sh
 
-echo "ℹ️ Starting CrowdSec tests ..."
+echo "ℹ️ Starting CrowdSec $1 tests ..."
 
 # Create working directory
 if [ -d /tmp/bunkerweb-plugins ] ; then
@@ -19,6 +19,7 @@ do_and_check_cmd cp .tests/crowdsec/docker-compose.yml /tmp/bunkerweb-plugins/cr
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
+do_and_check_cmd sed -i "s@CROWSEC_MODE=.*\$@CROWDSEC_MODE=$1@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 
 # Copy configs
 do_and_check_cmd cp .tests/crowdsec/acquis.yaml /tmp/bunkerweb-plugins/crowdsec
@@ -61,6 +62,11 @@ fi
 echo "ℹ️ Executing dirb ..."
 do_and_check_cmd sudo apt install -y dirb
 dirb http://localhost -H "Host: www.example.com" -H "User-Agent: LegitOne" > /dev/null 2>&1
+
+# Wait if are in stream mode
+if [ "$1" == "stream" ] ; then
+	sleep 20
+fi
 
 # Expect a 403
 echo "ℹ️ Checking CS ..."

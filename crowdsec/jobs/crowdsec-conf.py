@@ -58,9 +58,14 @@ try:
         .replace(b"%CROWDSEC_MODE%", getenv("CROWDSEC_MODE", "live").encode())
         .replace(
             b"%CROWDSEC_REQUEST_TIMEOUT%",
-            getenv("CROWDSEC_REQUEST_TIMEOUT", "1000").encode(),
+            getenv("CROWDSEC_REQUEST_TIMEOUT", "500").encode(),
         )
+        .replace(b"%CROWDSEC_UPDATE_FREQUENCY%", getenv("CROWDSEC_UPDATE_FREQUENCY", "10").encode())
         .replace(b"%UPDATE_FREQUENCY%", getenv("UPDATE_FREQUENCY", "10").encode())
+        .replace(
+            b"%CROWDSEC_STREAM_REQUEST_TIMEOUT%",
+            getenv("CROWDSEC_STREAM_REQUEST_TIMEOUT", "15000").encode(),
+        )
     )
 
     # Write configuration in cache
