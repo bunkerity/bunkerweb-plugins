@@ -66,6 +66,7 @@ try:
             b"%CROWDSEC_STREAM_REQUEST_TIMEOUT%",
             getenv("CROWDSEC_STREAM_REQUEST_TIMEOUT", "15000").encode(),
         )
+        .replace(b"%CROWDSEC_CACHE_EXPORATION%", getenv("CROWDSEC_CACHE_EXPORATION", "1").encode())
     )
 
     # Write configuration in cache
