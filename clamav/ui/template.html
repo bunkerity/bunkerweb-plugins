@@ -15,8 +15,7 @@
       <p
         class="transition duration-300 ease-in-out  mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
       >
-        ClamAV<sup>®</sup> is an open-source antivirus engine for detecting
-        trojans, viruses, malware &amp; other malicious threats.
+      {{ plugin['description'] or ''}}
       </p>
     </div>
     <hr class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent" />
@@ -41,7 +40,7 @@
         <p
         class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
       >
-        {{ plugin['description'] or ''}}
+        Use next button to test {{ plugin['name'] }}
       </p>
 
       <div class="flex justify-center mt-4">
