@@ -14,8 +14,8 @@
       <p
         class="transition duration-300 ease-in-out  mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
       >
-        Slack plugin send security notifications to a Slack channel using a Webhook.
-      </p>
+      {{ plugin['description'] or ''}}
+    </p>
     </div>
   </div>
   <!-- end info -->
@@ -28,7 +28,7 @@
         <p
         class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
       >
-        Use the next button to send a default webhook message to the configured channel.
+        Use the next button to send a default webhook message to the configured slask channel ({{plugin['settings']['SLACK_WEBHOOK_URL']}})
       </p>
 
       <div class="flex justify-center mt-4">
@@ -77,39 +77,38 @@
 
     <!-- end test -->
     <script async>
-
       function send() {
-        let data = new FormData();
-        data.set(
-          "file",
-          new Blob([binary_content], { type: "text/plain" }),
-          "eicar.txt"
-          );
-          data.set("csrf_token", "{{ csrf_token() }}");
-          
-          let xhr = new XMLHttpRequest();
-          xhr.open("POST", "{{ url_for('plugins') }}/clamav", true);
-          xhr.send(data);
-          
-          xhr.onload = function () {
-          document.getElementById("no-test").classList.add('hidden');
-          if (xhr.status == 200) {
-            document
-              .getElementById("response-failed")
-              .classList.remove('hidden')
-            document.getElementById("response-none").classList.add('hidden');
-            document
-              .getElementById("response-success")
-              .classList.add('hidden');
-          } else if (xhr.status == 403) {
-            document
-              .getElementById("response-success")
-              .classList.remove('hidden')
-            document.getElementById("response-none").classList.add('hidden');
-            document
-              .getElementById("response-failed")
-              .classList.add('hidden');
-          } else {
+        fetch("{{plugin['settings']['SLACK_WEBHOOK_URL']}}" , {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: "Test message from {{ plugin['name'] }} plugin.",
+          }),
+        })
+          .then((response) => {
+            document.getElementById("no-test").classList.add('hidden');
+            if (response.status == 200) {
+              document
+                .getElementById("response-success")
+                .classList.remove('hidden')
+              document.getElementById("response-none").classList.add('hidden');
+              document
+                .getElementById("response-failed")
+                .classList.add('hidden');
+            } else {
+              document.getElementById("response-none").classList.remove('hidden')
+              document
+                .getElementById("response-success")
+                .classList.add('hidden');
+              document
+                .getElementById("response-failed")
+                .classList.add('hidden');
+            }
+          })
+          .catch((error) => {
+            document.getElementById("no-test").classList.add('hidden');
             document.getElementById("response-none").classList.remove('hidden')
             document
               .getElementById("response-success")
@@ -117,8 +116,7 @@
             document
               .getElementById("response-failed")
               .classList.add('hidden');
-          }
-        };
+          });
       }
     </script>
   </div>

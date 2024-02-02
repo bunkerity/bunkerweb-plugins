@@ -16,114 +16,113 @@
       <p
         class="transition duration-300 ease-in-out  mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
       >
-      CrowdSec plugin is a CrowdSec bouncer for BunkerWeb.
+      {{ plugin['description'] or ''}}
       </p>
     </div>
   </div>
   <!-- end info -->
 
       <!-- test-->
-    <div
-    class="col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
-    >
-      <h5 class="mb-2 font-bold dark:text-white/90">TEST</h5>
-        <p
-        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
+      <div
+      class="col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
       >
-        Use the next button to ping CrowdSec instance.
-      </p>
-
-      <div class="flex justify-center mt-4">
-        <button type="button" class="edit-btn text-sm"  onclick="ping()">
-         PING INSTANCE
-        </button>
-      </div>
-
-      <hr class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent" />
-
-      <div id="response-div"  class=" flex justify-center items-center" >
-        <div id="no-test" class="flex justify-center items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"  class="w-6 h-6 stroke-gray-600">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>    
-          <p  class="mb-0 ml-1 font-semibold text-gray-600 text-base uppercase">
-            UNKNOWN
-          </p>
+        <h5 class="mb-2 font-bold dark:text-white/90">TEST</h5>
+          <p
+          class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
+        >
+          Use the next button to ping API ({{{{plugin['settings']['CROWDSEC_API'] + '/ping'}}}})
+        </p>
+  
+        <div class="flex justify-center mt-4">
+          <button type="button" class="edit-btn text-sm"  onclick="send()">
+            PING
+          </button>
         </div>
-        <div class="hidden flex justify-center items-center"  id="response-success" >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-green-500">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
-          <p class="mb-0 ml-1 font-semibold text-green-500 text-base uppercase">
-            SUCCESS
-          </p>
-        </div>
-        <div class="hidden flex justify-center items-center" id="response-failed" >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-red-500">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-          </svg>        
-          <p  class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">FAILED</p>
-        </div>
-        <div class="hidden flex justify-center items-center"  id="response-none">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-red-500">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
-          </svg>
-          
-          <p  class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
-            FAILED
+  
+        <hr class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent" />
+  
+        <div id="response-div"  class=" flex justify-center items-center" >
+          <div id="no-test" class="flex justify-center items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"  class="w-6 h-6 stroke-gray-600">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+            </svg>    
+            <p  class="mb-0 ml-1 font-semibold text-gray-600 text-base uppercase">
+              UNKNOWN
             </p>
+          </div>
+          <div class="hidden flex justify-center items-center"  id="response-success" >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-green-500">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <p class="mb-0 ml-1 font-semibold text-green-500 text-base uppercase">
+              SUCCESS
+            </p>
+          </div>
+          <div class="hidden flex justify-center items-center" id="response-failed" >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-red-500">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>        
+            <p  class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">FAILED</p>
+          </div>
+          <div class="hidden flex justify-center items-center"  id="response-none">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-red-500">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            
+            <p  class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
+              FAILED
+              </p>
+          </div>
         </div>
       </div>
+  
+  
+      <!-- end test -->
+      <script async>
+        function send() {
+          fetch("{{plugin['settings']['CROWDSEC_API'] + '/ping'}}" , {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: "Test message from {{ plugin['name'] }} plugin.",
+            }),
+          })
+            .then((response) => {
+              document.getElementById("no-test").classList.add('hidden');
+              if (response.status == 200) {
+                document
+                  .getElementById("response-success")
+                  .classList.remove('hidden')
+                document.getElementById("response-none").classList.add('hidden');
+                document
+                  .getElementById("response-failed")
+                  .classList.add('hidden');
+              } else {
+                document.getElementById("response-none").classList.remove('hidden')
+                document
+                  .getElementById("response-success")
+                  .classList.add('hidden');
+                document
+                  .getElementById("response-failed")
+                  .classList.add('hidden');
+              }
+            })
+            .catch((error) => {
+              document.getElementById("no-test").classList.add('hidden');
+              document.getElementById("response-none").classList.remove('hidden')
+              document
+                .getElementById("response-success")
+                .classList.add('hidden');
+              document
+                .getElementById("response-failed")
+                .classList.add('hidden');
+            });
+        }
+      </script>
     </div>
-
-
-    <!-- end test -->
-    <script async>
-
-      function ping() {
-        let data = new FormData();
-        data.set(
-          "file",
-          new Blob([binary_content], { type: "text/plain" }),
-          "eicar.txt"
-          );
-          data.set("csrf_token", "{{ csrf_token() }}");
-          
-          let xhr = new XMLHttpRequest();
-          xhr.open("POST", "{{ url_for('plugins') }}/clamav", true);
-          xhr.send(data);
-          
-          xhr.onload = function () {
-          document.getElementById("no-test").classList.add('hidden');
-          if (xhr.status == 200) {
-            document
-              .getElementById("response-failed")
-              .classList.remove('hidden')
-            document.getElementById("response-none").classList.add('hidden');
-            document
-              .getElementById("response-success")
-              .classList.add('hidden');
-          } else if (xhr.status == 403) {
-            document
-              .getElementById("response-success")
-              .classList.remove('hidden')
-            document.getElementById("response-none").classList.add('hidden');
-            document
-              .getElementById("response-failed")
-              .classList.add('hidden');
-          } else {
-            document.getElementById("response-none").classList.remove('hidden')
-            document
-              .getElementById("response-success")
-              .classList.add('hidden');
-            document
-              .getElementById("response-failed")
-              .classList.add('hidden');
-          }
-        };
-      }
-    </script>
   </div>
-</div>
-
-{% endblock %}
+  
+  {% endblock %}
+  
