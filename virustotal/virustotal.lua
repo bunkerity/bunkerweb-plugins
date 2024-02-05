@@ -11,11 +11,15 @@ local virustotal = class("virustotal", plugin)
 
 local ngx = ngx
 local ERR = ngx.ERR
+local INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
 local http_new = http.new
+local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local tostring = tostring
 local decode = cjson.decode
+local encode = cjson.encode
 
 local read_all = function(form)
 	while true do
@@ -61,7 +65,7 @@ function virustotal:access()
 				nil,
 				{
 					id = "ip",
-					report = report
+					report = report,
 				}
 			)
 		end
@@ -94,7 +98,7 @@ function virustotal:access()
 				{
 					id = "file",
 					checksum = checksum,
-					detected = detected
+					detected = detected,
 				}
 			)
 		end
@@ -169,10 +173,7 @@ function virustotal:check_file()
 			-- Check if file is in cache
 			local ok, cached = self:is_in_cache("file_" .. checksum)
 			if not ok then
-				self.logger:log(
-					ERR,
-					"can't check if file with checksum " .. checksum .. " is in cache : " .. cached
-				)
+				self.logger:log(ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
 			elseif cached then
 				if cached ~= "clean" then
 					read_all(form)
@@ -278,6 +279,35 @@ function virustotal:request(url)
 		return false, "malformed json response"
 	end
 	return true, true, data.data.attributes.last_analysis_stats
+end
+
+function virustotal:api()
+	if self.ctx.bw.uri == "/virustotal/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check virustotal connection
+		local check, err = has_variable("USE_VIRUSTOTAL", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_VIRUSTOTAL (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Virustotal plugin not enabled")
+		end
+
+		-- Send test data to virustotal virustotal
+		local ok, found, response =
+			self:request("/files/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f") -- sha256 of eicar test file
+		if not ok then
+			return self:ret(true, "error while sending test data to virustotal : " .. found, INTERNAL_SERVER_ERROR)
+		end
+		if not found then
+			return self:ret(
+				true,
+				"error while sending test data to virustotal : file not found on virustotal but it should be",
+				INTERNAL_SERVER_ERROR
+			)
+		end
+		return self:ret(true, "test data sent to virustotal, response: " .. encode(response), HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return virustotal
