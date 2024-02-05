@@ -12,6 +12,9 @@ local ERR = ngx.ERR
 local WARN = ngx.WARN
 local INFO = ngx.INFO
 local ngx_timer = ngx.timer
+local INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_TOO_MANY_REQUESTS = ngx.HTTP_TOO_MANY_REQUESTS
+local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
 local get_variable = utils.get_variable
@@ -84,7 +87,7 @@ function discord:log(bypass_use_discord)
 						name = "Reason data",
 						value = formatField(encode(reason_data or {})),
 						inline = false,
-					}
+					},
 				},
 			},
 		},
@@ -174,6 +177,69 @@ function discord:log_default()
 	end
 	-- Call log method
 	return self:log(true)
+end
+
+function discord:api()
+	if self.ctx.bw.uri == "/discord/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check discord connection
+		local check, err = has_variable("USE_DISCORD", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_DISCORD (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Discord plugin not enabled")
+		end
+
+		-- Send test data to discord webhook
+		local data = {
+			username = "BunkerWeb",
+			embeds = {
+				{
+					title = "Test message",
+					description = "This is a test message sent by BunkerWeb's Discord plugin",
+					color = 0x125678,
+					provider = {
+						name = "BunkerWeb",
+						url = "https://github.com/bunkerity/bunkerweb",
+					},
+					author = {
+						name = "BunkerWeb's Discord plugin",
+						url = "https://github.com/bunkerity/bunkerweb",
+						icon_url = "https://raw.githubusercontent.com/bunkerity/bunkerweb-plugins/main/logo.png",
+					},
+				},
+			},
+		}
+		-- Send request
+		local httpc
+		httpc, err = http_new()
+		if not httpc then
+			self.logger:log(ERR, "can't instantiate http object : " .. err)
+		end
+		local res, err_http = httpc:request_uri(self.variables["DISCORD_WEBHOOK_URL"], {
+			method = "POST",
+			headers = {
+				["Content-Type"] = "application/json",
+			},
+			body = encode(data),
+		})
+		httpc:close()
+		if not res then
+			return self:ret(true, "error while sending request : " .. err_http, INTERNAL_SERVER_ERROR)
+		end
+		if self.variables["DISCORD_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
+			return self:ret(
+				true,
+				"Discord API is rate-limiting us, retry in " .. res.headers["Retry-After"] .. "s",
+				HTTP_TOO_MANY_REQUESTS
+			)
+		end
+		if res.status < 200 or res.status > 299 then
+			return self:ret(true, "request returned status " .. tostring(res.status), INTERNAL_SERVER_ERROR)
+		end
+		return self:ret(true, "request sent to webhook", HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return discord
