@@ -1,8 +1,8 @@
 {% extends "base.html" %} {% block content %}
 
-
-
 <div class="col-span-12 grid grid-cols-12 gap-4">
+  {% if is_used %}
+
   <!-- info-->
   <div
     class="h-fit col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
@@ -10,119 +10,200 @@
     <h5 class="mb-2 font-bold dark:text-white/90">INFO</h5>
 
     <div class="mx-1 flex justify-start items-center my-4">
-      <img class="h-16 w-16 mr-4"
-      src="data:image/png;base64,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"
+      <img
+        class="h-16 w-16 mr-4"
+        src="data:image/png;base64,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"
       />
       <p
-        class="transition duration-300 ease-in-out  mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
+        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
       >
-      {{ plugin['description'] or ''}}
-    </p>
+        {{ plugin['description'] or ''}}
+      </p>
     </div>
   </div>
   <!-- end info -->
 
-      <!-- test-->
-      <div
-      class="col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
-      >
-        <h5 class="mb-2 font-bold dark:text-white/90">TEST</h5>
-          <p
-          class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
+  <!-- test-->
+  <div
+    class="col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
+  >
+    <h5 class="mb-2 font-bold dark:text-white/90">TEST</h5>
+    <p
+      class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
+    >
+      Use the next button to send a default webhook message to the configured
+      slask channel ({{plugin['settings']['DISCORD_WEBHOOK_URL']}})
+    </p>
+
+    <div class="flex justify-center mt-4">
+      <button type="button" class="edit-btn text-sm" onclick="send()">
+        Test webhook
+      </button>
+    </div>
+
+    <hr
+      class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent"
+    />
+
+    <div id="response-div" class="flex justify-center items-center">
+      <div id="no-test" class="flex justify-center items-center">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="w-6 h-6 stroke-gray-600"
         >
-          Use the next button to send a default webhook message to the configured slask channel ({{plugin['settings']['DISCORD_WEBHOOK_URL']}})
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+          />
+        </svg>
+        <p class="mb-0 ml-1 font-semibold text-gray-600 text-base uppercase">
+          UNKNOWN
         </p>
-  
-        <div class="flex justify-center mt-4">
-          <button type="button" class="edit-btn text-sm"  onclick="send()">
-            Test webhook
-          </button>
-        </div>
-  
-        <hr class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent" />
-  
-        <div id="response-div"  class=" flex justify-center items-center" >
-          <div id="no-test" class="flex justify-center items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"  class="w-6 h-6 stroke-gray-600">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-            </svg>    
-            <p  class="mb-0 ml-1 font-semibold text-gray-600 text-base uppercase">
-              UNKNOWN
-            </p>
-          </div>
-          <div class="hidden flex justify-center items-center"  id="response-success" >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-green-500">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
-            <p class="mb-0 ml-1 font-semibold text-green-500 text-base uppercase">
-              SUCCESS
-            </p>
-          </div>
-          <div class="hidden flex justify-center items-center" id="response-failed" >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-red-500">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-            </svg>        
-            <p  class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">FAILED</p>
-          </div>
-          <div class="hidden flex justify-center items-center"  id="response-none">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 stroke-red-500">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
-            
-            <p  class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
-              FAILED
-              </p>
-          </div>
-        </div>
       </div>
-  
-  
-      <!-- end test -->
-      <script async>
-        function send() {
-          fetch("{{plugin['settings']['DISCORD_WEBHOOK_URL']}}" , {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: "Test message from {{ plugin['name'] }} plugin.",
-            }),
-          })
-            .then((response) => {
-              document.getElementById("no-test").classList.add('hidden');
-              if (response.status == 200) {
-                document
-                  .getElementById("response-success")
-                  .classList.remove('hidden')
-                document.getElementById("response-none").classList.add('hidden');
-                document
-                  .getElementById("response-failed")
-                  .classList.add('hidden');
-              } else {
-                document.getElementById("response-none").classList.remove('hidden')
-                document
-                  .getElementById("response-success")
-                  .classList.add('hidden');
-                document
-                  .getElementById("response-failed")
-                  .classList.add('hidden');
-              }
-            })
-            .catch((error) => {
-              document.getElementById("no-test").classList.add('hidden');
-              document.getElementById("response-none").classList.remove('hidden')
-              document
-                .getElementById("response-success")
-                .classList.add('hidden');
-              document
-                .getElementById("response-failed")
-                .classList.add('hidden');
-            });
-        }
-      </script>
+      <div
+        class="hidden flex justify-center items-center"
+        id="response-success"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="w-6 h-6 stroke-green-500"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+          />
+        </svg>
+        <p class="mb-0 ml-1 font-semibold text-green-500 text-base uppercase">
+          SUCCESS
+        </p>
+      </div>
+      <div class="hidden flex justify-center items-center" id="response-failed">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="w-6 h-6 stroke-red-500"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+          />
+        </svg>
+        <p class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
+          FAILED
+        </p>
+      </div>
+      <div class="hidden flex justify-center items-center" id="response-none">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="w-6 h-6 stroke-red-500"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"
+          />
+        </svg>
+
+        <p class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
+          FAILED
+        </p>
+      </div>
     </div>
   </div>
-  
-  {% endblock %}
-  
+
+  <!-- end test -->
+  <script async>
+    function send() {
+      fetch("{{plugin['settings']['DISCORD_WEBHOOK_URL']}}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: "Test message from {{ plugin['name'] }} plugin.",
+        }),
+      })
+        .then((response) => {
+          document.getElementById("no-test").classList.add("hidden");
+          if (response.status == 200) {
+            document
+              .getElementById("response-success")
+              .classList.remove("hidden");
+            document.getElementById("response-none").classList.add("hidden");
+            document.getElementById("response-failed").classList.add("hidden");
+          } else {
+            document.getElementById("response-none").classList.remove("hidden");
+            document.getElementById("response-success").classList.add("hidden");
+            document.getElementById("response-failed").classList.add("hidden");
+          }
+        })
+        .catch((error) => {
+          document.getElementById("no-test").classList.add("hidden");
+          document.getElementById("response-none").classList.remove("hidden");
+          document.getElementById("response-success").classList.add("hidden");
+          document.getElementById("response-failed").classList.add("hidden");
+        });
+    }
+  </script>
+
+  {% else %}
+  <div
+    class="h-fit transition hover:scale-102 col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
+  >
+    <div class="flex justify-between">
+      <h5 class="mb-2 font-bold dark:text-white/90">Deactived</h5>
+      <!-- icon -->
+      <div
+        role="img"
+        class="dark:brightness-90 inline-block w-12 h-12 text-center rounded-circle bg-yellow-500"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="scale-75 leading-none text-lg relative fill-yellow-500 stroke-white"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+          />
+        </svg>
+      </div>
+      <!-- end icon -->
+    </div>
+
+    <div class="mx-1 flex justify-start items-center my-2">
+      <p
+        data-info
+        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
+      >
+        This plugin need to be activated to get metrics.
+      </p>
+    </div>
+  </div>
+  <!-- end info -->
+  {% endif %}
+</div>
+
+{% endblock %}
