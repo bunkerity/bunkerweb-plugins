@@ -12,7 +12,7 @@ local ERR = ngx.ERR
 local WARN = ngx.WARN
 local INFO = ngx.INFO
 local ngx_timer = ngx.timer
-local INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_TOO_MANY_REQUESTS = ngx.HTTP_TOO_MANY_REQUESTS
 local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
@@ -225,7 +225,7 @@ function discord:api()
 		})
 		httpc:close()
 		if not res then
-			return self:ret(true, "error while sending request : " .. err_http, INTERNAL_SERVER_ERROR)
+			return self:ret(true, "error while sending request : " .. err_http, HTTP_INTERNAL_SERVER_ERROR)
 		end
 		if self.variables["DISCORD_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
 			return self:ret(
@@ -235,7 +235,7 @@ function discord:api()
 			)
 		end
 		if res.status < 200 or res.status > 299 then
-			return self:ret(true, "request returned status " .. tostring(res.status), INTERNAL_SERVER_ERROR)
+			return self:ret(true, "request returned status " .. tostring(res.status), HTTP_INTERNAL_SERVER_ERROR)
 		end
 		return self:ret(true, "request sent to webhook", HTTP_OK)
 	end

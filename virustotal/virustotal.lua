@@ -11,7 +11,7 @@ local virustotal = class("virustotal", plugin)
 
 local ngx = ngx
 local ERR = ngx.ERR
-local INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
 local http_new = http.new
@@ -296,13 +296,13 @@ function virustotal:api()
 		local ok, found, response =
 			self:request("/files/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f") -- sha256 of eicar test file
 		if not ok then
-			return self:ret(true, "error while sending test data to virustotal : " .. found, INTERNAL_SERVER_ERROR)
+			return self:ret(true, "error while sending test data to virustotal : " .. found, HTTP_INTERNAL_SERVER_ERROR)
 		end
 		if not found then
 			return self:ret(
 				true,
 				"error while sending test data to virustotal : file not found on virustotal but it should be",
-				INTERNAL_SERVER_ERROR
+				HTTP_INTERNAL_SERVER_ERROR
 			)
 		end
 		return self:ret(true, "test data sent to virustotal, response: " .. encode(response), HTTP_OK)
