@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -12,7 +12,7 @@ RUN apk add bash git && \
     chmod +x crs.sh && \
     ./crs.sh Download
 
-FROM golang:1.21-alpine
+FROM golang:1.22-alpine
 
 COPY --from=builder --chown=0:0 /usr/local/bin/bw-coraza /usr/local/bin/bw-coraza
 
