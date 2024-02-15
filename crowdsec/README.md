@@ -199,12 +199,12 @@ metadata:
 
 # Settings
 
-|             Setting             |       Default        | Context |Multiple|                      Description                       |
-|---------------------------------|----------------------|---------|--------|--------------------------------------------------------|
-|`USE_CROWDSEC`                   |`no`                  |multisite|no      |Activate CrowdSec bouncer.                              |
-|`CROWDSEC_API`                   |`http://crowdsec:8080`|global   |no      |Address of the CrowdSec API.                            |
-|`CROWDSEC_API_KEY`               |                      |global   |no      |Key for the CrowdSec API given by cscli bouncer add.    |
-|`CROWDSEC_MODE`                  |`live`                |global   |no      |Mode of the CrowdSec API (live or stream).              |
-|`CROWDSEC_REQUEST_TIMEOUT`       |`500`                 |global   |no      |Bouncer's request timeout in milliseconds (live mode).  |
-|`CROWDSEC_STREAM_REQUEST_TIMEOUT`|`15000`               |global   |no      |Bouncer's request timeout in milliseconds (stream mode).|
-|`CROWDSEC_UPDATE_FREQUENCY`      |`10`                  |global   |no      |Bouncer's update frequency in stream mode, in second.   |
+| Setting                           | Default                | Context   | Multiple | Description                                              |
+| --------------------------------- | ---------------------- | --------- | -------- | -------------------------------------------------------- |
+| `USE_CROWDSEC`                    | `no`                   | multisite | no       | Activate CrowdSec bouncer.                               |
+| `CROWDSEC_API`                    | `http://crowdsec:8080` | global    | no       | Address of the CrowdSec API.                             |
+| `CROWDSEC_API_KEY`                |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.     |
+| `CROWDSEC_MODE`                   | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).               |
+| `CROWDSEC_REQUEST_TIMEOUT`        | `500`                  | global    | no       | Bouncer's request timeout in milliseconds (live mode).   |
+| `CROWDSEC_STREAM_REQUEST_TIMEOUT` | `15000`                | global    | no       | Bouncer's request timeout in milliseconds (stream mode). |
+| `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | Bouncer's update frequency in stream mode, in second.    |

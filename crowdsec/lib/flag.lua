@@ -36,7 +36,7 @@ function M.GetFlags(flags)
   elseif bit.band(flags, M.VALIDATED_STATE) then
     state = M.VALIDATED_STATE
   end
-  return source, state, err    
+  return source, state, err
 
 end
 

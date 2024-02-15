@@ -106,7 +106,7 @@ function M.Validate(captcha_res, remote_ip)
           ngx.log(ngx.ERR, "reCaptcha secret key is invalid")
           return true, nil
         end
-      end 
+      end
     end
 
     return result.success, nil
