@@ -21,7 +21,7 @@
       "id": "virustotal-api-key",
       "label": "API key",
       "regex": "^.*$",
-      "type": "text"
+      "type": "password"
     },
     "VIRUSTOTAL_SCAN_FILE": {
       "context": "multisite",
