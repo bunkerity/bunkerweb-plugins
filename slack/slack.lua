@@ -41,7 +41,7 @@ function slack:log(bypass_use_slack)
 	end
 	-- Compute data
 	local data = {}
-	data.content = "```Denied request for IP "
+	data.text = "```Denied request for IP "
 		.. self.ctx.bw.remote_addr
 		.. " (reason = "
 		.. reason
@@ -52,13 +52,13 @@ function slack:log(bypass_use_slack)
 		.. "\n"
 	local headers, err = ngx_req.get_headers()
 	if not headers then
-		data.content = data.content .. "error while getting headers : " .. err
+		data.text = data.text .. "error while getting headers : " .. err
 	else
 		for header, value in pairs(headers) do
-			data.content = data.content .. header .. ": " .. value .. "\n"
+			data.text = data.text .. header .. ": " .. value .. "\n"
 		end
 	end
-	data.content = data.content .. "```"
+	data.text = data.text .. "```"
 	-- Send request
 	local hdr
 	hdr, err = ngx_timer.at(0, self.send, self, data)
@@ -135,7 +135,7 @@ function slack:api()
 
 		-- Send test data to slack webhook
 		local data = {
-			content = "```Test message from bunkerweb```",
+			text = "```Test message from bunkerweb```",
 		}
 		-- Send request
 		local httpc
