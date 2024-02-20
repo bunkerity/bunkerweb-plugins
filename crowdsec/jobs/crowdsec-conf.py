@@ -60,7 +60,10 @@ try:
             b"%CROWDSEC_REQUEST_TIMEOUT%",
             getenv("CROWDSEC_REQUEST_TIMEOUT", "500").encode(),
         )
-        .replace(b"%CROWDSEC_UPDATE_FREQUENCY%", getenv("CROWDSEC_UPDATE_FREQUENCY", "10").encode())
+        .replace(
+            b"%CROWDSEC_UPDATE_FREQUENCY%",
+            getenv("CROWDSEC_UPDATE_FREQUENCY", "10").encode(),
+        )
         .replace(b"%UPDATE_FREQUENCY%", getenv("UPDATE_FREQUENCY", "10").encode())
         .replace(
             b"%CROWDSEC_STREAM_REQUEST_TIMEOUT%",

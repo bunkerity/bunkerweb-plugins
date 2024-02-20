@@ -10,7 +10,7 @@
       "default": "no",
       "help": "Activate Coraza library",
       "id": "use coraza library",
-      "label": "Coraza",
+      "label": "Use coraza",
       "regex": "^(no|yes)$",
       "type": "check"
     },

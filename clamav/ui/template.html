@@ -1,4 +1,11 @@
 {% extends "base.html" %} {% block content %}
+<input
+  type="csrf_token"
+  name="csrf_token"
+  value="{{ csrf_token }}"
+  class="hidden"
+  hidden
+/>
 
 <div class="col-span-12 grid grid-cols-12 gap-4">
   {% if is_used %}
@@ -16,6 +23,7 @@
         width="200"
       />
       <p
+        data-info
         class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
       >
         {{ plugin['description'] or ''}}
@@ -44,13 +52,13 @@
   >
     <h5 class="mb-2 font-bold dark:text-white/90">TEST</h5>
     <p
-      class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80 text-center"
+      class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-100 dark:opacity-80 text-center"
     >
       Use next button to test {{ plugin['name'] }}
     </p>
 
     <div class="flex justify-center mt-4">
-      <button type="button" class="edit-btn text-sm" onclick="send_test()">
+      <button type="button" class="edit-btn text-sm" data-ping>
         Test plugin
       </button>
     </div>
@@ -59,129 +67,50 @@
       class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent"
     />
 
-    <div id="response-div" class="flex justify-center items-center">
-      <div id="no-test" class="flex justify-center items-center">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="w-6 h-6 stroke-gray-600"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-          />
-        </svg>
-        <p class="mb-0 ml-1 font-semibold text-gray-600 text-base uppercase">
-          UNKNOWN
-        </p>
-      </div>
-      <div
-        class="hidden flex justify-center items-center"
-        id="response-success"
+    <div class="mx-1 flex justify-center items-center">
+      <svg
+        data-status-svg
+        class="w-6 h-6 fill-sky-500"
+        viewBox="0 0 100 100"
+        xmlns="http://www.w3.org/2000/svg"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="w-6 h-6 stroke-green-500"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-          />
-        </svg>
-        <p class="mb-0 ml-1 font-semibold text-green-500 text-base uppercase">
-          SUCCESS
-        </p>
-      </div>
-      <div class="hidden flex justify-center items-center" id="response-failed">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="w-6 h-6 stroke-red-500"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-          />
-        </svg>
-        <p class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
-          FAILED
-        </p>
-      </div>
-      <div class="hidden flex justify-center items-center" id="response-none">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="w-6 h-6 stroke-red-500"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"
-          />
-        </svg>
-
-        <p class="mb-0 ml-1 font-semibold text-red-500 text-base uppercase">
-          FAILED
-        </p>
-      </div>
+        <circle cx="50" cy="50" r="50" />
+      </svg>
+      <p
+        data-status-text
+        class="ml-2 mx-1 transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-100 dark:opacity-80"
+      >
+        Unknown
+      </p>
     </div>
   </div>
 
-  <!-- end test -->
-  <script async>
-    // Test file from https://www.eicar.com/download-anti-malware-testfile/ encoded in base64
-    const coded_content =
-      "WDVPIVAlQEFQWzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCo=";
-    const binary_content = atob(coded_content);
+  <script>
+    // Use SetupPlugin class that is on static/js/plugins/setup.js
+    const setPlugin = new SetupPlugin({
+      info: {
+        el: document.querySelector("[data-info]"),
+        value: "{{ plugin['description'] or ''}}",
+        type: "text",
+      },
+      // value : active / inactive / unknown
+      ping_status: {
+        el: document.querySelector("[data-status-svg]"),
+        value: "unknown",
+        type: "status",
+        textEl: document.querySelector("[data-status-text]"),
+      },
+    });
 
-    function send_test() {
-      let data = new FormData();
-      data.set(
-        "file",
-        new Blob([binary_content], { type: "text/plain" }),
-        "eicar.txt"
-      );
-      data.set("csrf_token", "{{ csrf_token() }}");
-
-      let xhr = new XMLHttpRequest();
-      xhr.open("POST", "{{ url_for('plugins') }}/clamav", true);
-      xhr.send(data);
-
-      xhr.onload = function () {
-        document.getElementById("no-test").classList.add("hidden");
-        if (xhr.status == 200) {
-          document.getElementById("response-failed").classList.remove("hidden");
-          document.getElementById("response-none").classList.add("hidden");
-          document.getElementById("response-success").classList.add("hidden");
-        } else if (xhr.status == 403) {
-          document
-            .getElementById("response-success")
-            .classList.remove("hidden");
-          document.getElementById("response-none").classList.add("hidden");
-          document.getElementById("response-failed").classList.add("hidden");
-        } else {
-          document.getElementById("response-none").classList.remove("hidden");
-          document.getElementById("response-success").classList.add("hidden");
-          document.getElementById("response-failed").classList.add("hidden");
-        }
-      };
-    }
+    // When click to ping button
+    window.addEventListener("click", (e) => {
+      if (e.target.hasAttribute("data-ping")) {
+        window.location.href = `${location.href.replace(
+          "?ping=true",
+          "",
+        )}?ping=true`;
+      }
+    });
   </script>
 
   {% else %}
@@ -216,9 +145,9 @@
     <div class="mx-1 flex justify-start items-center my-2">
       <p
         data-info
-        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
+        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-100 dark:opacity-80"
       >
-        This plugin need to be activated to get metrics.
+        This plugin need to be activated.
       </p>
     </div>
   </div>
