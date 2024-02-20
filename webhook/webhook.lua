@@ -143,7 +143,7 @@ function webhook:api()
 		if not httpc then
 			self.logger:log(ERR, "can't instantiate http object : " .. err)
 		end
-		local res, err_http = httpc:request_uri(self.variables["WEBHOOK_WEBHOOK_URL"], {
+		local res, err_http = httpc:request_uri(self.variables["WEBHOOK_URL"], {
 			method = "POST",
 			headers = {
 				["Content-Type"] = "application/json",
