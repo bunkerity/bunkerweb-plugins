@@ -33,7 +33,7 @@ labels:
 For container-based integrations, we recommend you to redirect the logs of the BunkerWeb container to a syslog service that will store the logs so CrowdSec can access it easily. Here is an example configuration for syslog-ng that will store raw logs coming from BunkerWeb to a local `/var/log/bunkerweb.log` file :
 
 ```conf
-@version: 4.2
+@version: 4.6
 
 source s_net {
   udp(
@@ -111,7 +111,7 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.5.5
+    image: crowdsecurity/crowdsec:v1.6.0
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -123,7 +123,7 @@ services:
       - bw-universe
 
   syslog:
-    image: balabit/syslog-ng:4.4.0
+    image: balabit/syslog-ng:4.6.0
     volumes:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log
