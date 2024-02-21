@@ -65,7 +65,7 @@
   </div>
 
   <!-- end test -->
-  <script>
+  <script nonce="{{script_nonce}}">
     // Use SetupPlugin class that is on static/js/plugins/setup.js
     const setPlugin = new SetupPlugin({
       info: {
@@ -87,7 +87,7 @@
       if (e.target.hasAttribute("data-ping")) {
         window.location.href = `${location.href.replace(
           "?ping=true",
-          "",
+          ""
         )}?ping=true`;
       }
     });
