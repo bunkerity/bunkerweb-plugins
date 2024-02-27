@@ -1,64 +1,46 @@
 {% extends "base.html" %} {% block content %}
 
-<div class="col-span-12 grid grid-cols-12 gap-4">
+<div class="core-layout">
   {% if is_used %}
   <!-- info-->
-  <div
-    class="h-fit col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
-  >
-    <h5 class="mb-2 font-bold dark:text-white/90">INFO</h5>
+  <div class="core-card">
+    <h5 class="core-card-title">INFO</h5>
 
-    <div class="mx-1 flex justify-start items-center my-4">
+    <div class="core-card-container">
       <img
-        class="h-10 w-10 mr-4"
+        class="core-img-default"
         src=" data:image/png;base64,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"
       />
-      <p
-        data-info
-        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-500 dark:opacity-80"
-      >
-        {{ plugin['description'] or ''}}
-      </p>
+      <p data-info class="core-card-text">{{ plugin['description'] or ''}}</p>
     </div>
   </div>
   <!-- end info -->
 
   <!-- test-->
-  <div
-    class="h-fit col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
-  >
-    <h5 class="mb-2 font-bold dark:text-white/90">TEST</h5>
-    <p
-      class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-100 dark:opacity-80 text-center"
-    >
+  <div class="core-card">
+    <h5 class="core-card-title">TEST</h5>
+    <p class="core-card-text center">
       Use next button to test {{ plugin['name'] }}
     </p>
 
-    <div class="flex justify-center mt-4">
-      <button type="button" class="edit-btn text-sm" data-ping>
+    <div class="core-card-test-container">
+      <button type="button" class="core-card-test-btn" data-ping>
         Test plugin
       </button>
     </div>
 
-    <hr
-      class="h-px mx-0 mt-3 mb-2 bg-transparent bg-gradient-to-r from-transparent via-black/40 to-transparent dark:bg-gradient-to-r dark:from-transparent dark:via-white dark:to-transparent"
-    />
+    <hr class="core-separator" />
 
-    <div class="mx-1 flex justify-center items-center">
+    <div class="core-card-test-status-container">
       <svg
         data-status-svg
-        class="w-6 h-6 fill-sky-500"
+        class="core-card-test-status-svg info"
         viewBox="0 0 100 100"
         xmlns="http://www.w3.org/2000/svg"
       >
         <circle cx="50" cy="50" r="50" />
       </svg>
-      <p
-        data-status-text
-        class="ml-2 mx-1 transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-100 dark:opacity-80"
-      >
-        Unknown
-      </p>
+      <p data-status-text class="core-card-text">Unknown</p>
     </div>
   </div>
 
@@ -84,29 +66,24 @@
       if (e.target.hasAttribute("data-ping")) {
         window.location.href = `${location.href.replace(
           "?ping=true",
-          ""
+          "",
         )}?ping=true`;
       }
     });
   </script>
   {% else %}
-  <div
-    class="h-fit transition hover:scale-102 col-span-12 md:col-span-6 2xl:col-span-4 3xl:col-span-3 p-4 relative min-w-0 break-words bg-white shadow-xl dark:bg-slate-850 dark:shadow-dark-xl rounded-2xl bg-clip-border"
-  >
-    <div class="flex justify-between">
-      <h5 class="mb-2 font-bold dark:text-white/90">Deactivated</h5>
+  <div class="core-card">
+    <div class="core-card-wrap">
+      <h5 class="core-card-title">Deactivated</h5>
       <!-- icon -->
-      <div
-        role="img"
-        class="dark:brightness-90 inline-block w-12 h-12 text-center rounded-circle bg-yellow-500"
-      >
+      <div role="img" class="core-card-svg-container">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
           stroke-width="1.5"
           stroke="currentColor"
-          class="scale-75 leading-none text-lg relative fill-yellow-500 stroke-white"
+          class="core-card-deactivated-svg"
         >
           <path
             stroke-linecap="round"
@@ -118,13 +95,8 @@
       <!-- end icon -->
     </div>
 
-    <div class="mx-1 flex justify-start items-center my-2">
-      <p
-        data-info
-        class="transition duration-300 ease-in-out mb-0 font-sans text-sm leading-normal dark:text-gray-100 dark:opacity-80"
-      >
-        This plugin need to be activated.
-      </p>
+    <div class="core-card-text-container">
+      <p data-info class="core-card-text">This plugin need to be activated.</p>
     </div>
   </div>
   <!-- end info -->
