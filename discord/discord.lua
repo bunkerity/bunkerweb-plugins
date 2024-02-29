@@ -122,6 +122,7 @@ function discord:log(bypass_use_discord)
 	if not hdr then
 		return self:ret(true, "can't create report timer : " .. err)
 	end
+	return self:ret(true, "scheduled timer")
 end
 
 -- luacheck: ignore 212

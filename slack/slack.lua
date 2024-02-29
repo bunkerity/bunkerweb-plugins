@@ -65,6 +65,7 @@ function slack:log(bypass_use_slack)
 	if not hdr then
 		return self:ret(true, "can't create report timer : " .. err)
 	end
+	return self:ret(true, "scheduled timer")
 end
 
 -- luacheck: ignore 212
