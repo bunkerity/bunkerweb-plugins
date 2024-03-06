@@ -85,10 +85,7 @@
     // When click to ping button
     window.addEventListener("click", (e) => {
       if (e.target.hasAttribute("data-ping")) {
-        window.location.href = `${location.href.replace(
-          "?ping=true",
-          "",
-        )}?ping=true`;
+        window.location.href = `${location.origin}${location.pathname}?ping=true`;
       }
     });
   </script>
