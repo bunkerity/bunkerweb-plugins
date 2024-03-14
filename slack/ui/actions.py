@@ -1,3 +1,7 @@
+def pre_render(**kwargs):
+    pass
+
+
 def slack(**kwargs):
     ping = {"ping_status": "unknown"}
 

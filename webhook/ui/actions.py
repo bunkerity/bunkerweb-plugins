@@ -1,3 +1,7 @@
+def pre_render(**kwargs):
+    pass
+
+
 def webhook(**kwargs):
     ping = {"ping_status": "unknown"}
 

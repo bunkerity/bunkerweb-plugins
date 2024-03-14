@@ -1,3 +1,7 @@
+def pre_render(**kwargs):
+    pass
+
+
 def coraza(**kwargs):
     ping = {"ping_status": "unknown"}
 
