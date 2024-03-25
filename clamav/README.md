@@ -34,7 +34,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.5
+    image: bunkerity/bunkerweb:1.5.6
     ...
     environment:
       - USE_CLAMAV=yes
@@ -59,7 +59,7 @@ version: '3'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.5
+    image: bunkerity/bunkerweb:1.5.6
     ...
     environment:
       - USE_CLAMAV=yes
@@ -132,12 +132,12 @@ metadata:
 
 # Settings
 
-| Setting          | Default  | Context   | Multiple | Description                                             |
-| ---------------- | -------- | --------- | -------- | ------------------------------------------------------- |
-| `USE_CLAMAV`     | `no`     | multisite | no       | Activate automatic scan of uploaded files with ClamAV.  |
-| `CLAMAV_HOST`    | `clamav` | global    | no       | ClamAV hostname or IP address.                          |
-| `CLAMAV_PORT`    | `3310`   | global    | no       | ClamAV port.                                            |
-| `CLAMAV_TIMEOUT` | `1000`   | global    | no       | Network timeout (in ms) when communicating with ClamAV. |
+|    Setting     |Default | Context |Multiple|                      Description                      |
+|----------------|--------|---------|--------|-------------------------------------------------------|
+|`USE_CLAMAV`    |`no`    |multisite|no      |Activate automatic scan of uploaded files with ClamAV. |
+|`CLAMAV_HOST`   |`clamav`|global   |no      |ClamAV hostname or IP address.                         |
+|`CLAMAV_PORT`   |`3310`  |global   |no      |ClamAV port.                                           |
+|`CLAMAV_TIMEOUT`|`1000`  |global   |no      |Network timeout (in ms) when communicating with ClamAV.|
 
 # TODO
 

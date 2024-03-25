@@ -2,7 +2,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.5
+    image: bunkerity/bunkerweb:1.5.6
     ports:
       - 80:8080
       - 443:8443
@@ -34,7 +34,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.5
+    image: bunkerity/bunkerweb-scheduler:1.5.6
     depends_on:
       - bunkerweb
       - bw-docker
@@ -57,7 +57,7 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.5.5
+    image: crowdsecurity/crowdsec:v1.6.0
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -80,7 +80,7 @@ services:
         ipv4_address: 10.10.10.254
 
   hello:
-    image: tutum/hello-world
+    image: nginxdemos/nginx-hello
     networks:
       - bw-services
 

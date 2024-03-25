@@ -2,7 +2,7 @@
   "id": "discord",
   "name": "Discord",
   "description": "Send alerts to a Discord channel (using webhooks).",
-  "version": "1.3",
+  "version": "1.4",
   "stream": "yes",
   "settings": {
     "USE_DISCORD": {
