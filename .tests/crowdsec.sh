@@ -61,7 +61,7 @@ fi
 # Run basic attack with dirb
 echo "ℹ️ Executing dirb ..."
 do_and_check_cmd sudo apt install -y dirb
-dirb http://localhost -H "Host: www.example.com" -H "User-Agent: LegitOne" > /dev/null 2>&1
+dirb http://localhost -H "Host: www.example.com" -H "User-Agent: LegitOne" -f > /dev/null 2>&1
 
 # Wait if are in stream mode
 if [ "$1" == "stream" ] ; then
