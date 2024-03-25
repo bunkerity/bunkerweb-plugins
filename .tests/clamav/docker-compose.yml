@@ -20,7 +20,7 @@ services:
       - USE_BLACKLIST=no
       - USE_MODSECURITY=no
       - USE_REVERSE_PROXY=yes
-      - REVERSE_PROXY_HOST=http://hello
+      - REVERSE_PROXY_HOST=http://hello:8080
       - REVERSE_PROXY_URL=/
     networks:
       - bw-universe

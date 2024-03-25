@@ -80,7 +80,7 @@ services:
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_URL=/
-      - REVERSE_PROXY_HOST=http://myapp
+      - REVERSE_PROXY_HOST=http://myapp:8080
     networks:
       - bw-universe
       - bw-services
