@@ -155,6 +155,7 @@ function clamav:scan()
 		return false, "failed to create upload form"
 	end
 	local sha = sha512:new()
+	local socket = nil
 	while true do
 		-- Read part
 		local typ, res, err = form:read()
