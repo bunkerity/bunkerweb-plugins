@@ -1,3 +1,5 @@
+from traceback import format_exc
+
 def pre_render(**kwargs):
     pass
 
@@ -18,6 +20,7 @@ def webhook(**kwargs):
         ping_data = kwargs["app"].config["INSTANCES"].get_ping("webhook")
         ping = {"ping_status": ping_data["status"]}
     except:
+        print(f"Error while trying to ping webhook : {format_exc()}", flush=True)  
         ping = {"ping_status": "error"}
 
     return {**ping}

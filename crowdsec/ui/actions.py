@@ -1,3 +1,5 @@
+from traceback import format_exc
+
 def pre_render(**kwargs):
     pass
 
@@ -17,7 +19,8 @@ def crowdsec(**kwargs):
     try:
         ping_data = kwargs["app"].config["INSTANCES"].get_ping("crowdsec")
         ping = {"ping_status": ping_data["status"]}
-    except:
+    except BaseException:
+        print(f"Error while trying to ping crowdsec : {format_exc()}", flush=True)  
         ping = {"ping_status": "error"}
 
     return {**ping}
