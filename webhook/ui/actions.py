@@ -19,8 +19,9 @@ def webhook(**kwargs):
     try:
         ping_data = kwargs["app"].config["INSTANCES"].get_ping("webhook")
         ping = {"ping_status": ping_data["status"]}
-    except:
-        print(f"Error while trying to ping webhook : {format_exc()}", flush=True)  
-        ping = {"ping_status": "error"}
+    except BaseException:
+        error = f"Error while trying to ping webhook : {format_exc()}"
+        print(error, flush=True)  
+        ping = {"ping_status": "error", "error" : error}
 
     return {**ping}

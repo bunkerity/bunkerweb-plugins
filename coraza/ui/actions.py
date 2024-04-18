@@ -20,7 +20,8 @@ def coraza(**kwargs):
         ping_data = kwargs["app"].config["INSTANCES"].get_ping("coraza")
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
-        print(f"Error while trying to ping coraza : {format_exc()}", flush=True)     
-        ping = {"ping_status": "error"}
+        error = f"Error while trying to ping coraza : {format_exc()}"
+        print(error, flush=True)  
+        ping = {"ping_status": "error", "error" : error}
 
     return {**ping}

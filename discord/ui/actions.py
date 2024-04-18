@@ -20,7 +20,8 @@ def discord(**kwargs):
         ping_data = kwargs["app"].config["INSTANCES"].get_ping("discord")
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
-        print(f"Error while trying to ping discord : {format_exc()}", flush=True)     
-        ping = {"ping_status": "error"}
+        error = f"Error while trying to ping discord : {format_exc()}"
+        print(error, flush=True)  
+        ping = {"ping_status": "error", "error" : error}
 
     return {**ping}
