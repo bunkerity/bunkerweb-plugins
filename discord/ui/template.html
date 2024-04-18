@@ -57,6 +57,7 @@
     pingBtn.addEventListener("click", (e) => {
       new Ping(
         `${location.origin}${location.pathname}?ping=true`,
+        pingBtn,
         statusText,
         statusSvg,
         "ping_status",
