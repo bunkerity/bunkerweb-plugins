@@ -1,4 +1,8 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %}
+
+{% set read_doc_text = 'You will find more information about the clamav plugin <a target="_blank" href="https://github.com/bunkerity/bunkerweb-plugins/tree/' + plugin['version'] + '/clamav"  class="core-card-text-doc-link">in the documentation</a>.' %}
+
+{% block content %}
 <input
   type="csrf_token"
   name="csrf_token"
@@ -25,14 +29,7 @@
     <hr class="core-separator" />
 
     <div class="core-card-text-container">
-      <p class="core-card-text">
-        If you need help, please visit the
-        <a
-          class="underline"
-          href="https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav"
-          >ClamAV plugin page</a
-        >.
-      </p>
+      <p class="core-card-text-doc">{{ read_doc_text|safe }}</p>
     </div>
   </div>
   <!-- end info -->
@@ -85,7 +82,7 @@
   {% else %}
   <div class="core-card">
     <div class="core-card-wrap">
-      <h5 class="core-card-title">Deactivated</h5>
+      <h5 class="core-card-title">Plugin deactivated</h5>
       <!-- icon -->
       <div role="img" class="core-card-svg-container">
         <svg
@@ -107,8 +104,9 @@
     </div>
 
     <div class="core-card-text-container">
-      <p data-info class="core-card-text">This plugin need to be activated.</p>
+      <p data-info class="core-card-text">{{ plugin.get('description') }}</p>
     </div>
+    <p data-info class="core-card-text-doc">{{ read_doc_text|safe }}</p>
   </div>
   <!-- end info -->
   {% endif %}
