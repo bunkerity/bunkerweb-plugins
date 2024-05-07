@@ -6,6 +6,10 @@
 
 <div class="core-layout">
   {% if is_used %}
+  <input id="csrf_token"
+  type="hidden"
+  name="csrf_token"
+  value="{{ csrf_token() }}" />
   <!-- info-->
   <div class="core-card">
     <h5 class="core-card-title">INFO</h5>
