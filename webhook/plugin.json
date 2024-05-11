@@ -2,7 +2,7 @@
   "id": "webhook",
   "name": "WebHook",
   "description": "Send alerts to a custom webhook.",
-  "version": "1.4",
+  "version": "1.5",
   "stream": "yes",
   "settings": {
     "USE_WEBHOOK": {

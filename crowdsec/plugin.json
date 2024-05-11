@@ -3,7 +3,7 @@
   "stream": "no",
   "name": "CrowdSec",
   "description": "CrowdSec bouncer for BunkerWeb.",
-  "version": "1.4",
+  "version": "1.5",
   "settings": {
     "USE_CROWDSEC": {
       "context": "multisite",
@@ -73,8 +73,8 @@
       "context": "global",
       "default": "1",
       "help": "Bouncer's cache expiration in live mode, in second.",
-      "id": "crowdsec-cache-exporation",
-      "label": "CrowdSec cache-esporation",
+      "id": "crowdsec-cache-expiration",
+      "label": "CrowdSec cache-expiration",
       "regex": "^\\d+$",
       "type": "text"
     }

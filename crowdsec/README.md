@@ -67,7 +67,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.6
+    image: bunkerity/bunkerweb:1.5.7
     ports:
       - 80:8080
       - 443:8443
@@ -90,7 +90,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.6
+    image: bunkerity/bunkerweb-scheduler:1.5.7
     depends_on:
       - bunkerweb
       - bw-docker
