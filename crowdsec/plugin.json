@@ -69,10 +69,10 @@
       "regex": "^\\d+$",
       "type": "text"
     },
-    "CROWDSEC_CACHE_EXPORATION": {
+    "CROWDSEC_CACHE_EXPIRATION": {
       "context": "global",
       "default": "1",
-      "help": "Bouncer's Cache expiration in live mode, in second.",
+      "help": "Bouncer's cache expiration in live mode, in second.",
       "id": "crowdsec-cache-exporation",
       "label": "CrowdSec cache-esporation",
       "regex": "^\\d+$",
