@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% set read_doc_text = 'You will find more information about the webhook <a target="_blank" href="https://github.com/bunkerity/bunkerweb-plugins/tree/' + plugin['version'] + '/webhook"  class="core-card-text-doc-link">in the documentation</a>.' %}
+
+{% block content %}
+
+<div class="core-layout">
+  {% if is_used %}
+  <input id="csrf_token"
+  type="hidden"
+  name="csrf_token"
+  value="{{ csrf_token() }}" />
+  <!-- info-->
+  <div class="core-card">
+    <h5 class="core-card-title">INFO</h5>
+
+    <div class="core-card-wrap-logo">
+      <img
+        alt="logo"
+        class="core-img-default"
+        src="data:image/png;base64,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"
+      />
+      <p data-info class="core-card-text">{{ plugin.get('description') }}</p>
+    </div>
+    <p class="core-card-text-doc">{{ read_doc_text|safe }}</p>
+  </div>
+  <!-- end info -->
+
+  <!-- test-->
+  <div class="core-card">
+    <h5 class="core-card-title">TEST</h5>
+    <p class="core-card-text center">
+      Use the next button to send a default webhook message to the configured
+      endpoint.
+    </p>
+
+    <div class="core-card-test-container">
+      <button type="button" class="core-card-test-btn" data-ping>
+        Test webhook
+      </button>
+    </div>
+
+    <hr class="core-separator" />
+
+    <div class="core-card-test-status-container">
+      <svg
+        data-status-svg
+        class="core-card-test-status-svg info"
+        viewBox="0 0 100 100"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle cx="50" cy="50" r="50" />
+      </svg>
+      <p data-status-text class="core-card-text">Unknown</p>
+    </div>
+  </div>
+
+  <script nonce="{{script_nonce}}">
+    // When click to ping button
+    const pingBtn = document.querySelector("[data-ping]");
+    const statusSvg = document.querySelector("[data-status-svg]");
+    const statusText = document.querySelector("[data-status-text]");
+
+    pingBtn.addEventListener("click", (e) => {
+      new Ping(
+        `${location.origin}${location.pathname}?ping=true`,
+        pingBtn,
+        statusText,
+        statusSvg,
+        "ping_status",
+      );
+    });
+  </script>
+  {% else %}
+  <div class="core-card">
+    <div class="core-card-wrap">
+      <h5 class="core-card-title">Plugin deactivated</h5>
+      <!-- icon -->
+      <div role="img" class="core-card-svg-container">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="core-card-deactivated-svg"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+          />
+        </svg>
+      </div>
+      <!-- end icon -->
+    </div>
+
+    <div class="core-card-text-container">
+      <p data-info class="core-card-text">{{ plugin.get('description') }}</p>
+    </div>
+    <p class="core-card-text-doc">{{ read_doc_text|safe }}</p>
+  </div>
+  <!-- end info -->
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -3,7 +3,7 @@
   "stream": "no",
   "name": "CrowdSec",
   "description": "CrowdSec bouncer for BunkerWeb.",
-  "version": "1.2",
+  "version": "1.4",
   "settings": {
     "USE_CROWDSEC": {
       "context": "multisite",
@@ -44,10 +44,19 @@
     },
     "CROWDSEC_REQUEST_TIMEOUT": {
       "context": "global",
-      "default": "1000",
-      "help": "Bouncer's request timeout in milliseconds.",
+      "default": "500",
+      "help": "Bouncer's request timeout in milliseconds (live mode).",
       "id": "crowdsec-request-timeout",
-      "label": "CrowdSec request timeout",
+      "label": "CrowdSec live request timeout",
+      "regex": "^\\d+$",
+      "type": "text"
+    },
+    "CROWDSEC_STREAM_REQUEST_TIMEOUT": {
+      "context": "global",
+      "default": "15000",
+      "help": "Bouncer's request timeout in milliseconds (stream mode).",
+      "id": "crowdsec-stream-request-timeout",
+      "label": "CrowdSec stream request timeout",
       "regex": "^\\d+$",
       "type": "text"
     },
