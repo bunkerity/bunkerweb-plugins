@@ -2,7 +2,7 @@
   "id": "coraza",
   "name": "Coraza",
   "description": "Use Coraza as a library to inspect client request",
-  "version": "1.3",
+  "version": "1.4",
   "stream": "no",
   "settings": {
     "USE_CORAZA": {
@@ -10,7 +10,7 @@
       "default": "no",
       "help": "Activate Coraza library",
       "id": "use coraza library",
-      "label": "Coraza",
+      "label": "Use coraza",
       "regex": "^(no|yes)$",
       "type": "check"
     },

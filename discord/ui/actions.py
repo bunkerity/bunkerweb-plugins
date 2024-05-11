@@ -4,7 +4,7 @@ def pre_render(**kwargs):
     pass
 
 
-def clamav(**kwargs):
+def discord(**kwargs):
     ping = {"ping_status": "unknown"}
 
     args = kwargs.get("args", False)
@@ -17,10 +17,10 @@ def clamav(**kwargs):
 
     # Check ping
     try:
-        ping_data = kwargs["app"].config["INSTANCES"].get_ping("clamav")
+        ping_data = kwargs["app"].config["INSTANCES"].get_ping("discord")
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
-        error = f"Error while trying to ping clamav : {format_exc()}"
+        error = f"Error while trying to ping discord : {format_exc()}"
         print(error, flush=True)  
         ping = {"ping_status": "error", "error" : error}
 

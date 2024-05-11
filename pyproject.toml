@@ -1,0 +1,16 @@
+[project]
+name = "BunkerWeb Plugins"
+description = "External plugins for BunkerWeb"
+authors = [
+    { name = "Bunkerity", email = "contact@bunkerity.com" }
+]
+
+[tool.black]
+line-length = 160
+include = '\.pyi?$'
+exclude = '''
+/(
+  | \.git
+  | env
+)/
+'''

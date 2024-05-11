@@ -2,7 +2,7 @@
   "id": "virustotal",
   "name": "VirusTotal",
   "description": "Automatic scan of uploaded files and ips optionally with the VirusTotal API.",
-  "version": "1.3",
+  "version": "1.4",
   "stream": "partial",
   "settings": {
     "USE_VIRUSTOTAL": {
@@ -21,7 +21,7 @@
       "id": "virustotal-api-key",
       "label": "API key",
       "regex": "^.*$",
-      "type": "text"
+      "type": "password"
     },
     "VIRUSTOTAL_SCAN_FILE": {
       "context": "multisite",

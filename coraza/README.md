@@ -34,26 +34,26 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.5
+    image: bunkerity/bunkerweb:1.5.6
     ...
     environment:
-      - USE_MODSECURITY: "no" # We don't need modsecurity anymore
-      - USE_CORAZA: "yes"
-      - CORAZA_API: "http://bw-coraza:8080"
+      - USE_MODSECURITY=no # We don't need modsecurity anymore
+      - USE_CORAZA=yes
+      - CORAZA_API=http://bw-coraza:8080
     ...
-    bw-coraza:
-      image: bunkerity/bunkerweb-coraza:latest
-      networks:
-        - bw-universe
+  bw-coraza:
+    image: bunkerity/bunkerweb-coraza:latest
+    networks:
+      - bw-universe
 
 ```
 
 # Settings
 
-| Setting      | Default                 | Context   | Multiple | Description                 |
-| ------------ | ----------------------- | --------- | -------- | --------------------------- |
-| `USE_CORAZA` | `no`                    | multisite | no       | Activate Coraza library     |
-| `CORAZA_API` | `http://bw-coraza:8080` | global    | no       | hostname of the CORAZA API. |
+|  Setting   |        Default        | Context |Multiple|        Description        |
+|------------|-----------------------|---------|--------|---------------------------|
+|`USE_CORAZA`|`no`                   |multisite|no      |Activate Coraza library    |
+|`CORAZA_API`|`http://bw-coraza:8080`|global   |no      |hostname of the CORAZA API.|
 
 # TODO
 
