@@ -208,4 +208,4 @@ metadata:
 |`CROWDSEC_REQUEST_TIMEOUT`       |`500`                 |global   |no      |Bouncer's request timeout in milliseconds (live mode).  |
 |`CROWDSEC_STREAM_REQUEST_TIMEOUT`|`15000`               |global   |no      |Bouncer's request timeout in milliseconds (stream mode).|
 |`CROWDSEC_UPDATE_FREQUENCY`      |`10`                  |global   |no      |Bouncer's update frequency in stream mode, in second.   |
-|`CROWDSEC_CACHE_EXPIRATION`      |`1`                   |global   |no      |Bouncer's Cache expiration in live mode, in second.     |
+|`CROWDSEC_CACHE_EXPIRATION`      |`1`                   |global   |no      |Bouncer's cache expiration in live mode, in second.     |
