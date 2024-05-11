@@ -9,6 +9,18 @@ local utils = require("bunkerweb.utils")
 
 local virustotal = class("virustotal", plugin)
 
+local ngx = ngx
+local ERR = ngx.ERR
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_OK = ngx.HTTP_OK
+local to_hex = str.to_hex
+local http_new = http.new
+local has_variable = utils.has_variable
+local get_deny_status = utils.get_deny_status
+local tostring = tostring
+local decode = cjson.decode
+local encode = cjson.encode
+
 local read_all = function(form)
 	while true do
 		local typ = form:read()
@@ -21,9 +33,9 @@ local read_all = function(form)
 	end
 end
 
-function virustotal:initialize()
+function virustotal:initialize(ctx)
 	-- Call parent initialize
-	plugin.initialize(self, "virustotal")
+	plugin.initialize(self, "virustotal", ctx)
 end
 
 -- Todo : find a "ping" endpoint on VT API
@@ -49,7 +61,12 @@ function virustotal:access()
 			return self:ret(
 				true,
 				"IP " .. self.ctx.bw.remote_addr .. " is malicious : " .. report,
-				utils.get_deny_status(self.ctx)
+				get_deny_status(),
+				nil,
+				{
+					id = "ip",
+					report = report,
+				}
 			)
 		end
 	end
@@ -76,7 +93,13 @@ function virustotal:access()
 			return self:ret(
 				true,
 				"file with checksum " .. checksum .. "is detected : " .. detected,
-				utils.get_deny_status(self.ctx)
+				get_deny_status(),
+				nil,
+				{
+					id = "file",
+					checksum = checksum,
+					detected = detected,
+				}
 			)
 		end
 	end
@@ -104,7 +127,7 @@ function virustotal:check_ip()
 	end
 	-- Add to cache
 	local err
-	ok, err = self:add_to_cache("ip_" .. ngx.ctx.bw.remote_addr, result)
+	ok, err = self:add_to_cache("ip_" .. self.ctx.bw.remote_addr, result)
 	if not ok then
 		return false, err
 	end
@@ -145,15 +168,12 @@ function virustotal:check_file()
 		elseif typ == "part_end" and processing then
 			processing = nil
 			-- Compute checksum
-			local checksum = str.to_hex(sha:final())
+			local checksum = to_hex(sha:final())
 			sha:reset()
 			-- Check if file is in cache
 			local ok, cached = self:is_in_cache("file_" .. checksum)
 			if not ok then
-				self.logger:log(
-					ngx.ERR,
-					"can't check if file with checksum " .. checksum .. " is in cache : " .. cached
-				)
+				self.logger:log(ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
 			elseif cached then
 				if cached ~= "clean" then
 					read_all(form)
@@ -224,7 +244,7 @@ end
 
 function virustotal:request(url)
 	-- Get object
-	local httpc, err = http.new()
+	local httpc, err = http_new()
 	if not httpc then
 		return false, err
 	end
@@ -244,14 +264,14 @@ function virustotal:request(url)
 	end
 	if res.status ~= 200 then
 		err = "received status " .. tostring(res.status) .. " from VT API"
-		local ok, data = pcall(cjson.decode, res.body)
+		local ok, data = pcall(decode, res.body)
 		if ok then
 			err = err .. " with data " .. data
 		end
 		return false, err
 	end
 	-- Get result
-	local ok, data = pcall(cjson.decode, res.body)
+	local ok, data = pcall(decode, res.body)
 	if not ok then
 		return false, data
 	end
@@ -259,6 +279,35 @@ function virustotal:request(url)
 		return false, "malformed json response"
 	end
 	return true, true, data.data.attributes.last_analysis_stats
+end
+
+function virustotal:api()
+	if self.ctx.bw.uri == "/virustotal/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check virustotal connection
+		local check, err = has_variable("USE_VIRUSTOTAL", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_VIRUSTOTAL (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Virustotal plugin not enabled")
+		end
+
+		-- Send test data to virustotal virustotal
+		local ok, found, response =
+			self:request("/files/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f") -- sha256 of eicar test file
+		if not ok then
+			return self:ret(true, "error while sending test data to virustotal : " .. found, HTTP_INTERNAL_SERVER_ERROR)
+		end
+		if not found then
+			return self:ret(
+				true,
+				"error while sending test data to virustotal : file not found on virustotal but it should be",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
+		end
+		return self:ret(true, "test data sent to virustotal, response: " .. encode(response), HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return virustotal

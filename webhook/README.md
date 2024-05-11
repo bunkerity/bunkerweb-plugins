@@ -36,7 +36,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.3
+    image: bunkerity/bunkerweb:1.5.6
     ...
     environment:
       - USE_WEBHOOK=yes
@@ -52,7 +52,7 @@ version: '3'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.3
+    image: bunkerity/bunkerweb:1.5.6
     ..
     environment:
       - USE_WEBHOOK=yes
@@ -74,11 +74,11 @@ metadata:
 
 # Settings
 
-| Setting                    | Default                      | Context   | Multiple | Description                                                                                          |
-| -------------------------- | ---------------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `USE_WEBHOOK`              | `no`                         | multisite | no       | Enable sending alerts to a custom webhook.                                                           |
-| `WEBHOOK_URL`              | `https://api.example.com/bw` | global    | no       | Address of the webhook.                                                                              |
-| `WEBHOOK_RETRY_IF_LIMITED` | `no`                         | global    | no       | Retry to send the request if the remote server is rate limiting us (may consume a lot of resources). |
+|         Setting          |          Default           | Context |Multiple|                                            Description                                             |
+|--------------------------|----------------------------|---------|--------|----------------------------------------------------------------------------------------------------|
+|`USE_WEBHOOK`             |`no`                        |multisite|no      |Enable sending alerts to a custom webhook.                                                          |
+|`WEBHOOK_URL`             |`https://api.example.com/bw`|global   |no      |Address of the webhook.                                                                             |
+|`WEBHOOK_RETRY_IF_LIMITED`|`no`                        |global   |no      |Retry to send the request if the remote server is rate limiting us (may consume a lot of resources).|
 
 # TODO
 

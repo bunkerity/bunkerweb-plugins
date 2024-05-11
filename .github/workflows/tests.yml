@@ -17,18 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
 
       - name: Get BW tag
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=1.5.3" >> $GITHUB_ENV
+            echo "BW_TAG=1.5.6" >> $GITHUB_ENV
           else
             echo "BW_TAG=dev" >> $GITHUB_ENV
           fi
 
       - name: Login to Docker Hub
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -42,8 +42,11 @@ jobs:
       - name: Run Coraza tests
         run: ./.tests/coraza.sh
 
-      - name: Run CrowdSec tests
-        run: ./.tests/crowdsec.sh
+      - name: Run CrowdSec live tests
+        run: ./.tests/crowdsec.sh live
+
+      - name: Run CrowdSec stream tests
+        run: ./.tests/crowdsec.sh stream
 
       - name: Run VirusTotal tests
         run: ./.tests/virustotal.sh
@@ -51,5 +54,5 @@ jobs:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       - name: Build and push APIs
-        if: env.BW_TAG == '1.5.3'
+        if: env.BW_TAG == '1.5.6'
         run: ./.tests/build-push.sh "${{ env.BW_TAG }}"
