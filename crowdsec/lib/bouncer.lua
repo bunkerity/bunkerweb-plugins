@@ -17,6 +17,7 @@ local runtime = {}
 -- remediations are stored in cache as int (shared dict tags)
 -- we need to translate IDs to text with this.
 runtime.remediations = {}
+runtime.remediations["0"] = "allow"
 runtime.remediations["1"] = "ban"
 runtime.remediations["2"] = "captcha"
 
@@ -374,7 +375,7 @@ local function live_query(ip)
   if body == "null" then -- no result from API, no decision for this IP
     -- set ip in cache and DON'T block it
     local key = item_to_string(ip, "ip")
-    local succ, err, forcible = runtime.cache:set(key, true, runtime.conf["CACHE_EXPIRATION"], 1)
+    local succ, err, forcible = runtime.cache:set(key, true, runtime.conf["CACHE_EXPIRATION"], 0)
     if not succ then
       ngx.log(ngx.ERR, "failed to add ip '" .. ip .. "' in cache: "..err)
     end
