@@ -12,6 +12,9 @@ local ERR = ngx.ERR
 local WARN = ngx.WARN
 local INFO = ngx.INFO
 local ngx_timer = ngx.timer
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_TOO_MANY_REQUESTS = ngx.HTTP_TOO_MANY_REQUESTS
+local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
 local get_variable = utils.get_variable
@@ -38,7 +41,7 @@ function slack:log(bypass_use_slack)
 	end
 	-- Compute data
 	local data = {}
-	data.content = "```Denied request for IP "
+	data.text = "```Denied request for IP "
 		.. self.ctx.bw.remote_addr
 		.. " (reason = "
 		.. reason
@@ -49,19 +52,20 @@ function slack:log(bypass_use_slack)
 		.. "\n"
 	local headers, err = ngx_req.get_headers()
 	if not headers then
-		data.content = data.content .. "error while getting headers : " .. err
+		data.text = data.text .. "error while getting headers : " .. err
 	else
 		for header, value in pairs(headers) do
-			data.content = data.content .. header .. ": " .. value .. "\n"
+			data.text = data.text .. header .. ": " .. value .. "\n"
 		end
 	end
-	data.content = data.content .. "```"
+	data.text = data.text .. "```"
 	-- Send request
 	local hdr
 	hdr, err = ngx_timer.at(0, self.send, self, data)
 	if not hdr then
 		return self:ret(true, "can't create report timer : " .. err)
 	end
+	return self:ret(true, "scheduled timer")
 end
 
 -- luacheck: ignore 212
@@ -117,6 +121,53 @@ function slack:log_default()
 	end
 	-- Call log method
 	return self:log(true)
+end
+
+function slack:api()
+	if self.ctx.bw.uri == "/slack/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check slack connection
+		local check, err = has_variable("USE_SLACK", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_SLACK (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Slack plugin not enabled")
+		end
+
+		-- Send test data to slack webhook
+		local data = {
+			text = "```Test message from bunkerweb```",
+		}
+		-- Send request
+		local httpc
+		httpc, err = http_new()
+		if not httpc then
+			self.logger:log(ERR, "can't instantiate http object : " .. err)
+		end
+		local res, err_http = httpc:request_uri(self.variables["SLACK_WEBHOOK_URL"], {
+			method = "POST",
+			headers = {
+				["Content-Type"] = "application/json",
+			},
+			body = encode(data),
+		})
+		httpc:close()
+		if not res then
+			self.logger:log(ERR, "error while sending request : " .. err_http)
+		end
+		if self.variables["SLACK_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
+			return self:ret(
+				true,
+				"slack API is rate-limiting us, retry in " .. res.headers["Retry-After"] .. "s",
+				HTTP_TOO_MANY_REQUESTS
+			)
+		end
+		if res.status < 200 or res.status > 299 then
+			return self:ret(true, "request returned status " .. tostring(res.status), HTTP_INTERNAL_SERVER_ERROR)
+		end
+		return self:ret(true, "request sent to webhook", HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return slack

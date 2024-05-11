@@ -9,6 +9,8 @@ local coraza = class("coraza", plugin)
 local ngx = ngx
 local ngx_req = ngx.req
 local ERR = ngx.ERR
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
@@ -197,6 +199,31 @@ function coraza:is_needed()
 		self.logger:log(ERR, "can't check USE_CORAZA variable : " .. err)
 	end
 	return is_needed
+end
+
+function coraza:api()
+	if self.ctx.bw.uri == "/coraza/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check coraza connection
+		local check, err = has_variable("USE_CORAZA", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_CORAZA (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Coraza plugin not enabled")
+		end
+
+		-- Send ping request
+		local ok, data = self:ping()
+		if not ok then
+			return self:ret(
+				true,
+				"error while sending ping request to " .. self.variables["CORAZA_API"] .. " : " .. data,
+				HTTP_INTERNAL_SERVER_ERROR
+			)
+		end
+		return self:ret(true, "ping request is successful", HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return coraza

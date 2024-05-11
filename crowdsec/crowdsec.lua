@@ -7,6 +7,8 @@ local crowdsec = class("crowdsec", plugin)
 
 local ngx = ngx
 local ERR = ngx.ERR
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_OK = ngx.HTTP_OK
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local cs_init = cs.init
@@ -47,10 +49,32 @@ function crowdsec:access()
 		return self:ret(false, "Error while executing CrowdSec bouncer : " .. err)
 	end
 	if banned then
-		return self:ret(true, "CrowSec bouncer denied request", get_deny_status())
+		return self:ret(true, "CrowdSec bouncer denied request", get_deny_status())
 	end
 
 	return self:ret(true, "Not denied by CrowdSec bouncer")
+end
+
+function crowdsec:api()
+	if self.ctx.bw.uri == "/crowdsec/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check crowdsec connection
+		local check, err = has_variable("USE_CROWDSEC", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_CROWDSEC (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Crowdsec plugin not enabled")
+		end
+
+		-- Do the check
+		local ok
+		ok, err = cs_allow("127.0.0.1")
+		if not ok then
+			return self:ret(true, "Error while executing CrowdSec bouncer : " .. err, HTTP_INTERNAL_SERVER_ERROR)
+		end
+		return self:ret(true, "The test request is successful", HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return crowdsec

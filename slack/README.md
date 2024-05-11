@@ -38,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.5
+    image: bunkerity/bunkerweb:1.5.6
     ...
     environment:
       - USE_SLACK=yes
@@ -54,7 +54,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.5
+    image: bunkerity/bunkerweb:1.5.6
     ...
     environment:
       - USE_SLACK=yes
@@ -76,11 +76,12 @@ metadata:
 
 # Settings
 
-| Setting                  | Default                                | Context   | Multiple | Description                                                                                  |
-| ------------------------ | -------------------------------------- | --------- | -------- | -------------------------------------------------------------------------------------------- |
-| `USE_SLACK`              | `no`                                   | multisite | no       | Enable sending alerts to a Slack channel.                                                    |
-| `SLACK_WEBHOOK_URL`      | `https://hooks.slack.com/services/...` | global    | no       | Address of the Slack Webhook.                                                                |
-| `SLACK_RETRY_IF_LIMITED` | `no`                                   | global    | no       | Retry to send the request if Slack API is rate limiting us (may consume a lot of resources). |
+|        Setting         |               Default                | Context |Multiple|                                        Description                                         |
+|------------------------|--------------------------------------|---------|--------|--------------------------------------------------------------------------------------------|
+|`USE_SLACK`             |`no`                                  |multisite|no      |Enable sending alerts to a Slack channel.                                                   |
+|`SLACK_WEBHOOK_URL`     |`https://hooks.slack.com/services/...`|global   |no      |Address of the Slack Webhook.
+                                          |
+|`SLACK_RETRY_IF_LIMITED`|`no`                                  |global   |no      |Retry to send the request if Slack API is rate limiting us (may consume a lot of resources).|
 
 # TODO
 

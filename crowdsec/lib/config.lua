@@ -115,7 +115,7 @@ function config.loadConfig(file)
                 value = "ban"
                 end
             end
-            
+
             conf[key] = value
 
         elseif has_value(valid_int_params, key) then

@@ -55,7 +55,7 @@ function M.apply()
         ngx.exit(M.ret_code)
         return
     end
- 
+
     ngx.exit(M.ret_code)
 
     return

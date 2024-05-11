@@ -11,6 +11,8 @@ local ngx = ngx
 local NOTICE = ngx.NOTICE
 local ERR = ngx.ERR
 local socket = ngx.socket
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
@@ -104,7 +106,7 @@ function clamav:access()
 			{
 				id = "detected",
 				checksum = checksum,
-				signature = detected
+				signature = detected,
 			}
 		)
 	end
@@ -113,38 +115,37 @@ end
 
 function clamav:command(cmd)
 	-- Get socket
-	local socket, err = self:socket()
-	if not socket then
+	local clamav_socket, err = self:socket()
+	if not clamav_socket then
 		return false, err
 	end
 	-- Send command
 	local bytes
-	bytes, err = socket:send("n" .. cmd .. "\n")
+	bytes, err = clamav_socket:send("n" .. cmd .. "\n")
 	if not bytes then
-		socket:close()
+		clamav_socket:close()
 		return false, err
 	end
 	-- Receive response
-	-- luacheck: ignore partial
-	local data, partial
-	data, err, partial = socket:receive("*l")
+	local data
+	data, err = clamav_socket:receive("*l")
 	if not data then
-		socket:close()
+		clamav_socket:close()
 		return false, err
 	end
-	socket:close()
+	clamav_socket:close()
 	return true, data
 end
 
 function clamav:socket()
 	-- Init socket
-	local socket = socket.tcp()
-	socket:settimeout(tonumber(self.variables["CLAMAV_TIMEOUT"]))
-	local ok, err = socket:connect(self.variables["CLAMAV_HOST"], tonumber(self.variables["CLAMAV_PORT"]))
+	local tcp_socket = socket.tcp()
+	tcp_socket:settimeout(tonumber(self.variables["CLAMAV_TIMEOUT"]))
+	local ok, err = tcp_socket:connect(self.variables["CLAMAV_HOST"], tonumber(self.variables["CLAMAV_PORT"]))
 	if not ok then
 		return false, err
 	end
-	return socket
+	return tcp_socket
 end
 
 function clamav:scan()
@@ -154,7 +155,7 @@ function clamav:scan()
 		return false, "failed to create upload form"
 	end
 	local sha = sha512:new()
-	local socket
+	local socket = nil
 	while true do
 		-- Read part
 		local typ, res, err = form:read()
@@ -228,9 +229,8 @@ function clamav:scan()
 					return false, "socket:send() failed : " .. err
 				end
 				-- Read result
-				-- luacheck: ignore partial
-				local data, partial
-				data, err, partial = socket:receive("*l")
+				local data
+				data, err = socket:receive("*l")
 				if not data then
 					socket:close()
 					read_all(form)
@@ -247,7 +247,8 @@ function clamav:scan()
 					)
 				else
 					-- luacheck: ignore iend
-					local istart, iend, data = data:find("^stream: (.*) FOUND$")
+					local istart, iend
+					istart, iend, data = data:find("^stream: (.*) FOUND$")
 					local detected = "clean"
 					if istart then
 						detected = data
@@ -288,6 +289,30 @@ function clamav:add_to_cache(checksum, value)
 		return false, err
 	end
 	return true
+end
+
+function clamav:api()
+	if self.ctx.bw.uri == "/clamav/ping" and self.ctx.bw.request_method == "POST" then
+		-- Check clamav connection
+		local check, err = has_variable("USE_CLAMAV", "yes")
+		if check == nil then
+			return self:ret(true, "error while checking variable USE_CLAMAV (" .. err .. ")")
+		end
+		if not check then
+			return self:ret(true, "Clamav plugin not enabled")
+		end
+
+		-- Send PING to ClamAV
+		local ok, data = self:command("PING")
+		if not ok then
+			return self:ret(true, "connectivity with ClamAV failed : " .. data, HTTP_INTERNAL_SERVER_ERROR)
+		end
+		if data ~= "PONG" then
+			return self:ret(true, "wrong data received from ClamAV : " .. data, HTTP_INTERNAL_SERVER_ERROR)
+		end
+		return self:ret(true, "connectivity with ClamAV is successful", HTTP_OK)
+	end
+	return self:ret(false, "success")
 end
 
 return clamav
