@@ -49,6 +49,7 @@ try:
             CROWDSEC_STREAM_REQUEST_TIMEOUT=getenv("CROWDSEC_STREAM_REQUEST_TIMEOUT", "15000"),
             CROWDSEC_UPDATE_FREQUENCY=getenv("CROWDSEC_UPDATE_FREQUENCY", "10"),
             CROWDSEC_MODE=getenv("CROWDSEC_MODE", "live"),
+            CROWDSEC_CACHE_EXPORATION=getenv("CROWDSEC_CACHE_EXPORATION", "1"),
         )
         .encode()
     )
