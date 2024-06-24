@@ -216,10 +216,10 @@ metadata:
 | `CROWDSEC_API_KEY`                |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.                                                       |
 | `CROWDSEC_MODE`                   | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).                                                                 |
 | `CROWDSEC_REQUEST_TIMEOUT`        | `500`                  | global    | no       | Timeout in milliseconds for the HTTP requests done by the bouncer to query CrowdSec local API.             |
-| `CROWDSEC_EXCLUDE_LOCATION`       | ``                     | global    | no       | The locations to exclude while bouncing. It is a list of location, separated by commas.                    |
+| `CROWDSEC_EXCLUDE_LOCATION`       |                        | global    | no       | The locations to exclude while bouncing. It is a list of location, separated by commas.                    |
 | `CROWDSEC_CACHE_EXPIRATION`       | `1`                    | global    | no       | The cache expiration, in second, for IPs that the bouncer store in cache in live mode.                     |
 | `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | The frequency of update, in second, to pull new/old IPs from the CrowdSec local API.                       |
-| `CROWDSEC_REDIRECT_LOCATION`      | ``                     | global    | no       | The location to redirect the user when there is a ban.                                                     |
+| `CROWDSEC_REDIRECT_LOCATION`      |                        | global    | no       | The location to redirect the user when there is a ban.                                                     |
 | `CROWDSEC_RET_CODE`               | `403`                  | global    | no       | The HTTP code to return for IPs that trigger a ban remediation. (default: 403)                             |
 | `CROWDSEC_APPSEC_URL`             | `http://crowdsec:7422` | global    | no       | URL of the Application Security Component.                                                                 |
 | `CROWDSEC_APPSEC_FAILURE_ACTION`  | `passthrough`          | global    | no       | Behavior when the AppSec Component return a 500. Can let the request passthrough or deny it.               |
