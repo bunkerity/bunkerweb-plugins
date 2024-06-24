@@ -11,6 +11,9 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 - [CrowdSec plugin](#crowdsec-plugin)
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
+  - [CrowdSec](#crowdsec)
+    - [Optional : Application Security Component](#optional--application-security-component)
+  - [Syslog](#syslog)
 - [Setup](#setup)
   - [Docker](#docker)
   - [Kubernetes](#kubernetes)
@@ -20,6 +23,8 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 
 Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first and refer to the [CrowdSec documentation](https://docs.crowdsec.net/) if you are not familiar with it.
 
+## CrowdSec
+
 You will need to run CrowdSec instance and configure it to parse BunkerWeb logs. Because BunkerWeb is based on NGINX, you can use the `nginx` value for the `type` parameter in your acquisition file (assuming that BunkerWeb logs are stored "as is" without additional data) :
 
 ```yaml
@@ -28,6 +33,20 @@ filenames:
 labels:
   type: nginx
 ```
+
+### Optional : Application Security Component
+
+CrowdSec also provides an [Application Security Component](https://docs.crowdsec.net/docs/appsec/intro) that can be used to protect your application from attacks. You can configure the plugin to send requests to the AppSec Component for further analysis. If you want to use it, you will need to create another acquisition file for the AppSec Component :
+
+```yaml
+appsec_config: crowdsecurity/appsec-default
+labels:
+  type: appsec
+listen_addr: 0.0.0.0:7422
+source: appsec
+```
+
+## Syslog
 
 For container-based integrations, we recommend you to redirect the logs of the BunkerWeb container to a syslog service that will store the logs so CrowdSec can access it easily. Here is an example configuration for syslog-ng that will store raw logs coming from BunkerWeb to a local `/var/log/bunkerweb.log` file :
 
@@ -117,10 +136,11 @@ services:
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
+      - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml # Comment if you don't want to use the AppSec Component
       - bw-logs:/var/log:ro
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
-      - COLLECTIONS=crowdsecurity/nginx
+      - COLLECTIONS=crowdsecurity/nginx crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules
     networks:
       - bw-plugins
 
