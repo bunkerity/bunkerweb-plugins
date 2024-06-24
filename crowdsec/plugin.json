@@ -44,39 +44,123 @@
     },
     "CROWDSEC_REQUEST_TIMEOUT": {
       "context": "global",
-      "default": "500",
-      "help": "Bouncer's request timeout in milliseconds (live mode).",
+      "default": "1000",
+      "help": "Timeout in milliseconds for the HTTP requests done by the bouncer to query CrowdSec local API.",
       "id": "crowdsec-request-timeout",
       "label": "CrowdSec live request timeout",
       "regex": "^\\d+$",
       "type": "text"
     },
-    "CROWDSEC_STREAM_REQUEST_TIMEOUT": {
+    "CROWDSEC_EXCLUDE_LOCATION": {
       "context": "global",
-      "default": "15000",
-      "help": "Bouncer's request timeout in milliseconds (stream mode).",
-      "id": "crowdsec-stream-request-timeout",
-      "label": "CrowdSec stream request timeout",
+      "default": "",
+      "help": "The locations to exclude while bouncing. It is a list of location, separated by commas.",
+      "id": "crowdsec-exclude-location",
+      "label": "CrowdSec exclude location",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "CROWDSEC_CACHE_EXPIRATION": {
+      "context": "global",
+      "default": "1",
+      "help": "The cache expiration, in second, for IPs that the bouncer store in cache in live mode.",
+      "id": "crowdsec-cache-expiration",
+      "label": "CrowdSec cache-expiration",
       "regex": "^\\d+$",
       "type": "text"
     },
     "CROWDSEC_UPDATE_FREQUENCY": {
       "context": "global",
       "default": "10",
-      "help": "Bouncer's update frequency in stream mode, in second.",
+      "help": "The frequency of update, in second, to pull new/old IPs from the CrowdSec local API.",
       "id": "crowdsec-update-frequency",
       "label": "CrowdSec request timeout",
       "regex": "^\\d+$",
       "type": "text"
     },
-    "CROWDSEC_CACHE_EXPIRATION": {
+    "CROWDSEC_REDIRECT_LOCATION": {
       "context": "global",
-      "default": "1",
-      "help": "Bouncer's cache expiration in live mode, in second.",
-      "id": "crowdsec-cache-expiration",
-      "label": "CrowdSec cache-expiration",
+      "default": "",
+      "help": "The location to redirect the user when there is a ban.",
+      "id": "crowdsec-redirect-location",
+      "label": "CrowdSec redirect location",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "CROWDSEC_RET_CODE": {
+      "context": "global",
+      "default": "403",
+      "help": "The HTTP code to return for IPs that trigger a ban remediation. (default: 403)",
+      "id": "crowdsec-ret-code",
+      "label": "CrowdSec return code",
       "regex": "^\\d+$",
       "type": "text"
+    },
+    "CROWDSEC_APPSEC_URL": {
+      "context": "global",
+      "default": "http://127.0.0.1:7422",
+      "help": "URL of the Application Security Component.",
+      "id": "crowdsec-appsec-url",
+      "label": "AppSec URL",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "CROWDSEC_APPSEC_FAILURE_ACTION": {
+      "context": "global",
+      "default": "passthrough",
+      "help": "Behavior when the AppSec Component return a 500. Can let the request passthrough or deny it.",
+      "id": "crowdsec-appsec-failure-action",
+      "label": "AppSec failure action",
+      "regex": "^(passthrough|deny)$",
+      "type": "select",
+      "select": ["passthrough", "deny"]
+    },
+    "CROWDSEC_APPSEC_CONNECT_TIMEOUT": {
+      "context": "global",
+      "default": "100",
+      "help": "The timeout in milliseconds of the connection between the remediation component and AppSec Component.",
+      "id": "crowdsec-appsec-connect-timeout",
+      "label": "AppSec connect timeout",
+      "regex": "^\\d+$",
+      "type": "text"
+    },
+    "CROWDSEC_APPSEC_SEND_TIMEOUT": {
+      "context": "global",
+      "default": "100",
+      "help": "The timeout in milliseconds to send data from the remediation component to the AppSec Component.",
+      "id": "crowdsec-appsec-send-timeout",
+      "label": "AppSec send timeout",
+      "regex": "^\\d+$",
+      "type": "text"
+    },
+    "CROWDSEC_APPSEC_PROCESS_TIMEOUT": {
+      "context": "global",
+      "default": "500",
+      "help": "The timeout in milliseconds to process the request from the remediation component to the AppSec Component.",
+      "id": "crowdsec-appsec-process-timeout",
+      "label": "AppSec process timeout",
+      "regex": "^\\d+$",
+      "type": "text"
+    },
+    "CROWDSEC_ALWAYS_SEND_TO_APPSEC": {
+      "context": "global",
+      "default": "false",
+      "help": "Send the request to the AppSec Component even if there is a decision for the IP.",
+      "id": "crowdsec-always-send-to-appsec",
+      "label": "Always send to AppSec",
+      "regex": "^(true|false)$",
+      "type": "select",
+      "select": ["true", "false"]
+    },
+    "CROWDSEC_APPSEC_SSL_VERIFY": {
+      "context": "global",
+      "default": "false",
+      "help": "Verify the AppSec Component SSL certificate validity.",
+      "id": "crowdsec-appsec-ssl-verify",
+      "label": "AppSec SSL verify",
+      "regex": "^(true|false)$",
+      "type": "select",
+      "select": ["true", "false"]
     }
   },
   "jobs": [
