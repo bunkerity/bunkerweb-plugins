@@ -13,7 +13,6 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
   - [Docker](#docker)
-  - [Linux](#linux)
   - [Kubernetes](#kubernetes)
 - [Settings](#settings)
 
@@ -77,6 +76,7 @@ services:
       - SERVER_NAME=www.example.com
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
+      - CROWDSEC_APPSEC_URL=http://crowdsec:7422
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_URL=/
@@ -111,7 +111,7 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.6.0
+    image: crowdsecurity/crowdsec:v1.6.2
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
@@ -123,7 +123,7 @@ services:
       - bw-universe
 
   syslog:
-    image: balabit/syslog-ng:4.6.0
+    image: balabit/syslog-ng:4.7.1
     volumes:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log
@@ -199,13 +199,22 @@ metadata:
 
 # Settings
 
-| Setting                           | Default                | Context   | Multiple | Description                                              |
-| --------------------------------- | ---------------------- | --------- | -------- | -------------------------------------------------------- |
-| `USE_CROWDSEC`                    | `no`                   | multisite | no       | Activate CrowdSec bouncer.                               |
-| `CROWDSEC_API`                    | `http://crowdsec:8080` | global    | no       | Address of the CrowdSec API.                             |
-| `CROWDSEC_API_KEY`                |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.     |
-| `CROWDSEC_MODE`                   | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).               |
-| `CROWDSEC_REQUEST_TIMEOUT`        | `500`                  | global    | no       | Bouncer's request timeout in milliseconds (live mode).   |
-| `CROWDSEC_STREAM_REQUEST_TIMEOUT` | `15000`                | global    | no       | Bouncer's request timeout in milliseconds (stream mode). |
-| `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | Bouncer's update frequency in stream mode, in second.    |
-| `CROWDSEC_CACHE_EXPIRATION`       | `1`                    | global    | no       | Bouncer's cache expiration in live mode, in second.      |
+| Setting                           | Default                | Context   | Multiple | Description                                                                                                |
+| --------------------------------- | ---------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `USE_CROWDSEC`                    | `no`                   | multisite | no       | Activate CrowdSec bouncer.                                                                                 |
+| `CROWDSEC_API`                    | `http://crowdsec:8080` | global    | no       | Address of the CrowdSec API.                                                                               |
+| `CROWDSEC_API_KEY`                |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.                                                       |
+| `CROWDSEC_MODE`                   | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).                                                                 |
+| `CROWDSEC_REQUEST_TIMEOUT`        | `500`                  | global    | no       | Timeout in milliseconds for the HTTP requests done by the bouncer to query CrowdSec local API.             |
+| `CROWDSEC_EXCLUDE_LOCATION`       | ``                     | global    | no       | The locations to exclude while bouncing. It is a list of location, separated by commas.                    |
+| `CROWDSEC_CACHE_EXPIRATION`       | `1`                    | global    | no       | The cache expiration, in second, for IPs that the bouncer store in cache in live mode.                     |
+| `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | The frequency of update, in second, to pull new/old IPs from the CrowdSec local API.                       |
+| `CROWDSEC_REDIRECT_LOCATION`      | ``                     | global    | no       | The location to redirect the user when there is a ban.                                                     |
+| `CROWDSEC_RET_CODE`               | `403`                  | global    | no       | The HTTP code to return for IPs that trigger a ban remediation. (default: 403)                             |
+| `CROWDSEC_APPSEC_URL`             | `http://crowdsec:7422` | global    | no       | URL of the Application Security Component.                                                                 |
+| `CROWDSEC_APPSEC_FAILURE_ACTION`  | `passthrough`          | global    | no       | Behavior when the AppSec Component return a 500. Can let the request passthrough or deny it.               |
+| `CROWDSEC_APPSEC_CONNECT_TIMEOUT` | `100`                  | global    | no       | The timeout in milliseconds of the connection between the remediation component and AppSec Component.      |
+| `CROWDSEC_APPSEC_SEND_TIMEOUT`    | `100`                  | global    | no       | The timeout in milliseconds to send data from the remediation component to the AppSec Component.           |
+| `CROWDSEC_APPSEC_PROCESS_TIMEOUT` | `500`                  | global    | no       | The timeout in milliseconds to process the request from the remediation component to the AppSec Component. |
+| `CROWDSEC_ALWAYS_SEND_TO_APPSEC`  | `false`                | global    | no       | Send the request to the AppSec Component even if there is a decision for the IP.                           |
+| `CROWDSEC_APPSEC_SSL_VERIFY`      | `false`                | global    | no       | Verify the AppSec Component SSL certificate validity.                                                      |
