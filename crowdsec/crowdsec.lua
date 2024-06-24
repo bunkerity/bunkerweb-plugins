@@ -30,7 +30,7 @@ function crowdsec:init()
 	end
 	-- Init CS
 	local ok
-	ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.1")
+	ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.6")
 	if not ok then
 		self.logger:log(ERR, "error while initializing bouncer : " .. err)
 		return self:ret(false, err)
