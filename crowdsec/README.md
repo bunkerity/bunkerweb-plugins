@@ -32,7 +32,7 @@ labels:
 For container-based integrations, we recommend you to redirect the logs of the BunkerWeb container to a syslog service that will store the logs so CrowdSec can access it easily. Here is an example configuration for syslog-ng that will store raw logs coming from BunkerWeb to a local `/var/log/bunkerweb.log` file :
 
 ```conf
-@version: 4.6
+@version: 4.7
 
 source s_net {
   udp(
@@ -74,6 +74,7 @@ services:
       - "bunkerweb.INSTANCE=yes"
     environment:
       - SERVER_NAME=www.example.com
+      - API_WHITELIST_IP=127.0.0.0/24 10.20.30.0/24
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_APPSEC_URL=http://crowdsec:7422
@@ -84,6 +85,7 @@ services:
     networks:
       - bw-universe
       - bw-services
+      - bw-plugins
     logging:
       driver: syslog
       options:
@@ -120,7 +122,7 @@ services:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
       - COLLECTIONS=crowdsecurity/nginx
     networks:
-      - bw-universe
+      - bw-plugins
 
   syslog:
     image: balabit/syslog-ng:4.7.1
@@ -128,7 +130,7 @@ services:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log
     networks:
-      bw-universe:
+      bw-plugins:
         ipv4_address: 10.10.10.254
 
   myapp:
@@ -143,6 +145,11 @@ networks:
     ipam:
       driver: default
       config:
+        - subnet: 10.20.30.0/24
+  bw-plugins:
+    ipam:
+      driver: default
+      config:
         - subnet: 10.10.10.0/24
 
 volumes:
@@ -150,6 +157,9 @@ volumes:
   bw-logs:
   cs-data:
 ```
+
+> [!TIP]
+> The `balabit/syslog-ng` image used in the example is only compatible with amd64 architecture. If you want to use an arm64 compatible image, you can use `lscr.io/linuxserver/syslog-ng` instead.
 
 ## Kubernetes
 
