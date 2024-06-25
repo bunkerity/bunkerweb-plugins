@@ -144,23 +144,21 @@
     },
     "CROWDSEC_ALWAYS_SEND_TO_APPSEC": {
       "context": "global",
-      "default": "false",
+      "default": "no",
       "help": "Send the request to the AppSec Component even if there is a decision for the IP.",
       "id": "crowdsec-always-send-to-appsec",
       "label": "Always send to AppSec",
-      "regex": "^(true|false)$",
-      "type": "select",
-      "select": ["true", "false"]
+      "regex": "^(yes|no)$",
+      "type": "check"
     },
     "CROWDSEC_APPSEC_SSL_VERIFY": {
       "context": "global",
-      "default": "false",
+      "default": "no",
       "help": "Verify the AppSec Component SSL certificate validity.",
       "id": "crowdsec-appsec-ssl-verify",
       "label": "AppSec SSL verify",
-      "regex": "^(true|false)$",
-      "type": "select",
-      "select": ["true", "false"]
+      "regex": "^(yes|no)$",
+      "type": "check"
     }
   },
   "jobs": [

@@ -57,8 +57,8 @@ try:
             CROWDSEC_APPSEC_CONNECT_TIMEOUT=getenv("CROWDSEC_APPSEC_CONNECT_TIMEOUT", "100"),
             CROWDSEC_APPSEC_SEND_TIMEOUT=getenv("CROWDSEC_APPSEC_SEND_TIMEOUT", "100"),
             CROWDSEC_APPSEC_PROCESS_TIMEOUT=getenv("CROWDSEC_APPSEC_PROCESS_TIMEOUT", "500"),
-            CROWDSEC_ALWAYS_SEND_TO_APPSEC=getenv("CROWDSEC_ALWAYS_SEND_TO_APPSEC", "false"),
-            CROWDSEC_APPSEC_SSL_VERIFY=getenv("CROWDSEC_APPSEC_SSL_VERIFY", "false"),
+            CROWDSEC_ALWAYS_SEND_TO_APPSEC="true" if getenv("CROWDSEC_ALWAYS_SEND_TO_APPSEC", "no") == "yes" else "false",
+            CROWDSEC_APPSEC_SSL_VERIFY="true" if getenv("CROWDSEC_APPSEC_SSL_VERIFY", "no") == "yes" else "false",
         )
         .encode()
     )
