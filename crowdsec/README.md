@@ -323,5 +323,5 @@ metadata:
 | `CROWDSEC_APPSEC_CONNECT_TIMEOUT` | `100`                  | global    | no       | The timeout in milliseconds of the connection between the remediation component and AppSec Component.      |
 | `CROWDSEC_APPSEC_SEND_TIMEOUT`    | `100`                  | global    | no       | The timeout in milliseconds to send data from the remediation component to the AppSec Component.           |
 | `CROWDSEC_APPSEC_PROCESS_TIMEOUT` | `500`                  | global    | no       | The timeout in milliseconds to process the request from the remediation component to the AppSec Component. |
-| `CROWDSEC_ALWAYS_SEND_TO_APPSEC`  | `false`                | global    | no       | Send the request to the AppSec Component even if there is a decision for the IP.                           |
-| `CROWDSEC_APPSEC_SSL_VERIFY`      | `false`                | global    | no       | Verify the AppSec Component SSL certificate validity.                                                      |
+| `CROWDSEC_ALWAYS_SEND_TO_APPSEC`  | `no`                   | global    | no       | Send the request to the AppSec Component even if there is a decision for the IP.                           |
+| `CROWDSEC_APPSEC_SSL_VERIFY`      | `no`                   | global    | no       | Verify the AppSec Component SSL certificate validity.                                                      |
