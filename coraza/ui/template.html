@@ -1,15 +1,20 @@
-{% extends "base.html" %}
-
-{% set read_doc_text = 'You will find more information about the coraza plugin <a target="_blank" href="https://github.com/bunkerity/bunkerweb-plugins/tree/v' + plugin['version'] + '/coraza"  class="core-card-text-doc-link">in the documentation</a>.' %}
-
-{% block content %}
+{% extends "base.html" %} {% set read_doc_text = 'You will find more information
+about the coraza plugin
+<a
+  target="_blank"
+  href="https://github.com/bunkerity/bunkerweb-plugins/tree/v' + plugin['version'] + '/coraza"
+  class="core-card-text-doc-link"
+  >in the documentation</a
+>.' %} {% block content %}
 
 <div class="core-layout">
   {% if is_used %}
-  <input id="csrf_token"
-  type="hidden"
-  name="csrf_token"
-  value="{{ csrf_token() }}" />
+  <input
+    id="csrf_token"
+    type="hidden"
+    name="csrf_token"
+    value="{{ csrf_token() }}"
+  />
   <!-- info-->
   <div class="core-card">
     <h5 class="core-card-title">INFO</h5>

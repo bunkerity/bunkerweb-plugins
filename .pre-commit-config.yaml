@@ -3,7 +3,7 @@
 exclude: (^coraza/api/coreruleset|(^LICENSE.md|.svg)$)
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: c4a0b883114b00d8d76b479c820ce7950211c99b # frozen: v4.5.0
+    rev: 2c9f875913ee60ca25ce70243dc24d5b6415598c # frozen: v4.6.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -12,7 +12,7 @@ repos:
       - id: check-case-conflict
 
   - repo: https://github.com/ambv/black
-    rev: e026c93888f91a47a9c9f4e029f3eb07d96375e6 # frozen: 24.1.1
+    rev: 3702ba224ecffbcec30af640c149f231d90aebdb # frozen: 24.4.2
     hooks:
       - id: black
         name: Black Python Formatter
@@ -31,34 +31,34 @@ repos:
         exclude: ^crowdsec/lib/
 
   - repo: https://github.com/lunarmodules/luacheck
-    rev: 418f48976c73be697fe64b0eba9ea9821ac9bca8 # frozen: v1.1.2
+    rev: cc089e3f65acdd1ef8716cc73a3eca24a6b845e4 # frozen: v1.2.0
     hooks:
       - id: luacheck
         exclude: ^crowdsec/lib/
         args: ["--std", "min", "--codes", "--ranges", "--no-cache"]
 
   - repo: https://github.com/pycqa/flake8
-    rev: 7d37d9032d0d161634be4554273c30efd4dea0b3 # frozen: 7.0.0
+    rev: 1978e2b0de6efa0cb2a2b6f3f7986aa6569dd2be # frozen: 7.1.0
     hooks:
       - id: flake8
         name: Flake8 Python Linter
         args: ["--max-line-length=250", "--ignore=E266,E402,E722,W503"]
 
   - repo: https://github.com/codespell-project/codespell
-    rev: 6e41aba91fb32e9feb741a6258eefeb9c6e4a482 # frozen: v2.2.6
+    rev: 193cd7d27cd571f79358af09a8fb8997e54f8fff # frozen: v2.3.0
     hooks:
       - id: codespell
         name: Codespell Spell Checker
-        entry: codespell --ignore-regex="(tabEl|Widgits)" --skip src/ui/static/js/utils/flatpickr.js,CHANGELOG.md
+        entry: codespell --ignore-regex="(tabEl|Widgits)" --skip */ui/template.html,src/ui/static/js/utils/flatpickr.js,CHANGELOG.md
         language: python
         types: [text]
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: 145400593c178304246371bc45290588bc72f43e # frozen: v8.18.2
+    rev: 77c3c6a34b2577d71083442326c60b8fd58926ec # frozen: v8.18.4
     hooks:
       - id: gitleaks
 
   - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: 3f77b826548d8dc2d26675f077361c92773b50a7 # frozen: v0.9.0
+    rev: 2491238703a5d3415bb2b7ff11388bf775372f29 # frozen: v0.10.0
     hooks:
       - id: shellcheck

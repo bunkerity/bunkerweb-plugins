@@ -38,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.8
     ...
     environment:
       - USE_DISCORD=yes
@@ -54,7 +54,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.8
     ...
     environment:
       - USE_DISCORD=yes
@@ -86,12 +86,12 @@ metadata:
 
 # Settings
 
-|         Setting          |                 Default                 | Context |Multiple|                                         Description                                          |
-|--------------------------|-----------------------------------------|---------|--------|----------------------------------------------------------------------------------------------|
-|`USE_DISCORD`             |`no`                                     |multisite|no      |Enable sending alerts to a Discord channel.                                                   |
-|`DISCORD_WEBHOOK_URL`     |`https://discordapp.com/api/webhooks/...`|global   |no      |Address of the Discord Webhook.
-                                                 |
-|`DISCORD_RETRY_IF_LIMITED`|`no`                                     |global   |no      |Retry to send the request if Discord API is rate limiting us (may consume a lot of resources).|
+| Setting                    | Default                                   | Context   | Multiple | Description                                                                                    |
+| -------------------------- | ----------------------------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `USE_DISCORD`              | `no`                                      | multisite | no       | Enable sending alerts to a Discord channel.                                                    |
+| `DISCORD_WEBHOOK_URL`      | `https://discordapp.com/api/webhooks/...` | global    | no       | Address of the Discord Webhook.                                                                |
+|                            |
+| `DISCORD_RETRY_IF_LIMITED` | `no`                                      | global    | no       | Retry to send the request if Discord API is rate limiting us (may consume a lot of resources). |
 
 # TODO
 

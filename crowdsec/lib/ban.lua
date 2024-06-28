@@ -42,7 +42,20 @@ end
 
 
 
-function M.apply()
+function M.apply(...)
+    local args = {...}
+    local ret_code = args[1]
+
+    ngx.log(ngx.DEBUG, "args:" .. tostring(args[1]))
+
+    local status = 0
+    if ret_code ~= nil then
+        status = ret_code
+    else
+        status = M.ret_code
+    end
+
+    ngx.log(ngx.DEBUG, "BAN: status=" .. status .. ", redirect_location=" .. M.redirect_location .. ", template_str=" .. M.template_str)
     if M.redirect_location ~= "" then
         ngx.redirect(M.redirect_location)
         return
@@ -50,13 +63,13 @@ function M.apply()
     if M.template_str ~= "" then
         ngx.header.content_type = "text/html"
         ngx.header.cache_control = "no-cache"
-        ngx.status = M.ret_code
+        ngx.status = status
         ngx.say(M.template_str)
-        ngx.exit(M.ret_code)
+        ngx.exit(status)
         return
     end
 
-    ngx.exit(M.ret_code)
+    ngx.exit(status)
 
     return
 end

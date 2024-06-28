@@ -11,15 +11,22 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin acts as a [CrowdSec](https://c
 - [CrowdSec plugin](#crowdsec-plugin)
 - [Table of contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
+  - [CrowdSec](#crowdsec)
+    - [Optional : Application Security Component](#optional--application-security-component)
+  - [Syslog](#syslog)
 - [Setup](#setup)
   - [Docker](#docker)
   - [Linux](#linux)
+    - [Optional : Application Security Component](#optional--application-security-component-1)
+    - [Linux Configuration](#linux-configuration)
   - [Kubernetes](#kubernetes)
 - [Settings](#settings)
 
 # Prerequisites
 
 Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first and refer to the [CrowdSec documentation](https://docs.crowdsec.net/) if you are not familiar with it.
+
+## CrowdSec
 
 You will need to run CrowdSec instance and configure it to parse BunkerWeb logs. Because BunkerWeb is based on NGINX, you can use the `nginx` value for the `type` parameter in your acquisition file (assuming that BunkerWeb logs are stored "as is" without additional data) :
 
@@ -30,10 +37,24 @@ labels:
   type: nginx
 ```
 
+### Optional : Application Security Component
+
+CrowdSec also provides an [Application Security Component](https://docs.crowdsec.net/docs/appsec/intro) that can be used to protect your application from attacks. You can configure the plugin to send requests to the AppSec Component for further analysis. If you want to use it, you will need to create another acquisition file for the AppSec Component :
+
+```yaml
+appsec_config: crowdsecurity/appsec-default
+labels:
+  type: appsec
+listen_addr: 0.0.0.0:7422
+source: appsec
+```
+
+## Syslog
+
 For container-based integrations, we recommend you to redirect the logs of the BunkerWeb container to a syslog service that will store the logs so CrowdSec can access it easily. Here is an example configuration for syslog-ng that will store raw logs coming from BunkerWeb to a local `/var/log/bunkerweb.log` file :
 
 ```conf
-@version: 4.6
+@version: 4.7
 
 source s_net {
   udp(
@@ -67,7 +88,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.8
     ports:
       - 80:8080
       - 443:8443
@@ -75,8 +96,10 @@ services:
       - "bunkerweb.INSTANCE=yes"
     environment:
       - SERVER_NAME=www.example.com
+      - API_WHITELIST_IP=127.0.0.0/24 10.20.30.0/24
       - USE_CROWDSEC=yes
       - CROWDSEC_API=http://crowdsec:8080
+      - CROWDSEC_APPSEC_URL=http://crowdsec:7422
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - USE_REVERSE_PROXY=yes
       - REVERSE_PROXY_URL=/
@@ -84,13 +107,14 @@ services:
     networks:
       - bw-universe
       - bw-services
+      - bw-plugins
     logging:
       driver: syslog
       options:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.7
+    image: bunkerity/bunkerweb-scheduler:1.5.8
     depends_on:
       - bunkerweb
       - bw-docker
@@ -111,24 +135,25 @@ services:
       - bw-docker
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.6.0
+    image: crowdsecurity/crowdsec:v1.6.2
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
+      - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml # Comment if you don't want to use the AppSec Component
       - bw-logs:/var/log:ro
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
-      - COLLECTIONS=crowdsecurity/nginx
+      - COLLECTIONS=crowdsecurity/nginx crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules
     networks:
-      - bw-universe
+      - bw-plugins
 
   syslog:
-    image: balabit/syslog-ng:4.6.0
+    image: balabit/syslog-ng:4.7.1
     volumes:
       - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
       - bw-logs:/var/log
     networks:
-      bw-universe:
+      bw-plugins:
         ipv4_address: 10.10.10.254
 
   myapp:
@@ -143,12 +168,94 @@ networks:
     ipam:
       driver: default
       config:
+        - subnet: 10.20.30.0/24
+  bw-plugins:
+    ipam:
+      driver: default
+      config:
         - subnet: 10.10.10.0/24
 
 volumes:
   bw-data:
   bw-logs:
   cs-data:
+```
+
+> [!TIP]
+> The `balabit/syslog-ng` image used in the example is only compatible with amd64 architecture. If you want to use an arm64 compatible image, you can use `lscr.io/linuxserver/syslog-ng` instead.
+
+## Linux
+
+You'll need to install CrowdSec and configure it to parse BunkerWeb logs. To do so, you can follow the [official documentation](https://doc.crowdsec.net/docs/getting_started/install_crowdsec).
+
+For CrowdSec to parse BunkerWeb logs, you have to add the following lines to your acquisition file located in `/etc/crowdsec/acquis.yaml` :
+
+```yaml
+filenames:
+  - /var/log/bunkerweb/access.log
+  - /var/log/bunkerweb/error.log
+  - /var/log/bunkerweb/modsec_audit.log
+labels:
+  type: nginx
+```
+
+Now we have to add our custom bouncer to the CrowdSec API. To do so, you can use the `cscli` tool :
+
+```shell
+sudo cscli bouncers add crowdsec-bunkerweb-bouncer/v1.6
+```
+
+> [!IMPORTANT]
+> Keep the key generated by the `cscli` command, you will need it later.
+
+Now restart the CrowdSec service :
+
+```shell
+sudo systemctl restart crowdsec
+```
+
+### Optional : Application Security Component
+
+If you want to use the AppSec Component, you will need to create another acquisition file for it located in `/etc/crowdsec/acquis.d/appsec.yaml` :
+
+```yaml
+appsec_config: crowdsecurity/appsec-default
+labels:
+  type: appsec
+listen_addr: 127.0.0.1:7422
+source: appsec
+```
+
+And you will need to install the AppSec Component's collections :
+
+```shell
+sudo cscli collections install crowdsecurity/appsec-virtual-patching
+sudo cscli collections install crowdsecurity/appsec-generic-rules
+```
+
+Now you just have to restart the CrowdSec service :
+
+```shell
+sudo systemctl restart crowdsec
+```
+
+If you need more information about the AppSec Component, you can refer to the [official documentation](https://docs.crowdsec.net/docs/appsec/intro).
+
+### Linux Configuration
+
+Now you can configure the plugin by adding the following settings to your BunkerWeb configuration file :
+
+```env
+USE_CROWDSEC=yes
+CROWDSEC_API=http://127.0.0.1:8080
+CROWDSEC_API_KEY=<The key provided by cscli>
+CROWDSEC_APPSEC_URL=http://127.0.0.1:7422
+```
+
+And finally reload the BunkerWeb service :
+
+```shell
+sudo systemctl reload bunkerweb
 ```
 
 ## Kubernetes
@@ -199,13 +306,22 @@ metadata:
 
 # Settings
 
-|             Setting             |       Default        | Context |Multiple|                      Description                       |
-|---------------------------------|----------------------|---------|--------|--------------------------------------------------------|
-|`USE_CROWDSEC`                   |`no`                  |multisite|no      |Activate CrowdSec bouncer.                              |
-|`CROWDSEC_API`                   |`http://crowdsec:8080`|global   |no      |Address of the CrowdSec API.                            |
-|`CROWDSEC_API_KEY`               |                      |global   |no      |Key for the CrowdSec API given by cscli bouncer add.    |
-|`CROWDSEC_MODE`                  |`live`                |global   |no      |Mode of the CrowdSec API (live or stream).              |
-|`CROWDSEC_REQUEST_TIMEOUT`       |`500`                 |global   |no      |Bouncer's request timeout in milliseconds (live mode).  |
-|`CROWDSEC_STREAM_REQUEST_TIMEOUT`|`15000`               |global   |no      |Bouncer's request timeout in milliseconds (stream mode).|
-|`CROWDSEC_UPDATE_FREQUENCY`      |`10`                  |global   |no      |Bouncer's update frequency in stream mode, in second.   |
-|`CROWDSEC_CACHE_EXPIRATION`      |`1`                   |global   |no      |Bouncer's cache expiration in live mode, in second.     |
+| Setting                           | Default                | Context   | Multiple | Description                                                                                                |
+| --------------------------------- | ---------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `USE_CROWDSEC`                    | `no`                   | multisite | no       | Activate CrowdSec bouncer.                                                                                 |
+| `CROWDSEC_API`                    | `http://crowdsec:8080` | global    | no       | Address of the CrowdSec API.                                                                               |
+| `CROWDSEC_API_KEY`                |                        | global    | no       | Key for the CrowdSec API given by cscli bouncer add.                                                       |
+| `CROWDSEC_MODE`                   | `live`                 | global    | no       | Mode of the CrowdSec API (live or stream).                                                                 |
+| `CROWDSEC_REQUEST_TIMEOUT`        | `500`                  | global    | no       | Timeout in milliseconds for the HTTP requests done by the bouncer to query CrowdSec local API.             |
+| `CROWDSEC_EXCLUDE_LOCATION`       |                        | global    | no       | The locations to exclude while bouncing. It is a list of location, separated by commas.                    |
+| `CROWDSEC_CACHE_EXPIRATION`       | `1`                    | global    | no       | The cache expiration, in second, for IPs that the bouncer store in cache in live mode.                     |
+| `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | The frequency of update, in second, to pull new/old IPs from the CrowdSec local API.                       |
+| `CROWDSEC_REDIRECT_LOCATION`      |                        | global    | no       | The location to redirect the user when there is a ban.                                                     |
+| `CROWDSEC_RET_CODE`               | `403`                  | global    | no       | The HTTP code to return for IPs that trigger a ban remediation. (default: 403)                             |
+| `CROWDSEC_APPSEC_URL`             | `http://crowdsec:7422` | global    | no       | URL of the Application Security Component.                                                                 |
+| `CROWDSEC_APPSEC_FAILURE_ACTION`  | `passthrough`          | global    | no       | Behavior when the AppSec Component return a 500. Can let the request passthrough or deny it.               |
+| `CROWDSEC_APPSEC_CONNECT_TIMEOUT` | `100`                  | global    | no       | The timeout in milliseconds of the connection between the remediation component and AppSec Component.      |
+| `CROWDSEC_APPSEC_SEND_TIMEOUT`    | `100`                  | global    | no       | The timeout in milliseconds to send data from the remediation component to the AppSec Component.           |
+| `CROWDSEC_APPSEC_PROCESS_TIMEOUT` | `500`                  | global    | no       | The timeout in milliseconds to process the request from the remediation component to the AppSec Component. |
+| `CROWDSEC_ALWAYS_SEND_TO_APPSEC`  | `no`                   | global    | no       | Send the request to the AppSec Component even if there is a decision for the IP.                           |
+| `CROWDSEC_APPSEC_SSL_VERIFY`      | `no`                   | global    | no       | Verify the AppSec Component SSL certificate validity.                                                      |

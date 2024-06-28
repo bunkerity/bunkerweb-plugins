@@ -155,13 +155,13 @@ function clamav:scan()
 		return false, "failed to create upload form"
 	end
 	local sha = sha512:new()
-	local socket = nil
+	local scan_socket = nil
 	while true do
 		-- Read part
 		local typ, res, err = form:read()
 		if not typ then
-			if socket then
-				socket:close()
+			if scan_socket then
+				scan_socket:close()
 			end
 			return false, "form:read() failed : " .. err
 		end
@@ -178,32 +178,32 @@ function clamav:scan()
 				end
 			end
 			if found then
-				if socket then
-					socket:close()
+				if scan_socket then
+					scan_socket:close()
 				end
-				socket, err = self:socket()
-				if not socket then
+				scan_socket, err = self:socket()
+				if not scan_socket then
 					read_all(form)
 					return false, "socket failed : " .. err
 				end
-				bytes, err = socket:send("nINSTREAM\n")
+				bytes, err = scan_socket:send("nINSTREAM\n")
 				if not bytes then
-					socket:close()
+					scan_socket:close()
 					read_all(form)
 					return false, "socket:send() failed : " .. err
 				end
 			end
 			-- Body case : update checksum and send to clamav
-		elseif typ == "body" and socket then
+		elseif typ == "body" and scan_socket then
 			sha:update(res)
-			bytes, err = socket:send(stream_size(#res) .. res)
+			bytes, err = scan_socket:send(stream_size(#res) .. res)
 			if not bytes then
-				socket:close()
+				scan_socket:close()
 				read_all(form)
 				return false, "socket:send() failed : " .. err
 			end
 			-- Part end case : get final checksum and clamav result
-		elseif typ == "part_end" and socket then
+		elseif typ == "part_end" and scan_socket then
 			local checksum = to_hex(sha:final())
 			sha:reset()
 			-- Check if file is in cache
@@ -214,30 +214,30 @@ function clamav:scan()
 					"can't check if file with checksum " .. checksum .. " is in cache : " .. cached
 				)
 			elseif cached then
-				socket:close()
-				socket = nil
+				scan_socket:close()
+				scan_socket = nil
 				if cached ~= "clean" then
 					read_all(form)
 					return true, cached, checksum
 				end
 			else
 				-- End the INSTREAM
-				bytes, err = socket:send(stream_size(0))
+				bytes, err = scan_socket:send(stream_size(0))
 				if not bytes then
-					socket:close()
+					scan_socket:close()
 					read_all(form)
 					return false, "socket:send() failed : " .. err
 				end
 				-- Read result
 				local data
-				data, err = socket:receive("*l")
+				data, err = scan_socket:receive("*l")
 				if not data then
-					socket:close()
+					scan_socket:close()
 					read_all(form)
 					return false, err
 				end
-				socket:close()
-				socket = nil
+				scan_socket:close()
+				scan_socket = nil
 				if data:match("^.*INSTREAM size limit exceeded.*$") then
 					self.logger:log(
 						ERR,
@@ -265,8 +265,8 @@ function clamav:scan()
 			end
 			-- End of body case : no file detected
 		elseif typ == "eof" then
-			if socket then
-				socket:close()
+			if scan_socket then
+				scan_socket:close()
 			end
 			return true
 		end
