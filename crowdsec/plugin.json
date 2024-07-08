@@ -78,24 +78,6 @@
       "regex": "^\\d+$",
       "type": "text"
     },
-    "CROWDSEC_REDIRECT_LOCATION": {
-      "context": "global",
-      "default": "",
-      "help": "The location to redirect the user when there is a ban.",
-      "id": "crowdsec-redirect-location",
-      "label": "CrowdSec redirect location",
-      "regex": "^.*$",
-      "type": "text"
-    },
-    "CROWDSEC_RET_CODE": {
-      "context": "global",
-      "default": "403",
-      "help": "The HTTP code to return for IPs that trigger a ban remediation. (default: 403)",
-      "id": "crowdsec-ret-code",
-      "label": "CrowdSec return code",
-      "regex": "^\\d+$",
-      "type": "text"
-    },
     "CROWDSEC_APPSEC_URL": {
       "context": "global",
       "default": "http://crowdsec:7422",

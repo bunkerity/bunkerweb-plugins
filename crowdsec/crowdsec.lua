@@ -9,7 +9,6 @@ local ngx = ngx
 local ERR = ngx.ERR
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
-local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local cs_init = cs.init
 local cs_allow = cs.Allow
@@ -21,16 +20,11 @@ end
 
 function crowdsec:init()
 	-- Check if init is needed
-	local init_needed, err = has_variable("USE_CROWDSEC", "yes")
-	if init_needed == nil then
-		return self:ret(false, "can't check USE_CROWDSEC variable : " .. err)
-	end
-	if not init_needed or self.is_loading then
+	if self.variables["USE_CROWDSEC"] ~= "yes" or self.is_loading then
 		return self:ret(true, "init not needed")
 	end
 	-- Init CS
-	local ok
-	ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v1.6")
+	local ok, err = cs_init("/var/cache/bunkerweb/crowdsec/crowdsec.conf", "crowdsec-bunkerweb-bouncer/v2.0")
 	if not ok then
 		self.logger:log(ERR, "error while initializing bouncer : " .. err)
 		return self:ret(false, err)
@@ -58,17 +52,12 @@ end
 function crowdsec:api()
 	if self.ctx.bw.uri == "/crowdsec/ping" and self.ctx.bw.request_method == "POST" then
 		-- Check crowdsec connection
-		local check, err = has_variable("USE_CROWDSEC", "yes")
-		if check == nil then
-			return self:ret(true, "error while checking variable USE_CROWDSEC (" .. err .. ")")
-		end
-		if not check then
-			return self:ret(true, "Crowdsec plugin not enabled")
+		if self.variables["USE_CROWDSEC"] ~= "yes" then
+			return self:ret(true, "CrowdSec plugin is not enabled", HTTP_OK)
 		end
 
 		-- Do the check
-		local ok
-		ok, err = cs_allow("127.0.0.1")
+		local ok, err = cs_allow("127.0.0.1")
 		if not ok then
 			return self:ret(true, "Error while executing CrowdSec bouncer : " .. err, HTTP_INTERNAL_SERVER_ERROR)
 		end

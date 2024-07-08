@@ -59,7 +59,7 @@ function csmod.init(configFile, userAgent)
   local captcha_ok = true
   local err = captcha.New(runtime.conf["SITE_KEY"], runtime.conf["SECRET_KEY"], runtime.conf["CAPTCHA_TEMPLATE_PATH"], runtime.conf["CAPTCHA_PROVIDER"])
   if err ~= nil then
-    ngx.log(ngx.ERR, "error loading captcha plugin: " .. err)
+    -- ngx.log(ngx.ERR, "error loading captcha plugin: " .. err)
     captcha_ok = false
   end
   local succ, err, forcible = runtime.cache:set("captcha_ok", captcha_ok)
@@ -71,10 +71,10 @@ function csmod.init(configFile, userAgent)
   end
 
 
-  local err = ban.new(runtime.conf["BAN_TEMPLATE_PATH"], runtime.conf["REDIRECT_LOCATION"], runtime.conf["RET_CODE"])
-  if err ~= nil then
-    ngx.log(ngx.ERR, "error loading ban plugins: " .. err)
-  end
+  -- local err = ban.new(runtime.conf["BAN_TEMPLATE_PATH"], runtime.conf["REDIRECT_LOCATION"], runtime.conf["RET_CODE"])
+  -- if err ~= nil then
+  --   ngx.log(ngx.ERR, "error loading ban plugins: " .. err)
+  -- end
 
   if runtime.conf["REDIRECT_LOCATION"] ~= "" then
     table.insert(runtime.conf["EXCLUDE_LOCATION"], runtime.conf["REDIRECT_LOCATION"])
@@ -605,11 +605,11 @@ end
 
 function csmod.Allow(ip)
   if runtime.conf["ENABLED"] == "false" then
-    ngx.exit(ngx.DECLINED)
+    return true, "disabled"
   end
 
   if ngx.req.is_internal() then
-    ngx.exit(ngx.DECLINED)
+    return true, "internal"
   end
 
   local remediationSource = flag.BOUNCER_SOURCE
@@ -619,7 +619,7 @@ function csmod.Allow(ip)
     for k, v in pairs(runtime.conf["EXCLUDE_LOCATION"]) do
       if ngx.var.uri == v then
         ngx.log(ngx.ERR,  "whitelisted location: " .. v)
-        ngx.exit(ngx.DECLINED)
+        return true, "whitelisted " .. v
       end
       local uri_to_check = v
       if utils.ends_with(uri_to_check, "/") == false then
@@ -716,8 +716,8 @@ function csmod.Allow(ip)
   if not ok then
       if remediation == "ban" then
         ngx.log(ngx.ALERT, "[Crowdsec] denied '" .. ip .. "' with '"..remediation.."' (by " .. flag.Flags[remediationSource] .. ")")
-        ban.apply(ret_code)
-        return
+        -- ban.apply(ret_code)
+        return true, "denied", true
       end
       -- if the remediation is a captcha and captcha is well configured
       if remediation == "captcha" and captcha_ok and ngx.var.uri ~= "/favicon.ico" then
@@ -750,7 +750,7 @@ function csmod.Allow(ip)
           end
       end
   end
-  ngx.exit(ngx.DECLINED)
+  return true, "allow"
 end
 
 

@@ -50,15 +50,13 @@ try:
             CROWDSEC_EXCLUDE_LOCATION=getenv("CROWDSEC_EXCLUDE_LOCATION", ""),
             CROWDSEC_CACHE_EXPIRATION=getenv("CROWDSEC_CACHE_EXPIRATION", "1"),
             CROWDSEC_UPDATE_FREQUENCY=getenv("CROWDSEC_UPDATE_FREQUENCY", "10"),
-            CROWDSEC_REDIRECT_LOCATION=getenv("CROWDSEC_REDIRECT_LOCATION", ""),
-            CROWDSEC_RET_CODE=getenv("CROWDSEC_RET_CODE", "403"),
             CROWDSEC_APPSEC_URL=getenv("CROWDSEC_APPSEC_URL", "http://crowdsec:7422"),
             CROWDSEC_APPSEC_FAILURE_ACTION=getenv("CROWDSEC_APPSEC_FAILURE_ACTION", "passthrough"),
             CROWDSEC_APPSEC_CONNECT_TIMEOUT=getenv("CROWDSEC_APPSEC_CONNECT_TIMEOUT", "100"),
             CROWDSEC_APPSEC_SEND_TIMEOUT=getenv("CROWDSEC_APPSEC_SEND_TIMEOUT", "100"),
             CROWDSEC_APPSEC_PROCESS_TIMEOUT=getenv("CROWDSEC_APPSEC_PROCESS_TIMEOUT", "500"),
-            CROWDSEC_ALWAYS_SEND_TO_APPSEC="true" if getenv("CROWDSEC_ALWAYS_SEND_TO_APPSEC", "no") == "yes" else "false",
-            CROWDSEC_APPSEC_SSL_VERIFY="true" if getenv("CROWDSEC_APPSEC_SSL_VERIFY", "no") == "yes" else "false",
+            CROWDSEC_ALWAYS_SEND_TO_APPSEC=("true" if getenv("CROWDSEC_ALWAYS_SEND_TO_APPSEC", "no") == "yes" else "false"),
+            CROWDSEC_APPSEC_SSL_VERIFY=("true" if getenv("CROWDSEC_APPSEC_SSL_VERIFY", "no") == "yes" else "false"),
         )
         .encode()
     )
