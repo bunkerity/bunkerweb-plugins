@@ -4,7 +4,7 @@
 	<img alt="BunkerWeb Coraza diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/coraza/docs/diagram.svg" />
 </p>
 
-This [Plugin](https://www.bunkerweb.io/latest/plugins) will act as a Library of rule that aim to detect and deny malicious requests
+This [Plugin](https://www.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) will act as a Library of rule that aim to detect and deny malicious requests
 
 # Table of contents
 
@@ -17,7 +17,7 @@ This [Plugin](https://www.bunkerweb.io/latest/plugins) will act as a Library of 
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 ## Docker/Swarm
 

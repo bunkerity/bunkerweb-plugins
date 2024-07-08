@@ -4,7 +4,7 @@
 	<img alt="BunkerWeb VirusTotal diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/virustotal/docs/diagram.svg" />
 </p>
 
-This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is already analyzed on VirusTotal and deny the request if the file is detected by some antivirus engine(s).
+This [BunkerWeb](https://www.bunkerweb.io/?utm_campaign=self&utm_source=github) plugin will automatically check if any uploaded file is already analyzed on VirusTotal and deny the request if the file is detected by some antivirus engine(s).
 
 At the moment, submission of new file is not supported, it only checks if files already exist in VT and get the scan result if that's the case.
 
@@ -21,13 +21,13 @@ At the moment, submission of new file is not supported, it only checks if files 
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation first.
 
 You will need a VirusTotal API key to contact their API (see [here](https://support.virustotal.com/hc/en-us/articles/115002088769-Please-give-me-an-API-key)). The free API key is also working but you should check the terms of service and limits as described [here](https://support.virustotal.com/hc/en-us/articles/115002119845-What-is-the-difference-between-the-public-API-and-the-private-API-).
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 ## Docker
 
