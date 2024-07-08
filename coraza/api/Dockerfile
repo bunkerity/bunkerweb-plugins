@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine@sha256:a8836ec73ab2f18e7f9abe18cdf2580b9575226e7dabeec3fc5230f8788aa9c4 AS builder
+FROM golang:1.22-alpine@sha256:8c9183f715b0b4eca05b8b3dbf59766aaedb41ec07477b132ee2891ac0110a07 AS builder
 
 WORKDIR /usr/src/app
 
@@ -11,7 +11,7 @@ COPY --chmod=644 crs.sh .
 RUN apk add bash git && \
     bash crs.sh Download
 
-FROM golang:1.22-alpine@sha256:a8836ec73ab2f18e7f9abe18cdf2580b9575226e7dabeec3fc5230f8788aa9c4
+FROM golang:1.22-alpine@sha256:8c9183f715b0b4eca05b8b3dbf59766aaedb41ec07477b132ee2891ac0110a07
 
 COPY --from=builder --chown=0:0 /usr/local/bin/bw-coraza /usr/local/bin/bw-coraza
 
