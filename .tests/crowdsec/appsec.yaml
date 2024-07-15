@@ -1,5 +1,5 @@
 appsec_config: crowdsecurity/appsec-default
 labels:
   type: appsec
-listen_addr: 127.0.0.1:7422
+listen_addr: 0.0.0.0:7422
 source: appsec
