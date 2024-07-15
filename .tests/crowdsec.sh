@@ -24,7 +24,6 @@ if [ $1 == "appsec" ] ; then
 	do_and_check_cmd sed -i "s@CROWDSEC_APPSEC_URL=.*\$@CROWDSEC_APPSEC_URL=http://crowdsec:7422@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 else
 	do_and_check_cmd sed -i "s@CROWDSEC_MODE=.*\$@CROWDSEC_MODE=$1@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
-	
 fi
 
 # Copy configs
@@ -65,7 +64,6 @@ if [ "$success" == "ko" ] ; then
 	exit 1
 fi
 
-
 if [ "$1" != "appsec" ] ; then
 	# Run basic attack with dirb
 	echo "ℹ️ Executing dirb ..."
@@ -86,10 +84,10 @@ if [ "$1" != "appsec" ] ; then
 		success="ok"
 	fi
 else
-	# Send an obvious pattern
+	# Send a malicious pattern
 	echo "ℹ️ Sending malicious pattern"
 	success="ko"
-	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost/?id=/etc/passwd)"
+	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost/rpc2)"
 	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 		success="ok"

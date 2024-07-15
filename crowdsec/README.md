@@ -89,7 +89,6 @@ services:
     # BunkerWeb services
     environment:
       ...
-      USE_MODSECURITY: "no" # Disable ModSecurity to let CrowdSec handle the security (only if the AppSec Component is used)
       USE_CROWDSEC: "yes"
       CROWDSEC_API: "http://crowdsec:8080" # This is the address of the CrowdSec container API in the same network
       CROWDSEC_APPSEC_URL: "http://crowdsec:7422" # Comment if you don't want to use the AppSec Component
@@ -106,7 +105,7 @@ services:
       - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml # Comment if you don't want to use the AppSec Component
     environment:
       BOUNCER_KEY_bunkerweb: "s3cr3tb0unc3rk3y" # Remember to set a stronger key for the bouncer
-      COLLECTIONS: "crowdsecurity/nginx crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules crowdsecurity/appsec-crs"
+      COLLECTIONS: "crowdsecurity/nginx crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules"
       #   COLLECTIONS: "crowdsecurity/nginx" # If you don't want to use the AppSec Component use this line instead
     networks:
       - bw-plugins
@@ -183,7 +182,6 @@ And you will need to install the AppSec Component's collections :
 ```shell
 sudo cscli collections install crowdsecurity/appsec-virtual-patching
 sudo cscli collections install crowdsecurity/appsec-generic-rules
-sudo cscli collections install crowdsecurity/appsec-crs
 ```
 
 Now you just have to restart the CrowdSec service :
@@ -199,7 +197,6 @@ If you need more information about the AppSec Component, you can refer to the [o
 Now you can configure the plugin by adding the following settings to your BunkerWeb configuration file :
 
 ```env
-USE_MODSECURITY=no # Disable ModSecurity to let CrowdSec handle the security (only if the AppSec Component is used)
 USE_CROWDSEC=yes
 CROWDSEC_API=http://127.0.0.1:8080
 CROWDSEC_API_KEY=<The key provided by cscli>
