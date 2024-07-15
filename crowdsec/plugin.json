@@ -80,7 +80,7 @@
     },
     "CROWDSEC_APPSEC_URL": {
       "context": "global",
-      "default": "http://crowdsec:7422",
+      "default": "",
       "help": "URL of the Application Security Component.",
       "id": "crowdsec-appsec-url",
       "label": "AppSec URL",

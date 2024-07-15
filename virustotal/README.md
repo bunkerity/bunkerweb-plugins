@@ -37,7 +37,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.8
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_VIRUSTOTAL=yes
@@ -53,7 +53,7 @@ version: '3'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.8
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_VIRUSTOTAL=yes

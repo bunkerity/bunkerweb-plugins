@@ -38,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.8
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_SLACK=yes
@@ -54,7 +54,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.8
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_SLACK=yes

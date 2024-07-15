@@ -15,6 +15,7 @@ services:
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - CROWDSEC_MODE=
+      - CROWDSEC_APPSEC_URL=
       - LOG_LEVEL=info
       - USE_MODSECURITY=no
       - USE_BLACKLIST=no
@@ -61,10 +62,11 @@ services:
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
+      - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml
       - bw-logs:/var/log:ro
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
-      - COLLECTIONS=crowdsecurity/nginx
+      - COLLECTIONS=crowdsecurity/nginx crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules crowdsecurity/appsec-crs
       - DISABLE_PARSERS=crowdsecurity/whitelists
     networks:
       - bw-universe

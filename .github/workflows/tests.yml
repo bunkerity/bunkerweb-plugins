@@ -47,6 +47,9 @@ jobs:
 
       - name: Run CrowdSec stream tests
         run: ./.tests/crowdsec.sh stream
+      
+      - name: Run CrowdSec appsec tests
+        run: ./.tests/crowdsec.sh appsec
 
       - name: Run VirusTotal tests
         run: ./.tests/virustotal.sh
