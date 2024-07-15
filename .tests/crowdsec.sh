@@ -29,6 +29,7 @@ fi
 
 # Copy configs
 do_and_check_cmd cp .tests/crowdsec/acquis.yaml /tmp/bunkerweb-plugins/crowdsec
+do_and_check_cmd cp .tests/crowdsec/appsec.yaml /tmp/bunkerweb-plugins/crowdsec
 do_and_check_cmd cp .tests/crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowdsec
 
 # Do the tests
