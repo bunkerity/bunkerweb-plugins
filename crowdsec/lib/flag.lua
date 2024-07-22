@@ -25,28 +25,19 @@ function M.GetFlags(flags)
     return source, state, err
   end
 
-  if bit.band(flags, M.BOUNCER_SOURCE) then
+  if bit.band(flags, M.BOUNCER_SOURCE) ~= 0 then
     source = M.BOUNCER_SOURCE
-  elseif bit.band(flags, M.APPSEC_SOURCE) then
+  elseif bit.band(flags, M.APPSEC_SOURCE) ~= 0 then
     source = M.APPSEC_SOURCE
   end
 
-  if bit.band(flags, M.VERIFY_STATE) then
+  if bit.band(flags, M.VERIFY_STATE) ~= 0 then
     state = M.VERIFY_STATE
-  elseif bit.band(flags, M.VALIDATED_STATE) then
+  elseif bit.band(flags, M.VALIDATED_STATE) ~= 0 then
     state = M.VALIDATED_STATE
   end
   return source, state, err
 
-end
-
-function M.GetStateID(state)
-    for k, v in pairs(M.State) do
-        if v == state then
-            return tonumber(k)
-        end
-    end
-    return nil
 end
 
 return M

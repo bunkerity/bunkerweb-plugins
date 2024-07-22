@@ -17,18 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Get BW tag
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=1.5.7" >> $GITHUB_ENV
+            echo "BW_TAG=1.5.9" >> $GITHUB_ENV
           else
             echo "BW_TAG=dev" >> $GITHUB_ENV
           fi
 
       - name: Login to Docker Hub
-        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
+        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446 # v3.2.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -47,6 +47,9 @@ jobs:
 
       - name: Run CrowdSec stream tests
         run: ./.tests/crowdsec.sh stream
+      
+      - name: Run CrowdSec appsec tests
+        run: ./.tests/crowdsec.sh appsec
 
       - name: Run VirusTotal tests
         run: ./.tests/virustotal.sh
@@ -54,5 +57,5 @@ jobs:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       - name: Build and push APIs
-        if: env.BW_TAG == '1.5.7'
+        if: env.BW_TAG == '1.5.9'
         run: ./.tests/build-push.sh "${{ env.BW_TAG }}"

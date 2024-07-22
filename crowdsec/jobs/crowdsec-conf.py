@@ -43,13 +43,20 @@ try:
     content = (
         jinja_env.get_template("crowdsec.conf")
         .render(
-            CROWDSEC_API=getenv("CROWDSEC_API", ""),
+            CROWDSEC_API=getenv("CROWDSEC_API", "http://crowdsec:8080"),
             CROWDSEC_API_KEY=getenv("CROWDSEC_API_KEY", ""),
-            CROWDSEC_REQUEST_TIMEOUT=getenv("CROWDSEC_REQUEST_TIMEOUT", "500"),
-            CROWDSEC_STREAM_REQUEST_TIMEOUT=getenv("CROWDSEC_STREAM_REQUEST_TIMEOUT", "15000"),
-            CROWDSEC_UPDATE_FREQUENCY=getenv("CROWDSEC_UPDATE_FREQUENCY", "10"),
             CROWDSEC_MODE=getenv("CROWDSEC_MODE", "live"),
+            CROWDSEC_REQUEST_TIMEOUT=getenv("CROWDSEC_REQUEST_TIMEOUT", "1000"),
+            CROWDSEC_EXCLUDE_LOCATION=getenv("CROWDSEC_EXCLUDE_LOCATION", ""),
             CROWDSEC_CACHE_EXPIRATION=getenv("CROWDSEC_CACHE_EXPIRATION", "1"),
+            CROWDSEC_UPDATE_FREQUENCY=getenv("CROWDSEC_UPDATE_FREQUENCY", "10"),
+            CROWDSEC_APPSEC_URL=getenv("CROWDSEC_APPSEC_URL", "http://crowdsec:7422"),
+            CROWDSEC_APPSEC_FAILURE_ACTION=getenv("CROWDSEC_APPSEC_FAILURE_ACTION", "passthrough"),
+            CROWDSEC_APPSEC_CONNECT_TIMEOUT=getenv("CROWDSEC_APPSEC_CONNECT_TIMEOUT", "100"),
+            CROWDSEC_APPSEC_SEND_TIMEOUT=getenv("CROWDSEC_APPSEC_SEND_TIMEOUT", "100"),
+            CROWDSEC_APPSEC_PROCESS_TIMEOUT=getenv("CROWDSEC_APPSEC_PROCESS_TIMEOUT", "500"),
+            CROWDSEC_ALWAYS_SEND_TO_APPSEC=("true" if getenv("CROWDSEC_ALWAYS_SEND_TO_APPSEC", "no") == "yes" else "false"),
+            CROWDSEC_APPSEC_SSL_VERIFY=("true" if getenv("CROWDSEC_APPSEC_SSL_VERIFY", "no") == "yes" else "false"),
         )
         .encode()
     )

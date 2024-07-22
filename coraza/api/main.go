@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"strconv"
 	"time"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
@@ -214,6 +215,23 @@ func main() {
 	r.HandleFunc("/request", handleRequest)
 	r.Use(loggingMiddleware)
 	r.NotFoundHandler = r.NewRoute().HandlerFunc(http.NotFound).GetHandler()
+
+	// Write the .pid file
+	pid := os.Getpid()
+	pidStr := strconv.Itoa(pid)
+	pidFilePath := "/var/run/coraza/coraza.pid"
+	err = os.WriteFile(pidFilePath, []byte(pidStr), 0644)
+	if err != nil {
+			log.Fatalf("Failed to write PID file: %s", err)
+	}
+
+	// Schedule removal of the .pid file upon exit
+	defer func() {
+		if removeErr := os.Remove(pidFilePath); removeErr != nil {
+				log.Printf("Failed to remove PID file: %s", removeErr)
+		}
+	}()
+
 	InfoLogger.Printf("Coraza API is ready to handle requests")
 	srv := &http.Server{
         Handler:      r,

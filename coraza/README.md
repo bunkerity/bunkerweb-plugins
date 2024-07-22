@@ -4,56 +4,56 @@
 	<img alt="BunkerWeb Coraza diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/coraza/docs/diagram.svg" />
 </p>
 
-This [Plugin](https://www.bunkerweb.io/latest/plugins) will act as a Library of rule that aim to detect and deny malicious requests
+This [Plugin](https://www.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) will act as a Library of rule that aim to detect and deny malicious requests
 
 # Table of contents
 
 - [Coraza plugin](#coraza-plugin)
 - [Table of contents](#table-of-contents)
-- [Prerequisites](#prerequisites)
 - [Setup](#setup)
-  - [Docker](#docker)
+  - [Docker/Swarm](#dockerswarm)
 - [Settings](#settings)
-  - [Plugin (BunkerWeb)](#plugin--bunkerweb-)
 - [TODO](#todo)
-
-# Prerequisites
-
-Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
-## Docker
+## Docker/Swarm
 
 ```yaml
-
-version: '3'
-
 services:
 
-  bunkerweb:
-    image: bunkerity/bunkerweb:1.5.7
+  # BunkerWeb services
     ...
     environment:
-      - USE_MODSECURITY=no # We don't need modsecurity anymore
-      - USE_CORAZA=yes
-      - CORAZA_API=http://bw-coraza:8080
-    ...
-  bw-coraza:
-    image: bunkerity/bunkerweb-coraza:latest
+      HTTP2: "no" # The Coraza plugin doesn't support HTTP2 yet
+      USE_MODSECURITY: "no" # We don't need ModSecurity anymore
+      USE_CORAZA: "yes"
+      CORAZA_API: "http://bw-coraza:8080" # This is the address of the coraza container in the same network
     networks:
-      - bw-universe
+      - bw-plugins
 
+  ...
+
+  bw-coraza:
+    image: bunkerity/bunkerweb-coraza:2.0
+    networks:
+      - bw-plugins
+
+networks:
+  # BunkerWeb networks
+  ...
+  bw-plugins:
+    name: bw-plugins
 ```
 
 # Settings
 
-|  Setting   |        Default        | Context |Multiple|        Description        |
-|------------|-----------------------|---------|--------|---------------------------|
-|`USE_CORAZA`|`no`                   |multisite|no      |Activate Coraza library    |
-|`CORAZA_API`|`http://bw-coraza:8080`|global   |no      |hostname of the CORAZA API.|
+| Setting      | Default                 | Context   | Multiple | Description                 |
+| ------------ | ----------------------- | --------- | -------- | --------------------------- |
+| `USE_CORAZA` | `no`                    | multisite | no       | Activate Coraza library     |
+| `CORAZA_API` | `http://bw-coraza:8080` | global    | no       | hostname of the CORAZA API. |
 
 # TODO
 

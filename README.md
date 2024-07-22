@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb-1.5.7-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.6-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=dev&label=CI%2FCD%20dev" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=main&label=CI%2FCD%20main" />
@@ -11,11 +11,11 @@
 	<img src="https://img.shields.io/github/issues-pr/bunkerity/bunkerweb-plugins">
 </p>
 
-This repository contains "official" plugins for the [BunkerWeb solution](https://github.com/bunkerity/bunkerweb). If you don't already know BunkerWeb, you should first read the [documentation](https://docs.bunkerweb.io).
+This repository contains "official" plugins for the [BunkerWeb solution](https://github.com/bunkerity/bunkerweb). If you don't already know BunkerWeb, you should first read the [documentation](https://docs.bunkerweb.io/?utm_campaign=self&utm_source=github).
 
 # Prerequisites
 
-The installation of external plugins is covered in the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the documentation.
+The installation of external plugins is covered in the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the documentation.
 
 # Plugins
 
@@ -46,7 +46,7 @@ Please contact us at contact \[@\] bunkerity.com if you are interested.
 
 To get free community support you can use the following media :
 
-- The #help channel of BunkerWeb in the [Discord server](https://discord.com/invite/fTf46FmtyD)
+- The #help channel of BunkerWeb in the [Discord server](https://bunkerity.discord.com/?utm_campaign=self&utm_source=github)
 - The help category of [GitHub discussions](https://github.com/bunkerity/bunkerweb-plugins/discussions)
 - The [/r/BunkerWeb](https://www.reddit.com/r/BunkerWeb) subreddit
 - The [Server Fault](https://serverfault.com/) and [Super User](https://superuser.com/) forums

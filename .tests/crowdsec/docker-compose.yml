@@ -2,7 +2,7 @@ version: "3"
 
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.8
     ports:
       - 80:8080
       - 443:8443
@@ -15,6 +15,7 @@ services:
       - CROWDSEC_API=http://crowdsec:8080
       - CROWDSEC_API_KEY=s3cr3tb0unc3rk3y
       - CROWDSEC_MODE=
+      - CROWDSEC_APPSEC_URL=
       - LOG_LEVEL=info
       - USE_MODSECURITY=no
       - USE_BLACKLIST=no
@@ -34,7 +35,7 @@ services:
         syslog-address: "udp://10.10.10.254:514"
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.7
+    image: bunkerity/bunkerweb-scheduler:1.5.8
     depends_on:
       - bunkerweb
       - bw-docker
@@ -61,10 +62,11 @@ services:
     volumes:
       - cs-data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.yaml
+      - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml
       - bw-logs:/var/log:ro
     environment:
       - BOUNCER_KEY_bunkerweb=s3cr3tb0unc3rk3y
-      - COLLECTIONS=crowdsecurity/nginx
+      - COLLECTIONS=crowdsecurity/nginx crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules crowdsecurity/appsec-crs
       - DISABLE_PARSERS=crowdsecurity/whitelists
     networks:
       - bw-universe

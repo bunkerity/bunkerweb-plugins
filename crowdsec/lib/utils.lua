@@ -20,7 +20,7 @@ function M.read_file(path)
    local file = io.open(path, "r") -- r read mode and b binary mode
    if not file then return nil end
    io.input(file)
-   content = io.read("*a")
+   local content = io.read("*a")
    io.close(file)
    return content
  end

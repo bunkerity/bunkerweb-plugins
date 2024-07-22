@@ -19,10 +19,16 @@ do_and_check_cmd cp .tests/crowdsec/docker-compose.yml /tmp/bunkerweb-plugins/cr
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
-do_and_check_cmd sed -i "s@CROWDSEC_MODE=.*\$@CROWDSEC_MODE=$1@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
+if [ $1 == "appsec" ] ; then
+	do_and_check_cmd sed -i "s@CROWDSEC_MODE=.*\$@CROWDSEC_MODE=live@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
+	do_and_check_cmd sed -i "s@CROWDSEC_APPSEC_URL=.*\$@CROWDSEC_APPSEC_URL=http://crowdsec:7422@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
+else
+	do_and_check_cmd sed -i "s@CROWDSEC_MODE=.*\$@CROWDSEC_MODE=$1@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
+fi
 
 # Copy configs
 do_and_check_cmd cp .tests/crowdsec/acquis.yaml /tmp/bunkerweb-plugins/crowdsec
+do_and_check_cmd cp .tests/crowdsec/appsec.yaml /tmp/bunkerweb-plugins/crowdsec
 do_and_check_cmd cp .tests/crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowdsec
 
 # Do the tests
@@ -58,23 +64,34 @@ if [ "$success" == "ko" ] ; then
 	exit 1
 fi
 
-# Run basic attack with dirb
-echo "ℹ️ Executing dirb ..."
-do_and_check_cmd sudo apt install -y dirb
-dirb http://localhost -H "Host: www.example.com" -H "User-Agent: LegitOne" -f > /dev/null 2>&1
+if [ "$1" != "appsec" ] ; then
+	# Run basic attack with dirb
+	echo "ℹ️ Executing dirb ..."
+	do_and_check_cmd sudo apt install -y dirb
+	dirb http://localhost -H "Host: www.example.com" -H "User-Agent: LegitOne" -f > /dev/null 2>&1
 
-# Wait if are in stream mode
-if [ "$1" == "stream" ] ; then
-	sleep 20
-fi
+	# Wait if are in stream mode
+	if [ "$1" == "stream" ] ; then
+		sleep 20
+	fi
 
-# Expect a 403
-echo "ℹ️ Checking CS ..."
-success="ko"
-ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
-# shellcheck disable=SC2181
-if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
-	success="ok"
+	# Expect a 403
+	echo "ℹ️ Checking CS ..."
+	success="ko"
+	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost)"
+	# shellcheck disable=SC2181
+	if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
+		success="ok"
+	fi
+else
+	# Send a malicious pattern
+	echo "ℹ️ Sending malicious pattern"
+	success="ko"
+	ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" http://localhost/rpc2)"
+	# shellcheck disable=SC2181
+	if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
+		success="ok"
+	fi
 fi
 
 # We're done

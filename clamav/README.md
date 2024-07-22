@@ -4,7 +4,7 @@
 	<img alt="BunkerWeb ClamAV diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/clamav/docs/diagram.svg" />
 </p>
 
-This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if any uploaded file is detected by the ClamAV antivirus engine and deny the request if that's the case.
+This [BunkerWeb](https://www.bunkerweb.io/?utm_campaign=self&utm_source=github) plugin will automatically check if any uploaded file is detected by the ClamAV antivirus engine and deny the request if that's the case.
 
 # Table of contents
 
@@ -20,11 +20,11 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically check if an
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation first.
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 ## Docker
 
@@ -34,7 +34,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_CLAMAV=yes
@@ -59,7 +59,7 @@ version: '3'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_CLAMAV=yes
@@ -132,12 +132,12 @@ metadata:
 
 # Settings
 
-|    Setting     |Default | Context |Multiple|                      Description                      |
-|----------------|--------|---------|--------|-------------------------------------------------------|
-|`USE_CLAMAV`    |`no`    |multisite|no      |Activate automatic scan of uploaded files with ClamAV. |
-|`CLAMAV_HOST`   |`clamav`|global   |no      |ClamAV hostname or IP address.                         |
-|`CLAMAV_PORT`   |`3310`  |global   |no      |ClamAV port.                                           |
-|`CLAMAV_TIMEOUT`|`1000`  |global   |no      |Network timeout (in ms) when communicating with ClamAV.|
+| Setting          | Default  | Context   | Multiple | Description                                             |
+| ---------------- | -------- | --------- | -------- | ------------------------------------------------------- |
+| `USE_CLAMAV`     | `no`     | multisite | no       | Activate automatic scan of uploaded files with ClamAV.  |
+| `CLAMAV_HOST`    | `clamav` | global    | no       | ClamAV hostname or IP address.                          |
+| `CLAMAV_PORT`    | `3310`   | global    | no       | ClamAV port.                                            |
+| `CLAMAV_TIMEOUT` | `1000`   | global    | no       | Network timeout (in ms) when communicating with ClamAV. |
 
 # TODO
 

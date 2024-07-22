@@ -17,7 +17,6 @@ local runtime = {}
 -- remediations are stored in cache as int (shared dict tags)
 -- we need to translate IDs to text with this.
 runtime.remediations = {}
-runtime.remediations["0"] = "allow"
 runtime.remediations["1"] = "ban"
 runtime.remediations["2"] = "captcha"
 
@@ -30,6 +29,11 @@ local PASSTHROUGH = "passthrough"
 local DENY = "deny"
 
 local APPSEC_API_KEY_HEADER = "x-crowdsec-appsec-api-key"
+local APPSEC_IP_HEADER = "x-crowdsec-appsec-ip"
+local APPSEC_HOST_HEADER = "x-crowdsec-appsec-host"
+local APPSEC_VERB_HEADER = "x-crowdsec-appsec-verb"
+local APPSEC_URI_HEADER = "x-crowdsec-appsec-uri"
+local APPSEC_USER_AGENT_HEADER = "x-crowdsec-appsec-user-agent"
 local REMEDIATION_API_KEY_HEADER = 'x-api-key'
 
 
@@ -55,7 +59,7 @@ function csmod.init(configFile, userAgent)
   local captcha_ok = true
   local err = captcha.New(runtime.conf["SITE_KEY"], runtime.conf["SECRET_KEY"], runtime.conf["CAPTCHA_TEMPLATE_PATH"], runtime.conf["CAPTCHA_PROVIDER"])
   if err ~= nil then
-    --ngx.log(ngx.ERR, "error loading captcha plugin: " .. err)
+    -- ngx.log(ngx.ERR, "error loading captcha plugin: " .. err)
     captcha_ok = false
   end
   local succ, err, forcible = runtime.cache:set("captcha_ok", captcha_ok)
@@ -69,7 +73,7 @@ function csmod.init(configFile, userAgent)
 
   -- local err = ban.new(runtime.conf["BAN_TEMPLATE_PATH"], runtime.conf["REDIRECT_LOCATION"], runtime.conf["RET_CODE"])
   -- if err ~= nil then
-    -- ngx.log(ngx.ERR, "error loading ban plugins: " .. err)
+  --   ngx.log(ngx.ERR, "error loading ban plugins: " .. err)
   -- end
 
   if runtime.conf["REDIRECT_LOCATION"] ~= "" then
@@ -91,7 +95,7 @@ function csmod.init(configFile, userAgent)
   runtime.conf["APPSEC_ENABLED"] = false
 
   if runtime.conf["APPSEC_URL"] ~= "" then
-    u = url.parse(runtime.conf["APPSEC_URL"])
+    local u = url.parse(runtime.conf["APPSEC_URL"])
     runtime.conf["APPSEC_ENABLED"] = true
     runtime.conf["APPSEC_HOST"] = u.host
     if u.port ~= nil then
@@ -117,6 +121,14 @@ function csmod.init(configFile, userAgent)
     if forcible then
       ngx.log(ngx.ERR, "Lua shared dict (crowdsec cache) is full, please increase dict size in config")
     end
+  end
+
+  if runtime.conf["API_URL"] == "" and  runtime.conf["APPSEC_URL"] == "" then
+    ngx.log(ngx.ERR, "Neither API_URL or APPSEC_URL are defined, remediation component will not do anything")
+  end
+
+  if runtime.conf["API_URL"] == "" and  runtime.conf["APPSEC_URL"] ~= "" then
+    ngx.log(ngx.ERR, "Only APPSEC_URL is defined, local API decisions will be ignored")
   end
 
 
@@ -229,6 +241,9 @@ local function stream_query(premature)
   -- As this function is running inside coroutine (with ngx.timer.at),
   -- we need to raise error instead of returning them
 
+  if runtime.conf["API_URL"] == "" then
+    return
+  end
 
   ngx.log(ngx.DEBUG, "running timers: " .. tostring(ngx.timer.running_count()) .. " | pending timers: " .. tostring(ngx.timer.pending_count()))
 
@@ -361,6 +376,9 @@ local function stream_query(premature)
 end
 
 local function live_query(ip)
+  if runtime.conf["API_URL"] == "" then
+    return true, nil, nil
+  end
   local link = runtime.conf["API_URL"] .. "/v1/decisions?ip=" .. ip
   local res, err = get_remediation_http_request(link)
   if not res then
@@ -375,7 +393,7 @@ local function live_query(ip)
   if body == "null" then -- no result from API, no decision for this IP
     -- set ip in cache and DON'T block it
     local key = item_to_string(ip, "ip")
-    local succ, err, forcible = runtime.cache:set(key, true, runtime.conf["CACHE_EXPIRATION"], 0)
+    local succ, err, forcible = runtime.cache:set(key, true, runtime.conf["CACHE_EXPIRATION"], 1)
     if not succ then
       ngx.log(ngx.ERR, "failed to add ip '" .. ip .. "' in cache: "..err)
     end
@@ -408,6 +426,13 @@ end
 
 local function get_body()
 
+  -- the LUA module requires a content-length header to read a body for HTTP 2/3 requests, although it's not mandatory.
+  -- This means that we will likely miss body, but AFAIK, there's no workaround for this.
+  -- do not even try to read the body if there's no content-length as the LUA API will throw an error
+  if ngx.req.http_version() >= 2 and ngx.var.http_content_length == nil then
+    ngx.log(ngx.DEBUG, "No content-length header in request")
+    return nil
+  end
   ngx.req.read_body()
   local body = ngx.req.get_body_data()
   if body == nil then
@@ -433,6 +458,9 @@ end
 
 function csmod.SetupStream()
   -- if it stream mode and startup start timer
+  if runtime.conf["API_URL"] == "" then
+    return
+  end
   ngx.log(ngx.DEBUG, "timer started: " .. tostring(runtime.timer_started) .. " in worker " .. tostring(ngx.worker.id()))
   if runtime.timer_started == false and runtime.conf["MODE"] == "stream" then
     local ok, err
@@ -448,6 +476,10 @@ end
 function csmod.allowIp(ip)
   if runtime.conf == nil then
     return true, nil, "Configuration is bad, cannot run properly"
+  end
+
+  if runtime.conf["API_URL"] == "" then
+    return true, nil, nil
   end
 
   csmod.SetupStream()
@@ -496,7 +528,7 @@ function csmod.allowIp(ip)
 end
 
 
-function csmod.AppSecCheck()
+function csmod.AppSecCheck(ip)
   local httpc = http.new()
   httpc:set_timeouts(runtime.conf["APPSEC_CONNECT_TIMEOUT"], runtime.conf["APPSEC_SEND_TIMEOUT"], runtime.conf["APPSEC_PROCESS_TIMEOUT"])
 
@@ -504,16 +536,17 @@ function csmod.AppSecCheck()
   local headers = ngx.req.get_headers()
 
   -- overwrite headers with crowdsec appsec require headers
-  headers["x-crowdsec-appsec-ip"] = ngx.var.remote_addr
-  headers["x-crowdsec-appsec-host"] = ngx.var.http_host
-  headers["x-crowdsec-appsec-verb"] = ngx.var.request_method
-  headers["x-crowdsec-appsec-uri"] = uri
+  headers[APPSEC_IP_HEADER] = ip
+  headers[APPSEC_HOST_HEADER] = ngx.var.http_host
+  headers[APPSEC_VERB_HEADER] = ngx.var.request_method
+  headers[APPSEC_URI_HEADER] = uri
+  headers[APPSEC_USER_AGENT_HEADER] = ngx.var.http_user_agent
   headers[APPSEC_API_KEY_HEADER] = runtime.conf["API_KEY"]
 
   -- set CrowdSec APPSEC Host
   headers["host"] = runtime.conf["APPSEC_HOST"]
 
-  local ok, remediation = true, "allow"
+  local ok, remediation, status_code = true, "allow", 200
   if runtime.conf["APPSEC_FAILURE_ACTION"] == DENY then
     ok = false
     remediation = runtime.conf["FALLBACK_REMEDIATION"]
@@ -529,6 +562,8 @@ function csmod.AppSecCheck()
         headers["content-length"] = tostring(#body)
       end
     end
+  else
+    headers["content-length"] = nil
   end
 
   local res, err = httpc:request_uri(runtime.conf["APPSEC_URL"], {
@@ -541,7 +576,7 @@ function csmod.AppSecCheck()
 
   if err ~= nil then
     ngx.log(ngx.ERR, "Fallback because of err: " .. err)
-    return ok, remediation, err
+    return ok, remediation, status_code, err
   end
 
   if res.status == 200 then
@@ -549,15 +584,22 @@ function csmod.AppSecCheck()
     remediation = "allow"
   elseif res.status == 403 then
     ok = false
+    ngx.log(ngx.DEBUG, "Appsec body response: " .. res.body)
     local response = cjson.decode(res.body)
     remediation = response.action
+    if response.http_status ~= nil then
+      ngx.log(ngx.DEBUG, "Got status code from APPSEC: " .. response.http_status)
+      status_code = response.http_status
+    else
+      status_code = ngx.HTTP_FORBIDDEN
+    end
   elseif res.status == 401 then
     ngx.log(ngx.ERR, "Unauthenticated request to APPSEC")
   else
     ngx.log(ngx.ERR, "Bad request to APPSEC (" .. res.status .. "): " .. res.body)
   end
 
-  return ok, remediation, err
+  return ok, remediation, status_code, err
 
 end
 
@@ -571,6 +613,7 @@ function csmod.Allow(ip)
   end
 
   local remediationSource = flag.BOUNCER_SOURCE
+  local ret_code = nil
 
   if utils.table_len(runtime.conf["EXCLUDE_LOCATION"]) > 0 then
     for k, v in pairs(runtime.conf["EXCLUDE_LOCATION"]) do
@@ -603,7 +646,7 @@ function csmod.Allow(ip)
   -- that user configured the remediation component to always check on the appSec (even if there is a decision for the IP)
   if ok == true or runtime.conf["ALWAYS_SEND_TO_APPSEC"] == true then
     if runtime.conf["APPSEC_ENABLED"] == true and ngx.var.no_appsec ~= "1" then
-      local appsecOk, appsecRemediation, err = csmod.AppSecCheck()
+      local appsecOk, appsecRemediation, status_code, err = csmod.AppSecCheck(ip)
       if err ~= nil then
         ngx.log(ngx.ERR, "AppSec check: " .. err)
       end
@@ -611,6 +654,7 @@ function csmod.Allow(ip)
         ok = false
         remediationSource = flag.APPSEC_SOURCE
         remediation = appsecRemediation
+        ret_code = status_code
       end
     end
   end
@@ -631,13 +675,16 @@ function csmod.Allow(ip)
 
   if captcha_ok then -- if captcha can be use (configuration is valid)
     -- we check if the IP need to validate its captcha before checking it against crowdsec local API
-    local previous_uri, flags = ngx.shared.crowdsec_cache:get("captcha_"..ngx.var.remote_addr)
+    local previous_uri, flags = ngx.shared.crowdsec_cache:get("captcha_"..ip)
     local source, state_id, err = flag.GetFlags(flags)
-    if previous_uri ~= nil and state_id == flag.VERIFY_STATE then
-        ngx.req.read_body()
+    local body = get_body()
+
+    -- nil body means it was likely not a post, abort here because the user hasn't provided a captcha solution
+
+    if previous_uri ~= nil and state_id == flag.VERIFY_STATE and body ~= nil then
         local captcha_res = ngx.req.get_post_args()[csmod.GetCaptchaBackendKey()] or 0
         if captcha_res ~= 0 then
-            local valid, err = csmod.validateCaptcha(captcha_res, ngx.var.remote_addr)
+            local valid, err = csmod.validateCaptcha(captcha_res, ip)
             if err ~= nil then
               ngx.log(ngx.ERR, "Error while validating captcha: " .. err)
             end
@@ -647,11 +694,11 @@ function csmod.Allow(ip)
                 -- we will not propose a captcha until the 'CAPTCHA_EXPIRATION'.
                 -- But for the Application security component, we serve the captcha each time the user trigger it.
                 if source == flag.APPSEC_SOURCE then
-                  ngx.shared.crowdsec_cache:delete("captcha_"..ngx.var.remote_addr)
+                  ngx.shared.crowdsec_cache:delete("captcha_"..ip)
                 else
-                  local succ, err, forcible = ngx.shared.crowdsec_cache:set("captcha_"..ngx.var.remote_addr, previous_uri, runtime.conf["CAPTCHA_EXPIRATION"], bit.bor(flag.VALIDATED_STATE, source) )
+                  local succ, err, forcible = ngx.shared.crowdsec_cache:set("captcha_"..ip, previous_uri, runtime.conf["CAPTCHA_EXPIRATION"], bit.bor(flag.VALIDATED_STATE, source) )
                   if not succ then
-                    ngx.log(ngx.ERR, "failed to add key about captcha for ip '" .. ngx.var.remote_addr .. "' in cache: "..err)
+                    ngx.log(ngx.ERR, "failed to add key about captcha for ip '" .. ip .. "' in cache: "..err)
                   end
                   if forcible then
                     ngx.log(ngx.ERR, "Lua shared dict (crowdsec cache) is full, please increase dict size in config")
@@ -659,26 +706,25 @@ function csmod.Allow(ip)
                 end
                 -- captcha is valid, we redirect the IP to its previous URI but in GET method
                 ngx.req.set_method(ngx.HTTP_GET)
-                ngx.redirect(previous_uri)
-                return
+                return ngx.redirect(previous_uri)
             else
-                ngx.log(ngx.ALERT, "Invalid captcha from " .. ngx.var.remote_addr)
+                ngx.log(ngx.ALERT, "Invalid captcha from " .. ip)
             end
         end
     end
   end
   if not ok then
       if remediation == "ban" then
-        ngx.log(ngx.ALERT, "[Crowdsec] denied '" .. ngx.var.remote_addr .. "' with '"..remediation.."' (by " .. flag.Flags[remediationSource] .. ")")
-        --ban.apply()
+        ngx.log(ngx.ALERT, "[Crowdsec] denied '" .. ip .. "' with '"..remediation.."' (by " .. flag.Flags[remediationSource] .. ")")
+        -- ban.apply(ret_code)
         return true, "denied", true
       end
       -- if the remediation is a captcha and captcha is well configured
       if remediation == "captcha" and captcha_ok and ngx.var.uri ~= "/favicon.ico" then
-          local previous_uri, flags = ngx.shared.crowdsec_cache:get("captcha_"..ngx.var.remote_addr)
-          source, state_id, err = flag.GetFlags(flags)
+          local previous_uri, flags = ngx.shared.crowdsec_cache:get("captcha_"..ip)
+          local source, state_id, err = flag.GetFlags(flags)
           -- we check if the IP is already in cache for captcha and not yet validated
-          if previous_uri == nil or remediationSource == flag.APPSEC_SOURCE then
+          if previous_uri == nil or state_id ~= flag.VALIDATED_STATE or remediationSource == flag.APPSEC_SOURCE then
               ngx.header.content_type = "text/html"
               ngx.header.cache_control = "no-cache"
               ngx.say(csmod.GetCaptchaTemplate())
@@ -692,14 +738,15 @@ function csmod.Allow(ip)
                   end
                 end
               end
-              local succ, err, forcible = ngx.shared.crowdsec_cache:set("captcha_"..ngx.var.remote_addr, uri , 60, bit.bor(flag.VERIFY_STATE, remediationSource))
+              local succ, err, forcible = ngx.shared.crowdsec_cache:set("captcha_"..ip, uri , 60, bit.bor(flag.VERIFY_STATE, remediationSource))
               if not succ then
-                ngx.log(ngx.ERR, "failed to add key about captcha for ip '" .. ngx.var.remote_addr .. "' in cache: "..err)
+                ngx.log(ngx.ERR, "failed to add key about captcha for ip '" .. ip .. "' in cache: "..err)
               end
               if forcible then
                 ngx.log(ngx.ERR, "Lua shared dict (crowdsec cache) is full, please increase dict size in config")
               end
-              ngx.log(ngx.ALERT, "[Crowdsec] denied '" .. ngx.var.remote_addr .. "' with '"..remediation.."'")
+              ngx.log(ngx.ALERT, "[Crowdsec] denied '" .. ip .. "' with '"..remediation.."'")
+              return
           end
       end
   end

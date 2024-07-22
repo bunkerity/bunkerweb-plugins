@@ -4,7 +4,7 @@
 	<img alt="BunkerWeb Discord diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/discord/docs/diagram.svg" />
 </p>
 
-This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you attack notifications on a Discord channel of your choice using a webhook.
+This [BunkerWeb](https://www.bunkerweb.io/?utm_campaign=self&utm_source=github) plugin will automatically send you attack notifications on a Discord channel of your choice using a webhook.
 
 # Table of contents
 
@@ -20,13 +20,13 @@ This [BunkerWeb](https://www.bunkerweb.io) plugin will automatically send you at
 
 # Prerequisites
 
-Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation first.
+Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation first.
 
 You will need to setup a Discord webhook URL, you will find more information [here](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
 
 # Setup
 
-See the [plugins section](https://docs.bunkerweb.io/latest/plugins) of the BunkerWeb documentation for the installation procedure depending on your integration.
+See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation for the installation procedure depending on your integration.
 
 There is no additional services to setup besides the plugin itself.
 
@@ -38,7 +38,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_DISCORD=yes
@@ -54,7 +54,7 @@ version: '3.5'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.7
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_DISCORD=yes
@@ -86,12 +86,12 @@ metadata:
 
 # Settings
 
-|         Setting          |                 Default                 | Context |Multiple|                                         Description                                          |
-|--------------------------|-----------------------------------------|---------|--------|----------------------------------------------------------------------------------------------|
-|`USE_DISCORD`             |`no`                                     |multisite|no      |Enable sending alerts to a Discord channel.                                                   |
-|`DISCORD_WEBHOOK_URL`     |`https://discordapp.com/api/webhooks/...`|global   |no      |Address of the Discord Webhook.
-                                                 |
-|`DISCORD_RETRY_IF_LIMITED`|`no`                                     |global   |no      |Retry to send the request if Discord API is rate limiting us (may consume a lot of resources).|
+| Setting                    | Default                                   | Context   | Multiple | Description                                                                                    |
+| -------------------------- | ----------------------------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `USE_DISCORD`              | `no`                                      | multisite | no       | Enable sending alerts to a Discord channel.                                                    |
+| `DISCORD_WEBHOOK_URL`      | `https://discordapp.com/api/webhooks/...` | global    | no       | Address of the Discord Webhook.                                                                |
+|                            |
+| `DISCORD_RETRY_IF_LIMITED` | `no`                                      | global    | no       | Retry to send the request if Discord API is rate limiting us (may consume a lot of resources). |
 
 # TODO
 

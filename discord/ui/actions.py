@@ -1,5 +1,6 @@
 from traceback import format_exc
 
+
 def pre_render(**kwargs):
     pass
 
@@ -21,7 +22,7 @@ def discord(**kwargs):
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
         error = f"Error while trying to ping discord : {format_exc()}"
-        print(error, flush=True)  
-        ping = {"ping_status": "error", "error" : error}
+        print(error, flush=True)
+        ping = {"ping_status": "error", "error": error}
 
     return {**ping}
