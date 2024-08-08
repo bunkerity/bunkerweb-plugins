@@ -2,7 +2,7 @@
   "id": "coraza",
   "name": "Coraza",
   "description": "Use Coraza as a library to inspect client request.",
-  "version": "1.6",
+  "version": "1.7",
   "stream": "no",
   "settings": {
     "USE_CORAZA": {

@@ -5,7 +5,7 @@ def pre_render(**kwargs):
     pass
 
 
-def discord(**kwargs):
+def discord(app, *args, **kwargs):
     ping = {"ping_status": "unknown"}
 
     args = kwargs.get("args", False)
@@ -18,7 +18,11 @@ def discord(**kwargs):
 
     # Check ping
     try:
-        ping_data = kwargs["app"].config["INSTANCES"].get_ping("discord")
+        if "INSTANCES" in app.config:
+            ping_data = app.config["INSTANCES"].get_ping("discord")
+        else:
+            ping_data = app.bw_instances_utils.get_ping("discord")
+
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
         error = f"Error while trying to ping discord : {format_exc()}"

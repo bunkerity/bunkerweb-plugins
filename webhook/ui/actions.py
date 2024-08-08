@@ -5,7 +5,7 @@ def pre_render(**kwargs):
     pass
 
 
-def webhook(**kwargs):
+def webhook(app, *args, **kwargs):
     ping = {"ping_status": "unknown"}
 
     args = kwargs.get("args", False)
@@ -18,7 +18,11 @@ def webhook(**kwargs):
 
     # Check ping
     try:
-        ping_data = kwargs["app"].config["INSTANCES"].get_ping("webhook")
+        if "INSTANCES" in app.config:
+            ping_data = app.config["INSTANCES"].get_ping("webhook")
+        else:
+            ping_data = app.bw_instances_utils.get_ping("webhook")
+
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
         error = f"Error while trying to ping webhook : {format_exc()}"

@@ -2,7 +2,7 @@
   "id": "clamav",
   "name": "ClamAV",
   "description": "Automatic scan of uploaded files with ClamAV antivirus engine.",
-  "version": "1.6",
+  "version": "1.7",
   "stream": "no",
   "settings": {
     "USE_CLAMAV": {

@@ -5,7 +5,7 @@ def pre_render(**kwargs):
     pass
 
 
-def coraza(**kwargs):
+def coraza(app, *args, **kwargs):
     ping = {"ping_status": "unknown"}
 
     args = kwargs.get("args", False)
@@ -18,7 +18,11 @@ def coraza(**kwargs):
 
     # Check ping
     try:
-        ping_data = kwargs["app"].config["INSTANCES"].get_ping("coraza")
+        if "INSTANCES" in app.config:
+            ping_data = app.config["INSTANCES"].get_ping("coraza")
+        else:
+            ping_data = app.bw_instances_utils.get_ping("coraza")
+
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
         error = f"Error while trying to ping coraza : {format_exc()}"

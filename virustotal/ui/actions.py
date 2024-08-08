@@ -5,7 +5,7 @@ def pre_render(**kwargs):
     pass
 
 
-def virustotal(**kwargs):
+def virustotal(app, *args, **kwargs):
     ping = {"ping_status": "unknown"}
 
     args = kwargs.get("args", False)
@@ -18,7 +18,11 @@ def virustotal(**kwargs):
 
     # Check ping
     try:
-        ping_data = kwargs["app"].config["INSTANCES"].get_ping("virustotal")
+        if "INSTANCES" in app.config:
+            ping_data = app.config["INSTANCES"].get_ping("virustotal")
+        else:
+            ping_data = app.bw_instances_utils.get_ping("virustotal")
+
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
         error = f"Error while trying to ping virustotal : {format_exc()}"
