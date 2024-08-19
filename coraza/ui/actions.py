@@ -21,7 +21,7 @@ def coraza(app, *args, **kwargs):
         if "INSTANCES" in app.config:
             ping_data = app.config["INSTANCES"].get_ping("coraza")
         else:
-            ping_data = app.bw_instances_utils.get_ping("coraza")
+            ping_data = kwargs["bw_instances_utils"].get_ping("coraza")
 
         ping = {"ping_status": ping_data["status"]}
     except BaseException:

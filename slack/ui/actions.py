@@ -21,7 +21,7 @@ def slack(app, *args, **kwargs):
         if "INSTANCES" in app.config:
             ping_data = app.config["INSTANCES"].get_ping("slack")
         else:
-            ping_data = app.bw_instances_utils.get_ping("slack")
+            ping_data = kwargs["bw_instances_utils"].get_ping("slack")
 
         ping = {"ping_status": ping_data["status"]}
     except BaseException:

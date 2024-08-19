@@ -21,7 +21,7 @@ def webhook(app, *args, **kwargs):
         if "INSTANCES" in app.config:
             ping_data = app.config["INSTANCES"].get_ping("webhook")
         else:
-            ping_data = app.bw_instances_utils.get_ping("webhook")
+            ping_data = kwargs["bw_instances_utils"].get_ping("webhook")
 
         ping = {"ping_status": ping_data["status"]}
     except BaseException:

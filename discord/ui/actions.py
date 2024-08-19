@@ -21,7 +21,7 @@ def discord(app, *args, **kwargs):
         if "INSTANCES" in app.config:
             ping_data = app.config["INSTANCES"].get_ping("discord")
         else:
-            ping_data = app.bw_instances_utils.get_ping("discord")
+            ping_data = kwargs["bw_instances_utils"].get_ping("discord")
 
         ping = {"ping_status": ping_data["status"]}
     except BaseException:
