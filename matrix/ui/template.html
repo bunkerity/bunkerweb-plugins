@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="core-layout">
+  {% if is_used %}
+  <input
+    id="csrf_token"
+    type="hidden"
+    name="csrf_token"
+    value="{{ csrf_token() }}"
+  />
+
+  <!-- test-->
+  <div class="core-card">
+    <h5 class="core-card-title">TEST</h5>
+    <p class="core-card-text center">
+      Use the next button to send a test message to the configured
+      Matrix room.
+    </p>
+
+    <div class="core-card-test-container">
+      <button type="button" class="core-card-test-btn" data-ping>
+        Test Matrix connection
+      </button>
+    </div>
+
+    <hr class="core-separator" />
+
+    <div class="core-card-test-status-container">
+      <svg
+        data-status-svg
+        class="core-card-test-status-svg info"
+        viewBox="0 0 100 100"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle cx="50" cy="50" r="50" />
+      </svg>
+      <p data-status-text class="core-card-text">Unknown</p>
+    </div>
+  </div>
+
+  <script nonce="{{script_nonce}}">
+    // When click to ping button
+    const pingBtn = document.querySelector("[data-ping]");
+    const statusSvg = document.querySelector("[data-status-svg]");
+    const statusText = document.querySelector("[data-status-text]");
+
+    pingBtn.addEventListener("click", (e) => {
+      new Ping(
+        `${location.origin}${location.pathname}?ping=true`,
+        pingBtn,
+        statusText,
+        statusSvg,
+        "ping_status",
+      );
+    });
+  </script>
+  {% else %}
+  <div class="core-card">
+    <div class="core-card-wrap">
+      <h5 class="core-card-title">Plugin deactivated</h5>
+      <!-- icon -->
+      <div role="img" class="core-card-svg-container">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="core-card-deactivated-svg"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+          />
+        </svg>
+      </div>
+      <!-- end icon -->
+    </div>
+
+    <div class="core-card-text-container">
+      <p data-info class="core-card-text">{{ plugin.get('description') }}</p>
+    </div>
+    <p class="core-card-text-doc">{{ read_doc_text|safe }}</p>
+  </div>
+  <!-- end info -->
+  {% endif %}
+</div>
+
+{% endblock %}
