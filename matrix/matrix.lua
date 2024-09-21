@@ -90,7 +90,8 @@ function matrix:log(bypass_use_matrix)
 	-- Anonymize IP if enabled
 	if self.variables["MATRIX_ANONYMIZE_IP"] == "yes" then
 		remote_addr = string.gsub(remote_addr, "%d+%.%d+$", "xxx.xxx")
-		data = string.gsub(data, self.ctx.bw.remote_addr, remote_addr)
+		data["formatted_body"] = string.gsub(data["formatted_body"], self.ctx.bw.remote_addr, remote_addr)
+		data["body"] = string.gsub(data["body"], self.ctx.bw.remote_addr, remote_addr)
 	end
 	-- Send request
 	local hdr, err = ngx_timer.at(0, self.send, self, data)
