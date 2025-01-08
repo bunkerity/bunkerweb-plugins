@@ -13,7 +13,6 @@ jobs:
       security-events: write
 
   setup:
-    needs: codeql
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -47,7 +46,7 @@ jobs:
 
       - name: Run CrowdSec stream tests
         run: ./.tests/crowdsec.sh stream
-      
+
       - name: Run CrowdSec appsec tests
         run: ./.tests/crowdsec.sh appsec
 
