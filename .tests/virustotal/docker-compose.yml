@@ -1,14 +1,24 @@
-version: "3"
-
 services:
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.12
+    image: bunkerity/bunkerweb:1.6.0-rc1
     ports:
-      - 80:8080
-      - 443:8443
-    labels:
-      - "bunkerweb.INSTANCE"
+      - 80:8080/tcp
+      - 443:8443/tcp
+      - 443:8443/udp
     environment:
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+    networks:
+      - bw-universe
+      - bw-services
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
+    depends_on:
+      - bunkerweb
+    volumes:
+      - ./bw-data/plugins:/data/plugins
+    environment:
+      - BUNKERWEB_INSTANCES=bunkerweb
       - SERVER_NAME=www.example.com
       - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
       - USE_VIRUSTOTAL=yes
@@ -25,30 +35,6 @@ services:
       - REVERSE_PROXY_URL=/
     networks:
       - bw-universe
-      - bw-services
-
-  bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.5.12
-    depends_on:
-      - bunkerweb
-      - bw-docker
-    volumes:
-      - ./bw-data/plugins:/data/plugins
-    environment:
-      - DOCKER_HOST=tcp://bw-docker:2375
-    networks:
-      - bw-universe
-      - bw-docker
-
-  bw-docker:
-    image: tecnativa/docker-socket-proxy:nightly
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - CONTAINERS=1
-      - LOG_LEVEL=warning
-    networks:
-      - bw-docker
 
   hello:
     image: nginxdemos/nginx-hello
@@ -60,7 +46,6 @@ volumes:
 
 networks:
   bw-services:
-  bw-docker:
   bw-universe:
     ipam:
       driver: default

@@ -33,12 +33,10 @@ There is no additional services to setup besides the plugin itself.
 ## Docker
 
 ```yaml
-version: '3'
-
 services:
 
-  bunkerweb:
-    image: bunkerity/bunkerweb:1.5.9
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       - USE_SLACK=yes
@@ -49,12 +47,10 @@ services:
 ## Swarm
 
 ```yaml
-version: '3.5'
-
 services:
 
-  mybunker:
-    image: bunkerity/bunkerweb:1.5.9
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       - USE_SLACK=yes

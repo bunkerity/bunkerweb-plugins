@@ -29,52 +29,65 @@ See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign
 ## Docker
 
 ```yaml
-version: '3'
-
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.9
+    image: bunkerity/bunkerweb:1.6.0-rc1
+    ...
+    networks:
+      - bw-plugins
+    ...
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       - USE_CLAMAV=yes
       - CLAMAV_HOST=clamav
-    networks:
-      - bw-plugins
     ...
 
   clamav:
-    image: clamav/clamav:1.2
+    image: clamav/clamav:1.4
     volumes:
       - ./clamav-data:/var/lib/clamav
     networks:
       - bw-plugins
+
+networks:
+  # BunkerWeb networks
+  ...
+  bw-plugins:
+    name: bw-plugins
 ```
 
 ## Swarm
 
 ```yaml
-version: '3'
-
 services:
 
-  mybunker:
-    image: bunkerity/bunkerweb:1.5.9
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0-rc1
+    ...
+    networks:
+      - bw-plugins
+    ...
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       - USE_CLAMAV=yes
       - CLAMAV_HOST=clamav
     ...
-    networks:
-      - bw-plugins
-    ...
 
   clamav:
-    image: clamav/clamav:1.2
+    image: clamav/clamav:1.4
     networks:
       - bw-plugins
 
 networks:
+  # BunkerWeb networks
+  ...
   bw-plugins:
     driver: overlay
     attachable: true
@@ -103,7 +116,7 @@ spec:
     spec:
       containers:
         - name: bunkerweb-clamav
-          image: clamav/clamav:1.2
+          image: clamav/clamav:1.4
 ---
 apiVersion: v1
 kind: Service

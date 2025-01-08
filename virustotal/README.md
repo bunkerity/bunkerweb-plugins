@@ -32,12 +32,10 @@ See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign
 ## Docker
 
 ```yaml
-version: '3'
-
 services:
 
-  bunkerweb:
-    image: bunkerity/bunkerweb:1.5.9
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       - USE_VIRUSTOTAL=yes
@@ -48,12 +46,10 @@ services:
 ## Swarm
 
 ```yaml
-version: '3'
-
 services:
 
-  mybunker:
-    image: bunkerity/bunkerweb:1.5.9
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       - USE_VIRUSTOTAL=yes

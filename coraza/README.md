@@ -24,20 +24,26 @@ See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign
 ```yaml
 services:
 
-  # BunkerWeb services
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0-rc1
+    ...
+    networks:
+      - bw-plugins
+    ...
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
     ...
     environment:
       HTTP2: "no" # The Coraza plugin doesn't support HTTP2 yet
       USE_MODSECURITY: "no" # We don't need ModSecurity anymore
       USE_CORAZA: "yes"
       CORAZA_API: "http://bw-coraza:8080" # This is the address of the coraza container in the same network
-    networks:
-      - bw-plugins
 
   ...
 
   bw-coraza:
-    image: bunkerity/bunkerweb-coraza:2.0
+    image: bunkerity/bunkerweb-coraza:1.6.0-rc1
     networks:
       - bw-plugins
 

@@ -85,14 +85,9 @@ See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign
 
 ```yaml
 services:
-  ...
-    # BunkerWeb services
-    environment:
-      ...
-      USE_CROWDSEC: "yes"
-      CROWDSEC_API: "http://crowdsec:8080" # This is the address of the CrowdSec container API in the same network
-      CROWDSEC_APPSEC_URL: "http://crowdsec:7422" # Comment if you don't want to use the AppSec Component
-      CROWDSEC_API_KEY: "s3cr3tb0unc3rk3y" # Remember to set a stronger key for the bouncer
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0-rc1
+    ...
     networks:
       ...
       - bw-plugins
@@ -100,11 +95,22 @@ services:
       driver: syslog # Send logs to syslog
       options:
         syslog-address: "udp://10.10.10.254:514" # The IP address of the syslog service
+    ...
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
+    ...
+    environment:
+      ...
+      USE_CROWDSEC: "yes"
+      CROWDSEC_API: "http://crowdsec:8080" # This is the address of the CrowdSec container API in the same network
+      CROWDSEC_APPSEC_URL: "http://crowdsec:7422" # Comment if you don't want to use the AppSec Component
+      CROWDSEC_API_KEY: "s3cr3tb0unc3rk3y" # Remember to set a stronger key for the bouncer
 
   ...
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.6.2 # Use the latest version but always pin the version for a better stability/security
+    image: crowdsecurity/crowdsec:v1.6.4 # Use the latest version but always pin the version for a better stability/security
     volumes:
       - cs-data:/var/lib/crowdsec/data # To persist the CrowdSec data
       - bw-logs:/var/log:ro # The logs of BunkerWeb for CrowdSec to parse
