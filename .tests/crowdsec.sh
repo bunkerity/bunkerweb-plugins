@@ -19,7 +19,7 @@ do_and_check_cmd cp .tests/crowdsec/docker-compose.yml /tmp/bunkerweb-plugins/cr
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
-if [ $1 == "appsec" ] ; then
+if [ "$1" == "appsec" ] ; then
 	do_and_check_cmd sed -i "s@CROWDSEC_MODE=.*\$@CROWDSEC_MODE=live@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 	do_and_check_cmd sed -i "s@CROWDSEC_APPSEC_URL=.*\$@CROWDSEC_APPSEC_URL=http://crowdsec:7422@g" /tmp/bunkerweb-plugins/crowdsec/docker-compose.yml
 else
@@ -33,7 +33,7 @@ do_and_check_cmd cp .tests/crowdsec/syslog-ng.conf /tmp/bunkerweb-plugins/crowds
 
 # Do the tests
 cd /tmp/bunkerweb-plugins/crowdsec/ || exit 1
-do_and_check_cmd docker-compose up -d
+do_and_check_cmd docker compose up -d
 
 # Wait until BW is started
 echo "ℹ️ Waiting for BW ..."
@@ -52,14 +52,14 @@ done
 
 # We're done
 if [ $retry -eq 60 ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error timeout after 60s"
 	exit 1
 fi
 if [ "$success" == "ko" ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error did not receive 200 code"
 	exit 1
 fi
@@ -96,14 +96,14 @@ fi
 
 # We're done
 if [ "$success" == "ko" ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error did not receive 403 code"
 	exit 1
 fi
 if [ "$1" = "verbose" ] ; then
-	docker-compose logs
+	docker compose logs
 fi
-docker-compose down -v
+docker compose down -v
 
 echo "ℹ️ CrowdSec tests done"

@@ -26,7 +26,7 @@ do_and_check_cmd wget -O /tmp/bunkerweb-plugins/clamav/eicar.com https://secure.
 # Do the tests
 cd /tmp/bunkerweb-plugins/clamav || exit 1
 echo "ℹ️ Running compose ..."
-do_and_check_cmd docker-compose up --build -d
+do_and_check_cmd docker compose up --build -d
 
 # Wait until BW is started
 echo "ℹ️ Waiting for BW ..."
@@ -45,14 +45,14 @@ done
 
 # We're done
 if [ $retry -eq 60 ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error timeout after 60s"
 	exit 1
 fi
 if [ "$success" == "ko" ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error did not receive 200 code"
 	exit 1
 fi
@@ -74,20 +74,20 @@ done
 
 # We're done
 if [ $retry -eq 60 ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error timeout after 60s"
 	exit 1
 fi
 if [ "$success" == "ko" ] ; then
-	docker-compose logs
-	docker-compose down -v
+	docker compose logs
+	docker compose down -v
 	echo "❌ Error did not receive 403 code"
 	exit 1
 fi
 if [ "$1" = "verbose" ] ; then
-	docker-compose logs
+	docker compose logs
 fi
-docker-compose down -v
+docker compose down -v
 
 echo "ℹ️ ClamAV tests done"
