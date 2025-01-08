@@ -1,32 +1,30 @@
+from logging import getLogger
 from traceback import format_exc
 
 
 def pre_render(**kwargs):
-    pass
-
-
-def clamav(app, *args, **kwargs):
-    ping = {"ping_status": "unknown"}
-
-    args = kwargs.get("args", False)
-    if not args:
-        return {**ping}
-
-    is_ping = args.get("ping", False)
-    if not is_ping:
-        return {**ping}
-
-    # Check ping
+    logger = getLogger("UI")
+    ret = {
+        "ping_status": {
+            "title": "CLAMAV STATUS",
+            "value": "error",
+            "col-size": "col-12 col-md-6",
+            "card-classes": "h-100",
+        },
+    }
     try:
-        if "INSTANCES" in app.config:
-            ping_data = app.config["INSTANCES"].get_ping("clamav")
-        else:
-            ping_data = kwargs["bw_instances_utils"].get_ping("clamav")
+        ping_data = kwargs["bw_instances_utils"].get_ping("clamav")
+        ret["ping_status"]["value"] = ping_data["status"]
+    except BaseException as e:
+        logger.debug(format_exc())
+        logger.error(f"Failed to get clamav ping: {e}")
+        ret["error"] = str(e)
 
-        ping = {"ping_status": ping_data["status"]}
-    except BaseException:
-        error = f"Error while trying to ping clamav : {format_exc()}"
-        print(error, flush=True)
-        ping = {"ping_status": "error", "error": error}
+    if "error" in ret:
+        return ret
 
-    return {**ping}
+    return ret
+
+
+def clamav(**kwargs):
+    pass

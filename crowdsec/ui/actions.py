@@ -1,32 +1,30 @@
+from logging import getLogger
 from traceback import format_exc
 
 
 def pre_render(**kwargs):
-    pass
-
-
-def crowdsec(app, *args, **kwargs):
-    ping = {"ping_status": "unknown"}
-
-    args = kwargs.get("args", False)
-    if not args:
-        return {**ping}
-
-    is_ping = args.get("ping", False)
-    if not is_ping:
-        return {**ping}
-
-    # Check ping
+    logger = getLogger("UI")
+    ret = {
+        "ping_status": {
+            "title": "CROWDSEC STATUS",
+            "value": "error",
+            "col-size": "col-12 col-md-6",
+            "card-classes": "h-100",
+        },
+    }
     try:
-        if "INSTANCES" in app.config:
-            ping_data = app.config["INSTANCES"].get_ping("crowdsec")
-        else:
-            ping_data = kwargs["bw_instances_utils"].get_ping("crowdsec")
+        ping_data = kwargs["bw_instances_utils"].get_ping("crowdsec")
+        ret["ping_status"]["value"] = ping_data["status"]
+    except BaseException as e:
+        logger.debug(format_exc())
+        logger.error(f"Failed to get crowdsec ping: {e}")
+        ret["error"] = str(e)
 
-        ping = {"ping_status": ping_data["status"]}
-    except BaseException:
-        error = f"Error while trying to ping crowdsec : {format_exc()}"
-        print(error, flush=True)
-        ping = {"ping_status": "error", "error": error}
+    if "error" in ret:
+        return ret
 
-    return {**ping}
+    return ret
+
+
+def crowdsec(**kwargs):
+    pass
