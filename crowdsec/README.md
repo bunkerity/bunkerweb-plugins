@@ -93,6 +93,13 @@ services:
       CROWDSEC_API: "http://crowdsec:8080" # This is the address of the CrowdSec container API in the same network
       CROWDSEC_APPSEC_URL: "http://crowdsec:7422" # Comment if you don't want to use the AppSec Component
       CROWDSEC_API_KEY: "s3cr3tb0unc3rk3y" # Remember to set a stronger key for the bouncer
+    networks:
+      ...
+      - bw-plugins
+    logging:
+      driver: syslog # Send logs to syslog
+      options:
+        syslog-address: "udp://10.10.10.254:514" # The IP address of the syslog service
 
   ...
 
@@ -270,7 +277,7 @@ metadata:
 | `CROWDSEC_EXCLUDE_LOCATION`       |                        | global    | no       | The locations to exclude while bouncing. It is a list of location, separated by commas.                    |
 | `CROWDSEC_CACHE_EXPIRATION`       | `1`                    | global    | no       | The cache expiration, in second, for IPs that the bouncer store in cache in live mode.                     |
 | `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | The frequency of update, in second, to pull new/old IPs from the CrowdSec local API.                       |
-| `CROWDSEC_APPSEC_URL`             |  | global    | no       | URL of the Application Security Component.                                                                 |
+| `CROWDSEC_APPSEC_URL`             |                        | global    | no       | URL of the Application Security Component.                                                                 |
 | `CROWDSEC_APPSEC_FAILURE_ACTION`  | `passthrough`          | global    | no       | Behavior when the AppSec Component return a 500. Can let the request passthrough or deny it.               |
 | `CROWDSEC_APPSEC_CONNECT_TIMEOUT` | `100`                  | global    | no       | The timeout in milliseconds of the connection between the remediation component and AppSec Component.      |
 | `CROWDSEC_APPSEC_SEND_TIMEOUT`    | `100`                  | global    | no       | The timeout in milliseconds to send data from the remediation component to the AppSec Component.           |
