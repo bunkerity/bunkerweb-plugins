@@ -64,6 +64,8 @@ if [ "$success" == "ko" ] ; then
 	exit 1
 fi
 
+sleep 10
+
 if [ "$1" != "appsec" ] ; then
 	# Run basic attack with dirb
 	echo "ℹ️ Executing dirb ..."
