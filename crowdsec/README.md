@@ -85,8 +85,21 @@ See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign
 
 ```yaml
 services:
-  ...
-    # BunkerWeb services
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0-rc1
+    ...
+    networks:
+      ...
+      - bw-plugins
+    logging:
+      driver: syslog # Send logs to syslog
+      options:
+        syslog-address: "udp://10.10.10.254:514" # The IP address of the syslog service
+    ...
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
+    ...
     environment:
       ...
       USE_CROWDSEC: "yes"
@@ -97,7 +110,7 @@ services:
   ...
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.6.2 # Use the latest version but always pin the version for a better stability/security
+    image: crowdsecurity/crowdsec:v1.6.4 # Use the latest version but always pin the version for a better stability/security
     volumes:
       - cs-data:/var/lib/crowdsec/data # To persist the CrowdSec data
       - bw-logs:/var/log:ro # The logs of BunkerWeb for CrowdSec to parse
@@ -270,7 +283,7 @@ metadata:
 | `CROWDSEC_EXCLUDE_LOCATION`       |                        | global    | no       | The locations to exclude while bouncing. It is a list of location, separated by commas.                    |
 | `CROWDSEC_CACHE_EXPIRATION`       | `1`                    | global    | no       | The cache expiration, in second, for IPs that the bouncer store in cache in live mode.                     |
 | `CROWDSEC_UPDATE_FREQUENCY`       | `10`                   | global    | no       | The frequency of update, in second, to pull new/old IPs from the CrowdSec local API.                       |
-| `CROWDSEC_APPSEC_URL`             |  | global    | no       | URL of the Application Security Component.                                                                 |
+| `CROWDSEC_APPSEC_URL`             |                        | global    | no       | URL of the Application Security Component.                                                                 |
 | `CROWDSEC_APPSEC_FAILURE_ACTION`  | `passthrough`          | global    | no       | Behavior when the AppSec Component return a 500. Can let the request passthrough or deny it.               |
 | `CROWDSEC_APPSEC_CONNECT_TIMEOUT` | `100`                  | global    | no       | The timeout in milliseconds of the connection between the remediation component and AppSec Component.      |
 | `CROWDSEC_APPSEC_SEND_TIMEOUT`    | `100`                  | global    | no       | The timeout in milliseconds to send data from the remediation component to the AppSec Component.           |

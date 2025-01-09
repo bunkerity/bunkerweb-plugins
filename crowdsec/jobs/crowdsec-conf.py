@@ -36,7 +36,7 @@ try:
         LOGGER.info("CrowdSec is not activated, skipping job...")
         sys_exit(status)
 
-    JOB = Job(LOGGER)
+    JOB = Job(LOGGER, __file__)
 
     # Generate content
     jinja_env = Environment(loader=FileSystemLoader(PLUGIN_PATH.joinpath("misc")))
@@ -47,6 +47,7 @@ try:
             CROWDSEC_API_KEY=getenv("CROWDSEC_API_KEY", ""),
             CROWDSEC_MODE=getenv("CROWDSEC_MODE", "live"),
             CROWDSEC_REQUEST_TIMEOUT=getenv("CROWDSEC_REQUEST_TIMEOUT", "1000"),
+            CROWDSEC_ENABLE_INTERNAL=("true" if getenv("CROWDSEC_ENABLE_INTERNAL", "no") == "yes" else "false"),
             CROWDSEC_EXCLUDE_LOCATION=getenv("CROWDSEC_EXCLUDE_LOCATION", ""),
             CROWDSEC_CACHE_EXPIRATION=getenv("CROWDSEC_CACHE_EXPIRATION", "1"),
             CROWDSEC_UPDATE_FREQUENCY=getenv("CROWDSEC_UPDATE_FREQUENCY", "10"),

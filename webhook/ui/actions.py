@@ -1,28 +1,30 @@
+from logging import getLogger
 from traceback import format_exc
 
 
 def pre_render(**kwargs):
-    pass
+    logger = getLogger("UI")
+    ret = {
+        "ping_status": {
+            "title": "WEBHOOK STATUS",
+            "value": "error",
+            "col-size": "col-12 col-md-6",
+            "card-classes": "h-100",
+        },
+    }
+    try:
+        ping_data = kwargs["bw_instances_utils"].get_ping("webhook")
+        ret["ping_status"]["value"] = ping_data["status"]
+    except BaseException as e:
+        logger.debug(format_exc())
+        logger.error(f"Failed to get webhook ping: {e}")
+        ret["error"] = str(e)
+
+    if "error" in ret:
+        return ret
+
+    return ret
 
 
 def webhook(**kwargs):
-    ping = {"ping_status": "unknown"}
-
-    args = kwargs.get("args", False)
-    if not args:
-        return {**ping}
-
-    is_ping = args.get("ping", False)
-    if not is_ping:
-        return {**ping}
-
-    # Check ping
-    try:
-        ping_data = kwargs["app"].config["INSTANCES"].get_ping("webhook")
-        ping = {"ping_status": ping_data["status"]}
-    except BaseException:
-        error = f"Error while trying to ping webhook : {format_exc()}"
-        print(error, flush=True)
-        ping = {"ping_status": "error", "error": error}
-
-    return {**ping}
+    pass

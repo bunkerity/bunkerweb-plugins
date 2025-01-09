@@ -3,7 +3,7 @@
   "stream": "no",
   "name": "CrowdSec",
   "description": "CrowdSec bouncer for BunkerWeb.",
-  "version": "1.6",
+  "version": "1.8",
   "settings": {
     "USE_CROWDSEC": {
       "context": "multisite",
@@ -41,6 +41,15 @@
       "regex": "^(live|stream)$",
       "type": "select",
       "select": ["live", "stream"]
+    },
+    "CROWDSEC_ENABLE_INTERNAL": {
+      "context": "global",
+      "default": "no",
+      "help": "Enable the analysis of the internal traffic.",
+      "id": "crowdsec-enable-internal",
+      "label": "CrowdSec enable internal",
+      "regex": "^(yes|no)$",
+      "type": "check"
     },
     "CROWDSEC_REQUEST_TIMEOUT": {
       "context": "global",
