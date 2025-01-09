@@ -608,7 +608,7 @@ function csmod.Allow(ip)
     return true, "disabled"
   end
 
-  if ngx.req.is_internal() then
+  if runtime.conf["ENABLE_INTERNAL"] == "false" and ngx.req.is_internal() then
     return true, "internal"
   end
 
