@@ -3,7 +3,7 @@ module bw-coraza
 go 1.23
 
 require (
-	github.com/corazawaf/coraza/v3 v3.3.1
+	github.com/corazawaf/coraza/v3 v3.3.2
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 )

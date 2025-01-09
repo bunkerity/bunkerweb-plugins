@@ -18,9 +18,9 @@ COPY --from=builder --chown=0:0 /usr/local/bin/bw-coraza /usr/local/bin/bw-coraz
 RUN apk add --no-cache bash curl && \
     addgroup -g 1000 coraza && \
     adduser -h /usr/share/coraza -g coraza -s /bin/bash -G coraza -D -u 1000 coraza && \
-    mkdir -p /var/log/coraza /var/run/coraza && \
-    chown root:coraza /var/log/coraza /var/run/coraza && \
-    chmod 770 /var/log/coraza /var/run/coraza && \
+    mkdir -p /var/log/coraza /var/run/coraza /rules-before /rules-after && \
+    chown root:coraza /var/log/coraza /var/run/coraza /rules-before /rules-after && \
+    chmod 770 /var/log/coraza /var/run/coraza /rules-before /rules-after && \
     ln -s /proc/1/fd/1 /var/log/coraza/coraza.log
 
 WORKDIR /usr/share/coraza
