@@ -36,7 +36,7 @@ try:
         LOGGER.info("CrowdSec is not activated, skipping job...")
         sys_exit(status)
 
-    JOB = Job(LOGGER)
+    JOB = Job(LOGGER, __file__)
 
     # Generate content
     jinja_env = Environment(loader=FileSystemLoader(PLUGIN_PATH.joinpath("misc")))
