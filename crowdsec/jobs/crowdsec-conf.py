@@ -37,8 +37,8 @@ try:
         LOGGER.info("CrowdSec is not activated, skipping job...")
         sys_exit(status)
 
-    bunkerweb_version = get_version()
-    if int(bunkerweb_version.split(".")[1]) < 6:
+    bunkerweb_version_split = get_version().split(".")
+    if len(bunkerweb_version_split) > 1 and int(bunkerweb_version_split[1]) < 6:
         JOB = Job(LOGGER)
     else:
         JOB = Job(LOGGER, __file__)
