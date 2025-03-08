@@ -2,7 +2,7 @@
   "id": "matrix",
   "name": "Matrix",
   "description": "Send alerts to a Matrix room via the Matrix API.",
-  "version": "1.0",
+  "version": "1.1",
   "stream": "yes",
   "settings": {
     "USE_MATRIX": {
