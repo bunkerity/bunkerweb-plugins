@@ -22,7 +22,6 @@ The installation of external plugins is covered in the [plugins section](https:/
 Each plugin is located in a subdirectory of this repository. A README file located in each subdirectory contains documentation about the plugin. Here is the list :
 
 - [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
-- [CrowdSec](https://github.com/bunkerity/bunkerweb-plugins/tree/main/crowdsec)
 - [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 - [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
 - [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)

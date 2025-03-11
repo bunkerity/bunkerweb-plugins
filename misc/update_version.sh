@@ -15,5 +15,4 @@ fi
 echo "Updating version of plugins to \"$1\""
 
 find . -type f -name "plugin.json" -exec sed -i 's@"version": "[0-9].*"@"version": "'"$1"'"@' {} \;
-sed -i 's@"crowdsec-bunkerweb-bouncer/v[0-9].*"@"crowdsec-bunkerweb-bouncer/v'"$1"'"@' crowdsec/crowdsec.lua
 sed -i 's@"bunkerweb_plugins\-[0-9].*\-blue"@"bunkerweb_plugins-'"$1"'-blue@' README.md

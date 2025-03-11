@@ -41,15 +41,6 @@ jobs:
       - name: Run Coraza tests
         run: ./.tests/coraza.sh
 
-      - name: Run CrowdSec live tests
-        run: ./.tests/crowdsec.sh live
-
-      - name: Run CrowdSec stream tests
-        run: ./.tests/crowdsec.sh stream
-
-      - name: Run CrowdSec appsec tests
-        run: ./.tests/crowdsec.sh appsec
-
       - name: Run VirusTotal tests
         run: ./.tests/virustotal.sh
         env:
