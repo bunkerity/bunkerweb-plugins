@@ -28,13 +28,11 @@ repos:
     rev: 84c370104d6a8d1eef00c80a3ebd42f7033aaaad # frozen: v0.20.0
     hooks:
       - id: stylua-github
-        exclude: ^crowdsec/lib/
 
   - repo: https://github.com/lunarmodules/luacheck
     rev: cc089e3f65acdd1ef8716cc73a3eca24a6b845e4 # frozen: v1.2.0
     hooks:
       - id: luacheck
-        exclude: ^crowdsec/lib/
         args: ["--std", "min", "--codes", "--ranges", "--no-cache"]
 
   - repo: https://github.com/pycqa/flake8

@@ -14,7 +14,6 @@ body:
       options:
         - clamav
         - coraza
-        - crowdsec
         - discord
         - slack
         - virustotal

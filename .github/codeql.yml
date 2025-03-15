@@ -3,7 +3,6 @@ name: "CodeQL config"
 paths:
   - clamav
   - coraza
-  - crowdsec
   - discord
   - slack
   - virustotal
