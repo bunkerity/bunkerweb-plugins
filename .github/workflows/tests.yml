@@ -21,7 +21,7 @@ jobs:
       - name: Get BW tag
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=1.6.0-beta" >> $GITHUB_ENV
+            echo "BW_TAG=1.6.1" >> $GITHUB_ENV
           else
             echo "BW_TAG=dev" >> $GITHUB_ENV
           fi
@@ -47,5 +47,5 @@ jobs:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
       - name: Build and push APIs
-        if: env.BW_TAG == '1.5.9'
+        if: env.BW_TAG == '1.6.1'
         run: ./.tests/build-push.sh "${{ env.BW_TAG }}"
