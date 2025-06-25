@@ -2,6 +2,7 @@
 
 set -e
 
+# Display usage information
 show_usage() {
     cat << 'EOF'
 Usage: ./create_bunkerweb_plugin.sh [OPTIONS] PLUGIN_NAME
@@ -33,6 +34,7 @@ NOTE:
 EOF
 }
 
+# Validate plugin name format
 validate_plugin_name() {
     local name="$1"
     
@@ -54,6 +56,7 @@ validate_plugin_name() {
     return 0
 }
 
+# Create complete directory structure
 create_directory_structure() {
     local plugin_dir="$1"
     
@@ -84,6 +87,7 @@ create_directory_structure() {
     fi
 }
 
+# Create documentation directory and copy template files
 create_docs() {
     local plugin_dir="$1"
     
@@ -98,6 +102,7 @@ create_docs() {
     fi
 }
 
+# Generate plugin.json metadata file
 generate_plugin_json() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -163,6 +168,7 @@ generate_plugin_json() {
 EOF
 }
 
+# Generate main Lua plugin file
 generate_lua_file() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -269,6 +275,7 @@ function PLUGIN_NAME:log_stream()
     return self:ret(true, "Stream log successful")
 end
 
+-- Validate plugin settings
 function PLUGIN_NAME:validate_settings(setting_value, timeout)
     if not setting_value or setting_value == "" then
         self.logger:log(ngx.ERR, "Setting value is empty")
@@ -283,11 +290,13 @@ function PLUGIN_NAME:validate_settings(setting_value, timeout)
     return true
 end
 
+-- Execute main plugin logic
 function PLUGIN_NAME:execute_main_logic(setting_value, timeout)
     self.logger:log(ngx.INFO, 
                    string.format("Executing with setting: %s, timeout: %d", 
                                setting_value, timeout))
     
+    -- Add your custom logic here
     local allow_request = true
     local reason = "Request allowed by plugin"
     
@@ -297,8 +306,10 @@ end
 return PLUGIN_NAME
 EOF
 
+    # Replace placeholders
     sed -i.bak "s|PLUGIN_NAME|${plugin_name}|g" "$plugin_dir/$plugin_name.lua"
     
+    # Fix the uppercase variable names
     local plugin_name_upper
     plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     sed -i.bak "s|PLUGIN_NAME_UPPER|${plugin_name_upper}|g" "$plugin_dir/$plugin_name.lua"
@@ -306,6 +317,7 @@ EOF
     rm -f "$plugin_dir/$plugin_name.lua.bak"
 }
 
+# Generate complete UI components
 generate_ui_components() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -370,8 +382,7 @@ def validate_configuration(data):
         
         valid_log_levels = ["DEBUG", "INFO", "WARN", "ERROR"]
         if data["log_level"] not in valid_log_levels:
-            return {"valid": False, 
-                    "message": f"Log level must be one of: {', '.join(valid_log_levels)}"}
+            return {"valid": False, "message": f"Log level must be one of: {', '.join(valid_log_levels)}"}
         
         return {"valid": True, "message": "Configuration is valid"}
         
@@ -745,6 +756,7 @@ def teardown_appcontext(exception):
 EOF
 }
 
+# Generate job files for scheduled tasks
 generate_job_files() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -1079,6 +1091,7 @@ if __name__ == "__main__":
 EOF
 }
 
+# Generate NGINX configuration templates
 generate_config_templates() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -1218,6 +1231,7 @@ preread_by_lua_block {
 EOF
 }
 
+# Generate custom configuration templates
 generate_custom_templates() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -1228,18 +1242,13 @@ generate_custom_templates() {
 {
     "name": "$plugin_name-template",
     "description": "Template for $plugin_name plugin configuration",
-    "steps": [
-        {
-            "name": "basic_config",
-            "description": "Basic $plugin_name configuration",
-            "settings": {
-                "USE_PLUGIN_${plugin_name_upper}": "yes",
-                "PLUGIN_${plugin_name_upper}_SETTING": "template_value",
-                "PLUGIN_${plugin_name_upper}_TIMEOUT": "10",
-                "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "INFO"
-            }
-        }
-    ]
+    "version": "$VERSION",
+    "settings": {
+        "USE_PLUGIN_${plugin_name_upper}": "yes",
+        "PLUGIN_${plugin_name_upper}_SETTING": "template_value",
+        "PLUGIN_${plugin_name_upper}_TIMEOUT": "10",
+        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "INFO"
+    }
 }
 EOF
 
@@ -1247,18 +1256,13 @@ EOF
 {
     "name": "$plugin_name-development",
     "description": "Development configuration for $plugin_name plugin",
-    "steps": [
-        {
-            "name": "development_config",
-            "description": "Development settings for $plugin_name",
-            "settings": {
-                "USE_PLUGIN_${plugin_name_upper}": "yes",
-                "PLUGIN_${plugin_name_upper}_SETTING": "development_mode",
-                "PLUGIN_${plugin_name_upper}_TIMEOUT": "30",
-                "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "DEBUG"
-            }
-        }
-    ]
+    "version": "$VERSION",
+    "settings": {
+        "USE_PLUGIN_${plugin_name_upper}": "yes",
+        "PLUGIN_${plugin_name_upper}_SETTING": "development_mode",
+        "PLUGIN_${plugin_name_upper}_TIMEOUT": "30",
+        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "DEBUG"
+    }
 }
 EOF
 
@@ -1266,18 +1270,13 @@ EOF
 {
     "name": "$plugin_name-production",
     "description": "Production configuration for $plugin_name plugin",
-    "steps": [
-        {
-            "name": "production_config",
-            "description": "Production settings for $plugin_name",
-            "settings": {
-                "USE_PLUGIN_${plugin_name_upper}": "yes",
-                "PLUGIN_${plugin_name_upper}_SETTING": "production_mode",
-                "PLUGIN_${plugin_name_upper}_TIMEOUT": "5",
-                "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "WARN"
-            }
-        }
-    ]
+    "version": "$VERSION",
+    "settings": {
+        "USE_PLUGIN_${plugin_name_upper}": "yes",
+        "PLUGIN_${plugin_name_upper}_SETTING": "production_mode",
+        "PLUGIN_${plugin_name_upper}_TIMEOUT": "5",
+        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "WARN"
+    }
 }
 EOF
 
@@ -1301,6 +1300,7 @@ location /$plugin_name/custom {
 EOF
 }
 
+# Generate project README.md if it doesn't exist
 generate_project_readme() {
     local output_dir="$1"
     
@@ -1391,9 +1391,196 @@ plugin-name/
    USE_PLUGIN_PLUGINNAME=yes
    PLUGIN_PLUGINNAME_SETTING=your_value
    ```
+
+### Configuration Examples
+
+**Docker Compose:**
+```yaml
+version: '3.8'
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:latest
+    environment:
+      - USE_PLUGIN_MYPLUGIN=yes
+      - PLUGIN_MYPLUGIN_SETTING=production_value
+    volumes:
+      - ./bw-data:/data
+```
+
+**Kubernetes:**
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    bunkerweb.io/USE_PLUGIN_MYPLUGIN: "yes"
+    bunkerweb.io/PLUGIN_MYPLUGIN_SETTING: "kubernetes_value"
+```
+
+## Development
+
+### Creating New Plugins
+
+Use the provided plugin template generator:
+
+```bash
+cd templates/
+./create_bunkerweb_plugin.sh -d "Your plugin description" your-plugin-name
+```
+
+Available options:
+- `--with-ui`: Include web UI components
+- `--with-jobs`: Include scheduled jobs
+- `--with-configs`: Include NGINX configuration templates
+- `--with-templates`: Include configuration templates
+
+### Development Guidelines
+
+1. **Follow BunkerWeb Standards:**
+   - Use multisite context for all settings
+   - Implement proper error handling
+   - Include comprehensive logging
+   - Follow naming conventions: `PLUGIN_PLUGINNAME_SETTING`
+
+2. **Testing:**
+   - Test with single-site and multisite configurations
+   - Verify all NGINX phases (init, access, log, preread)
+   - Test with different log levels
+   - Validate configuration templates
+
+3. **Documentation:**
+   - Update plugin README.md with usage examples
+   - Document all configuration options
+   - Include troubleshooting section
+   - Provide Docker and Kubernetes examples
+
+### Plugin Development Workflow
+
+1. **Create Plugin:**
+   ```bash
+   cd templates/
+   ./create_bunkerweb_plugin.sh -d "My security plugin" --with-ui my-plugin
+   ```
+
+2. **Implement Logic:**
+   - Edit `my-plugin.lua` for core functionality
+   - Update `plugin.json` for settings
+   - Customize UI components if needed
+
+3. **Test Plugin:**
+   ```bash
+   # Install in test environment
+   cp -r my-plugin /path/to/test-bw/plugins/
+   
+   # Configure and test
+   USE_PLUGIN_MYPLUGIN=yes
+   ```
+
+4. **Document:**
+   - Update plugin README.md
+   - Add entry to this project README in the "Available Plugins" table
+   - Include configuration examples
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Plugin Not Loading:**
+   - Check file permissions (750 with correct ownership)
+   - Verify plugin.json syntax
+   - Check BunkerWeb error logs
+
+2. **Configuration Not Applied:**
+   - Restart BunkerWeb services
+   - Verify environment variables
+   - Check for multisite configuration conflicts
+
+3. **Performance Issues:**
+   - Adjust plugin timeout settings
+   - Review log levels (use INFO for production)
+   - Monitor system resources
+
+### Debugging
+
+1. **Enable Debug Logging:**
+   ```bash
+   PLUGIN_PLUGINNAME_LOG_LEVEL=DEBUG
+   ```
+
+2. **Check Logs:**
+   ```bash
+   # BunkerWeb logs
+   tail -f /var/log/bunkerweb/error.log
+   
+   # Plugin-specific logs
+   grep "PLUGINNAME" /var/log/bunkerweb/error.log
+   ```
+
+3. **Test Plugin Endpoints:**
+   ```bash
+   curl -I https://your-domain.com/plugin-name/status
+   ```
+
+## Contributing
+
+1. Fork this repository
+2. Create a feature branch
+3. Develop your plugin following the guidelines
+4. Add comprehensive tests
+5. Update documentation
+6. Submit a pull request
+
+### Code Review Checklist
+
+- [ ] Plugin follows BunkerWeb naming conventions
+- [ ] All settings use multisite context
+- [ ] Comprehensive error handling implemented
+- [ ] Documentation includes examples
+- [ ] Tests cover major functionality
+- [ ] Performance impact is minimal
+
+## Support
+
+- **BunkerWeb Documentation:** [docs.bunkerweb.io](https://docs.bunkerweb.io/)
+- **Plugin Development:** [Plugin Documentation](https://docs.bunkerweb.io/latest/plugins/)
+- **Community Support:** [Discord Server](https://bunkerity.discord.com/)
+- **Issues:** Create an issue in this repository
+
+## Resources
+
+- [BunkerWeb Official Repository](https://github.com/bunkerity/bunkerweb)
+- [BunkerWeb Plugins Repository](https://github.com/bunkerity/bunkerweb-plugins)
+- [NGINX Lua Module Documentation](https://github.com/openresty/lua-nginx-module)
+- [ModSecurity Rule Writing](https://coreruleset.org/docs/)
+
+## Environment Variables Reference
+
+All plugins use the `PLUGIN_` prefix for environment variables:
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `USE_PLUGIN_NAME` | Enable/disable plugin | `USE_PLUGIN_MYPLUGIN=yes` |
+| `PLUGIN_NAME_SETTING` | Plugin-specific setting | `PLUGIN_MYPLUGIN_TIMEOUT=30` |
+| `PLUGIN_NAME_LOG_LEVEL` | Plugin log level | `PLUGIN_MYPLUGIN_LOG_LEVEL=INFO` |
+
+### Multisite Configuration
+
+```bash
+# Global settings
+USE_PLUGIN_MYPLUGIN=yes
+PLUGIN_MYPLUGIN_SETTING=global_value
+
+# Per-service settings
+app1.example.com_PLUGIN_MYPLUGIN_SETTING=app1_value
+app2.example.com_PLUGIN_MYPLUGIN_SETTING=app2_value
+```
+
+**Note:** This project is designed to work with BunkerWeb 1.6.0+. For older versions, 
+some features may not be available.
 EOF
 }
 
+# Generate comprehensive documentation
 generate_readme() {
     local plugin_dir="$1"
     local plugin_name="$2"
@@ -1422,13 +1609,149 @@ generate_readme() {
     
     if [ "$WITH_TEMPLATES" = "yes" ]; then
         features="${features}
-- **Configuration Templates**: Pre-defined configuration templates with proper step structure"
+- **Configuration Templates**: Pre-defined configuration templates"
     fi
     
     features="${features}
 - **Stream Support**: $(echo "$STREAM_MODE" | tr '[:lower:]' '[:upper:]') support for TCP/UDP protocols
-- **Basic Security**: NGINX-level protections 
+- **Basic Security**: NGINX-level protections (ModSecurity disabled by default for stability)
 - **Flexible Context**: Multisite context allows both global and service-specific settings"
+    
+    local web_ui_section=""
+    if [ "$WITH_UI" = "yes" ]; then
+        web_ui_section="
+
+### Web UI
+
+Access the plugin configuration interface at:
+\`https://your-bunkerweb-ui.com/plugins/$plugin_name\`
+
+The web UI provides:
+- Real-time plugin status
+- Configuration management
+- Statistics dashboard
+- Health monitoring"
+    fi
+    
+    local jobs_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_section="
+
+### Scheduled Jobs
+
+The plugin includes automated maintenance jobs that run daily:
+
+- **Data Cleanup**: Removes old log files and temporary data
+- **Statistics Processing**: Aggregates request data and generates reports
+- **Health Checks**: Validates plugin configuration and system health
+- **Metrics Updates**: Updates runtime statistics and performance metrics
+
+**Available Job Frequencies:**
+- \`minute\` - Run every minute
+- \`hour\` - Run every hour  
+- \`day\` - Run once per day (default)
+- \`week\` - Run once per week
+- \`once\` - Run only once before configuration generation
+
+To change the job frequency, edit the \`every\` field in \`plugin.json\`:
+\`\`\`json
+\"jobs\": [
+    {
+        \"name\": \"myplugin-job\",
+        \"file\": \"myplugin-job.py\",
+        \"every\": \"hour\",
+        \"reload\": false
+    }
+]
+\`\`\`
+
+Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
+    fi
+    
+    local ui_structure=""
+    if [ "$WITH_UI" = "yes" ]; then
+        ui_structure="
+├── ui/                            # Web UI components
+│   ├── actions.py                 # Flask request handlers
+│   ├── template.html              # Web interface template
+│   ├── hooks.py                   # Flask lifecycle hooks
+│   ├── blueprints/               # Custom Flask blueprints
+│   └── templates/                # Additional UI templates"
+    fi
+    
+    local jobs_structure=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_structure="
+├── jobs/                          # Scheduled maintenance jobs
+│   └── $plugin_name-job.py       # Main job scheduler script"
+    fi
+    
+    local configs_structure=""
+    if [ "$WITH_CONFIGS" = "yes" ]; then
+        configs_structure="
+├── confs/                         # NGINX configuration templates
+│   ├── server-http/              # Server-level HTTP configurations
+│   ├── http/                     # HTTP-level configurations
+│   ├── default-server-http/      # Default server configurations
+│   ├── stream/                   # Stream-level configurations
+│   └── server-stream/            # Server-level stream configurations
+│   # Note: ModSecurity configs disabled by default"
+    fi
+    
+    local templates_structure=""
+    if [ "$WITH_TEMPLATES" = "yes" ]; then
+        templates_structure="
+└── templates/                     # Configuration templates
+    ├── $plugin_name-template.json    # Main template
+    ├── $plugin_name-dev.json         # Development template
+    ├── $plugin_name-prod.json        # Production template
+    └── $plugin_name-template/        # Template with custom configs
+        └── configs/
+            └── server-http/
+                └── custom-endpoint.conf"
+    fi
+    
+    local ui_dev_section=""
+    if [ "$WITH_UI" = "yes" ]; then
+        ui_dev_section="
+4. **Web Interface**: Modify files in \`ui/\` directory for UI changes"
+    fi
+    
+    local jobs_dev_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_dev_section="
+5. **Scheduled Tasks**: Update \`jobs/$plugin_name-job.py\` for job modifications
+   - Change frequency in \`plugin.json\` (hour, daily, weekly, monthly)
+   - Modify job logic for different execution patterns"
+    fi
+    
+    local configs_dev_section=""
+    if [ "$WITH_CONFIGS" = "yes" ]; then
+        configs_dev_section="
+6. **NGINX Configs**: Modify templates in \`confs/\` directory
+   - ModSecurity configurations disabled by default for stability
+   - Uncomment and customize ModSecurity rules in plugin source if needed"
+    fi
+    
+    local jobs_debug_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_debug_section="
+
+3. **Monitor job execution:**
+   \`\`\`bash
+   tail -f /var/log/bunkerweb/$plugin_name-job.log
+   \`\`\`"
+    fi
+    
+    local jobs_troubleshoot_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_troubleshoot_section="
+
+4. **Job execution failures:**
+   - Check job log file for errors
+   - Verify file system permissions
+   - Ensure required directories exist"
+    fi
     
     cat > "$plugin_dir/README.md" << EOF
 # $plugin_name Plugin for BunkerWeb
@@ -1493,6 +1816,57 @@ PLUGIN_${plugin_name_upper}_TIMEOUT=10
 
 # Set log level
 PLUGIN_${plugin_name_upper}_LOG_LEVEL=INFO
+\`\`\`$web_ui_section$jobs_section
+
+### Multisite Configuration
+
+The plugin supports both global and per-service configurations:
+
+**Global Configuration:**
+\`\`\`bash
+# Global defaults
+USE_PLUGIN_${plugin_name_upper}=yes
+PLUGIN_${plugin_name_upper}_SETTING=global_default
+PLUGIN_${plugin_name_upper}_TIMEOUT=30
+PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
+\`\`\`
+
+**Per-Service Configuration:**
+\`\`\`bash
+# Service-specific overrides
+example.com_PLUGIN_${plugin_name_upper}_SETTING=production_strict
+example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=5
+example.com_PLUGIN_${plugin_name_upper}_LOG_LEVEL=WARN
+
+# API service with custom timeout
+api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=60
+api.example.com_PLUGIN_${plugin_name_upper}_SETTING=api_optimized
+\`\`\`
+
+### Best Practices for Multisite
+
+1. **Global Defaults**: Set reasonable global defaults for common settings
+2. **Service Overrides**: Override only specific settings per service as needed
+3. **Consistent Naming**: Use consistent service names across all plugin settings
+4. **Environment Separation**: Use different configurations for dev/staging/prod
+5. **Security Levels**: Apply stricter settings to production services
+
+**Example Multisite Strategy:**
+\`\`\`bash
+# Global defaults (permissive for development)
+USE_PLUGIN_${plugin_name_upper}=yes
+PLUGIN_${plugin_name_upper}_SETTING=development_default
+PLUGIN_${plugin_name_upper}_TIMEOUT=30
+PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
+
+# Production service (strict settings)
+prod.example.com_PLUGIN_${plugin_name_upper}_SETTING=production_strict
+prod.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=5
+prod.example.com_PLUGIN_${plugin_name_upper}_LOG_LEVEL=WARN
+
+# API service (custom timeout)
+api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=60
+api.example.com_PLUGIN_${plugin_name_upper}_SETTING=api_optimized
 \`\`\`
 
 ### Environment Variables
@@ -1504,13 +1878,117 @@ PLUGIN_${plugin_name_upper}_LOG_LEVEL=INFO
 | \`PLUGIN_${plugin_name_upper}_TIMEOUT\` | \`5\` | Timeout for plugin operations (1-300 seconds) |
 | \`PLUGIN_${plugin_name_upper}_LOG_LEVEL\` | \`DEBUG\` | Log verbosity (DEBUG, INFO, WARN, ERROR) |
 
+### Docker Compose Example
+
+**Single Site:**
+\`\`\`yaml
+version: '3.8'
+
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:latest
+    environment:
+      # Global plugin configuration
+      - USE_PLUGIN_${plugin_name_upper}=yes
+      - PLUGIN_${plugin_name_upper}_SETTING=custom_value
+      - PLUGIN_${plugin_name_upper}_TIMEOUT=10
+      - PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
+    volumes:
+      - ./bw-data:/data
+    networks:
+      - bw-universe
+      - bw-services
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:latest
+    environment:
+      # Same configuration as bunkerweb
+      - USE_PLUGIN_${plugin_name_upper}=yes
+      - PLUGIN_${plugin_name_upper}_SETTING=custom_value
+      - PLUGIN_${plugin_name_upper}_TIMEOUT=10
+      - PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
+    volumes:
+      - ./bw-data:/data
+    networks:
+      - bw-universe
+
+networks:
+  bw-universe:
+  bw-services:
+\`\`\`
+
+**Multisite:**
+\`\`\`yaml
+version: '3.8'
+
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:latest
+    environment:
+      # Global configuration
+      - USE_PLUGIN_${plugin_name_upper}=yes
+      - PLUGIN_${plugin_name_upper}_SETTING=global_default
+      - PLUGIN_${plugin_name_upper}_TIMEOUT=30
+      - PLUGIN_${plugin_name_upper}_LOG_LEVEL=INFO
+      
+      # Per-service configuration
+      - app1.example.com_PLUGIN_${plugin_name_upper}_SETTING=app1_config
+      - app1.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=15
+      - app2.example.com_PLUGIN_${plugin_name_upper}_SETTING=app2_config
+      - api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=60
+    volumes:
+      - ./bw-data:/data
+\`\`\`
+
+### Kubernetes Configuration
+
+\`\`\`yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: example-ingress
+  annotations:
+    # Global plugin configuration
+    bunkerweb.io/USE_PLUGIN_${plugin_name_upper}: "yes"
+    bunkerweb.io/PLUGIN_${plugin_name_upper}_SETTING: "kubernetes_value"
+    bunkerweb.io/PLUGIN_${plugin_name_upper}_TIMEOUT: "10"
+    bunkerweb.io/PLUGIN_${plugin_name_upper}_LOG_LEVEL: "INFO"
+    
+    # Per-service configuration
+    bunkerweb.io/api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT: "60"
+    bunkerweb.io/admin.example.com_PLUGIN_${plugin_name_upper}_LOG_LEVEL: "DEBUG"
+spec:
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: example-service
+            port:
+              number: 80
+\`\`\`
+
+## File Structure
+
+\`\`\`
+$plugin_name/
+├── plugin.json                    # Plugin metadata and settings
+├── $plugin_name.lua              # Main Lua execution file
+├── README.md                      # This documentation$ui_structure$jobs_structure$configs_structure$templates_structure
+\`\`\`
+
 ## Development
 
 ### Modifying the Plugin
 
 1. **Core Logic**: Edit \`$plugin_name.lua\` for main functionality
 2. **Settings**: Update \`plugin.json\` for new configuration options
-3. **Documentation**: Update this README.md with your changes
+   - All settings use \`"context": "multisite"\` for maximum flexibility
+   - Add new settings following the same pattern
+3. **Documentation**: Update this README.md with your changes$ui_dev_section$jobs_dev_section$configs_dev_section
 
 ### Testing
 
@@ -1524,6 +2002,18 @@ tail -f /var/log/bunkerweb/error.log
 # Test plugin endpoints
 curl -I https://your-domain.com/$plugin_name/status
 \`\`\`
+
+### Debugging
+
+1. **Enable debug logging (already enabled by default):**
+   \`\`\`bash
+   PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
+   \`\`\`
+
+2. **Check plugin-specific logs:**
+   \`\`\`bash
+   grep "$plugin_name" /var/log/bunkerweb/error.log
+   \`\`\`$jobs_debug_section
 
 ## Troubleshooting
 
@@ -1542,7 +2032,7 @@ curl -I https://your-domain.com/$plugin_name/status
 3. **Performance issues:**
    - Adjust \`${plugin_name_upper}_TIMEOUT\` setting
    - Monitor system resources
-   - Check for excessive logging
+   - Check for excessive logging$jobs_troubleshoot_section
 
 ### Support
 
@@ -1562,6 +2052,7 @@ Please follow the [BunkerWeb contribution guidelines](https://github.com/bunkeri
 EOF
 }
 
+# Main plugin creation function
 create_plugin() {
     local plugin_name="$1"
     local output_dir="$2"
@@ -1650,6 +2141,7 @@ create_plugin() {
     echo "Plugin created in: $plugin_dir"
 }
 
+# Parse command line arguments
 PLUGIN_NAME=""
 DESCRIPTION=""
 VERSION="1.0.0"
@@ -1712,6 +2204,7 @@ while [ $# -gt 0 ]; do
     fi
 done
 
+# Validate required arguments
 if [ -z "$PLUGIN_NAME" ]; then
     echo "Error: Plugin name is required" >&2
     show_usage >&2
@@ -1723,18 +2216,22 @@ if [ -z "$DESCRIPTION" ]; then
     exit 1
 fi
 
+# Validate plugin name
 if ! validate_plugin_name "$PLUGIN_NAME"; then
     exit 1
 fi
 
+# Validate output directory
 if [ ! -d "$OUTPUT_DIR" ]; then
     echo "Error: Output directory does not exist: $OUTPUT_DIR" >&2
     exit 1
 fi
 
+# Validate order
 if ! echo "$ORDER" | grep -q '^[0-9]\+$' || [ "$ORDER" -lt 1 ] || [ "$ORDER" -gt 999 ]; then
     echo "Error: Order must be a number between 1 and 999" >&2
     exit 1
 fi
 
+# Create the plugin
 create_plugin "$PLUGIN_NAME" "$OUTPUT_DIR"
