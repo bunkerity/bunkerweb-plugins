@@ -75,10 +75,11 @@ create_directory_structure() {
         mkdir -p "$plugin_dir/confs/server-http"
         mkdir -p "$plugin_dir/confs/http"
         mkdir -p "$plugin_dir/confs/default-server-http"
-        mkdir -p "$plugin_dir/confs/modsec"
-        mkdir -p "$plugin_dir/confs/modsec-crs"
         mkdir -p "$plugin_dir/confs/stream"
         mkdir -p "$plugin_dir/confs/server-stream"
+        # Note: modsec directories not created by default
+        # mkdir -p "$plugin_dir/confs/modsec"
+        # mkdir -p "$plugin_dir/confs/modsec-crs"
     fi
     
     if [ "$WITH_TEMPLATES" = "yes" ]; then
@@ -1174,76 +1175,28 @@ location /$plugin_name {
 {% endif %}
 EOF
 
-    cat > "$plugin_dir/confs/modsec/$plugin_name.conf" << EOF
-# $plugin_name Plugin - ModSecurity Configuration
-
-{% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
-
-# Custom ModSecurity rules for $plugin_name plugin
-SecRule REQUEST_URI "@beginsWith /$plugin_name" \\
-    "id:${plugin_name}001,\\
-    phase:1,\\
-    pass,\\
-    msg:'$plugin_name plugin: Processing plugin request',\\
-    tag:'$plugin_name',\\
-    logdata:'Plugin setting: {{ PLUGIN_${plugin_name_upper}_SETTING }}',\\
-    rev:'1'"
-
-# Block suspicious patterns in plugin parameters
-SecRule ARGS "@detectSQLi" \\
-    "id:${plugin_name}002,\\
-    phase:2,\\
-    block,\\
-    msg:'$plugin_name plugin: SQL injection attempt detected',\\
-    logdata:'Matched Data: %{MATCHED_VAR} found within %{MATCHED_VAR_NAME}',\\
-    severity:'CRITICAL',\\
-    tag:'$plugin_name',\\
-    tag:'sql-injection',\\
-    rev:'1'"
-
-SecRule ARGS "@detectXSS" \\
-    "id:${plugin_name}003,\\
-    phase:2,\\
-    block,\\
-    msg:'$plugin_name plugin: XSS attempt detected',\\
-    logdata:'Matched Data: %{MATCHED_VAR} found within %{MATCHED_VAR_NAME}',\\
-    severity:'HIGH',\\
-    tag:'$plugin_name',\\
-    tag:'xss',\\
-    rev:'1'"
-
-# Allow legitimate plugin status checks
-SecRule REQUEST_URI "@streq /$plugin_name/status" \\
-    "id:${plugin_name}004,\\
-    phase:1,\\
-    pass,\\
-    msg:'$plugin_name plugin: Allow status endpoint',\\
-    tag:'$plugin_name',\\
-    ctl:ruleRemoveById=${plugin_name}002,\\
-    ctl:ruleRemoveById=${plugin_name}003,\\
-    rev:'1'"
-
-{% endif %}
-EOF
-
-    cat > "$plugin_dir/confs/modsec-crs/$plugin_name.conf" << EOF
-# $plugin_name Plugin - ModSecurity CRS Configuration
-
-{% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
-
-# Whitelist plugin endpoints from certain CRS rules
-SecRule REQUEST_URI "@rx ^/$plugin_name/(status|metrics)\$" \\
-    "id:${plugin_name}100,\\
-    phase:1,\\
-    pass,\\
-    msg:'$plugin_name plugin: Whitelist plugin endpoints',\\
-    tag:'$plugin_name',\\
-    ctl:ruleRemoveTargetById=920350;ARGS,\\
-    ctl:ruleRemoveTargetById=920360;ARGS,\\
-    rev:'1'"
-
-{% endif %}
-EOF
+    # ModSecurity configurations disabled by default due to syntax complexity
+    # Uncomment and customize if needed:
+    
+    # cat > "$plugin_dir/confs/modsec/$plugin_name.conf" << EOF
+    # # $plugin_name Plugin - ModSecurity Configuration
+    # # NOTE: ModSecurity rules disabled by default
+    # # Uncomment and test carefully before enabling
+    # 
+    # # {% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
+    # # 
+    # # # Custom ModSecurity rules for $plugin_name plugin
+    # # SecRule REQUEST_URI "@beginsWith /$plugin_name" \\
+    # #     "pass,\\
+    # #     id:${plugin_name}001,\\
+    # #     phase:1,\\
+    # #     msg:'$plugin_name plugin: Processing plugin request',\\
+    # #     tag:'$plugin_name',\\
+    # #     logdata:'Plugin setting: {{ PLUGIN_${plugin_name_upper}_SETTING }}',\\
+    # #     rev:'1'"
+    # # 
+    # # {% endif %}
+    # EOF
 
     cat > "$plugin_dir/confs/stream/$plugin_name.conf" << EOF
 # $plugin_name Plugin - Stream Configuration
@@ -1651,7 +1604,7 @@ generate_readme() {
     
     if [ "$WITH_CONFIGS" = "yes" ]; then
         features="${features}
-- **Custom NGINX Configs**: Flexible NGINX configuration templates"
+- **Custom NGINX Configs**: Flexible NGINX configuration templates (ModSecurity disabled by default)"
     fi
     
     if [ "$WITH_TEMPLATES" = "yes" ]; then
@@ -1661,7 +1614,7 @@ generate_readme() {
     
     features="${features}
 - **Stream Support**: $(echo "$STREAM_MODE" | tr '[:lower:]' '[:upper:]') support for TCP/UDP protocols
-- **Security Rules**: Integrated ModSecurity rules for protection
+- **Basic Security**: NGINX-level protections (ModSecurity disabled by default for stability)
 - **Flexible Context**: Multisite context allows both global and service-specific settings"
     
     local web_ui_section=""
@@ -1740,10 +1693,9 @@ Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
 │   ├── server-http/              # Server-level HTTP configurations
 │   ├── http/                     # HTTP-level configurations
 │   ├── default-server-http/      # Default server configurations
-│   ├── modsec/                   # ModSecurity rules
-│   ├── modsec-crs/              # ModSecurity CRS rules
 │   ├── stream/                   # Stream-level configurations
-│   └── server-stream/            # Server-level stream configurations"
+│   └── server-stream/            # Server-level stream configurations
+│   # Note: ModSecurity configs disabled by default"
     fi
     
     local templates_structure=""
@@ -1776,7 +1728,9 @@ Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
     local configs_dev_section=""
     if [ "$WITH_CONFIGS" = "yes" ]; then
         configs_dev_section="
-6. **NGINX Configs**: Modify templates in \`confs/\` directory"
+6. **NGINX Configs**: Modify templates in \`confs/\` directory
+   - ModSecurity configurations disabled by default for stability
+   - Uncomment and customize ModSecurity rules in plugin source if needed"
     fi
     
     local jobs_debug_section=""
