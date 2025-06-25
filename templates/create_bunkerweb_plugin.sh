@@ -17,7 +17,7 @@ OPTIONS:
     --order NUMBER          Plugin execution order (default: 256)
     --stream MODE           Stream support: no|partial|yes (default: partial)
     --with-ui               Include web UI components
-    --with-jobs             Include job scheduler components (daily frequency)
+    --with-jobs             Include job scheduler components (day frequency)
     --with-configs          Include NGINX configuration templates
     --with-templates        Include custom configuration templates
 
@@ -30,7 +30,7 @@ EXAMPLES:
 NOTE: 
 - Script creates plugins in parent directory by default (assumes run from templates/)
 - Creates project README.md template if it doesn't exist
-- Jobs default to daily frequency. Edit plugin.json to change to hour/weekly/monthly.
+- Jobs default to daily frequency. Edit plugin.json to change to minute/hour/day/week/once.
 EOF
 }
 
@@ -159,7 +159,8 @@ generate_plugin_json() {
         {
             "name": "'"$plugin_name"'-job",
             "file": "'"$plugin_name"'-job.py",
-            "every": "daily"
+            "every": "day",
+            "reload": false
         }
     ]' || echo "")
 }
@@ -173,50 +174,44 @@ generate_lua_file() {
     
     cat > "$plugin_dir/$plugin_name.lua" << 'EOF'
 local class = require "middleclass"
-local plugin = class("PLUGIN_NAME")
-
-local logger = require "bunkerweb.logger"
+local plugin = require "bunkerweb.plugin"
 local utils = require "bunkerweb.utils"
-local datastore = require "bunkerweb.datastore"
 
-# Constructor function
-function plugin:initialize(ctx)
-    self.ctx = ctx
-    self.logger = logger
-    self.utils = utils
-    self.datastore = datastore
+local PLUGIN_NAME = class("PLUGIN_NAME", plugin)
+
+function PLUGIN_NAME:initialize(ctx)
+    plugin.initialize(self, "PLUGIN_NAME", ctx)
 end
 
-# Init phase - called during NGINX worker initialization
-function plugin:init()
-    if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
+function PLUGIN_NAME:init()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
     end
     
-    self.logger:log(ngx.NOTICE, "PLUGIN_NAME", "Initializing plugin")
-    
-    local ret, err = self.datastore:set("plugin_PLUGIN_NAME_status", "initialized")
-    if not ret then
-        self.logger:log(ngx.ERR, "PLUGIN_NAME", "Failed to set plugin status: " .. err)
-        return self:ret(false, "Init failed: " .. err)
-    end
-    
-    self.logger:log(ngx.NOTICE, "PLUGIN_NAME", "Plugin initialized successfully")
-    return self:ret(true, "Init successful")
+    self.logger:log(ngx.NOTICE, "init called")
+    return self:ret(true, "Plugin initialized successfully")
 end
 
-# Access phase - called for each request before content is served
-function plugin:access()
-    if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
+function PLUGIN_NAME:set()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
+        return self:ret(true, "Plugin disabled")
+    end
+    
+    self.logger:log(ngx.NOTICE, "set called")
+    return self:ret(true, "Set phase completed")
+end
+
+function PLUGIN_NAME:access()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
     end
     
     local start_time = ngx.now()
-    self.logger:log(ngx.INFO, "PLUGIN_NAME", "Access phase started")
+    self.logger:log(ngx.NOTICE, "access called")
     
-    local setting_value = self.ctx.bw.variables["PLUGIN_PLUGIN_NAME_SETTING"] or "default_value"
-    local timeout = tonumber(self.ctx.bw.variables["PLUGIN_PLUGIN_NAME_TIMEOUT"]) or 5
-    local log_level = self.ctx.bw.variables["PLUGIN_PLUGIN_NAME_LOG_LEVEL"] or "DEBUG"
+    local setting_value = self.variables["PLUGIN_PLUGIN_NAME_UPPER_SETTING"] or "default_value"
+    local timeout = tonumber(self.variables["PLUGIN_PLUGIN_NAME_UPPER_TIMEOUT"]) or 5
+    local log_level = self.variables["PLUGIN_PLUGIN_NAME_UPPER_LOG_LEVEL"] or "DEBUG"
     
     if not self:validate_settings(setting_value, timeout) then
         return self:ret(false, "Invalid settings")
@@ -224,122 +219,100 @@ function plugin:access()
     
     local success, result = self:execute_main_logic(setting_value, timeout)
     if not success then
-        self.logger:log(ngx.ERR, "PLUGIN_NAME", "Main logic failed: " .. (result or "unknown error"))
+        self.logger:log(ngx.ERR, "Main logic failed: " .. (result or "unknown error"))
         return self:ret(false, "Plugin execution failed", 500)
     end
     
-    local request_data = {
-        uri = ngx.var.uri,
-        method = ngx.var.request_method,
-        remote_addr = ngx.var.remote_addr,
-        timestamp = ngx.time(),
-        result = result
-    }
-    
-    local ret, err = self.datastore:set("plugin_PLUGIN_NAME_request_" .. ngx.var.request_id, 
-                                       self.utils:json_encode(request_data), 300)
-    if not ret then
-        self.logger:log(ngx.WARN, "PLUGIN_NAME", "Failed to store request data: " .. err)
-    end
-    
     local duration = ngx.now() - start_time
-    self.logger:log(ngx.INFO, "PLUGIN_NAME", 
+    self.logger:log(ngx.INFO, 
                    string.format("Access phase completed in %.3f seconds", duration))
     
     return self:ret(true, "Access successful")
 end
 
-# Log phase - called after the request has been processed
-function plugin:log()
-    if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
+function PLUGIN_NAME:log()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
     end
     
-    local log_level = self.ctx.bw.variables["PLUGIN_PLUGIN_NAME_LOG_LEVEL"] or "DEBUG"
-    
-    local request_data_str, err = self.datastore:get("plugin_PLUGIN_NAME_request_" .. 
-                                                   ngx.var.request_id)
-    if request_data_str then
-        local request_data = self.utils:json_decode(request_data_str)
-        if request_data then
-            self:log_request_details(request_data, log_level)
-        end
-        
-        self.datastore:delete("plugin_PLUGIN_NAME_request_" .. ngx.var.request_id)
-    end
-    
+    self.logger:log(ngx.NOTICE, "log called")
     return self:ret(true, "Log successful")
 end
 
-# Preread phase - called for stream module (TCP/UDP)
-function plugin:preread()
-    if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
+function PLUGIN_NAME:log_default()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
     end
     
-    self.logger:log(ngx.INFO, "PLUGIN_NAME", "Preread phase executed")
+    self.logger:log(ngx.NOTICE, "log_default called")
+    return self:ret(true, "Log default successful")
+end
+
+function PLUGIN_NAME:preread()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
+        return self:ret(true, "Plugin disabled")
+    end
+    
+    self.logger:log(ngx.NOTICE, "preread called")
     
     local client_addr = ngx.var.remote_addr
     local server_port = ngx.var.server_port
     
-    self.logger:log(ngx.INFO, "PLUGIN_NAME", 
-                   string.format("Stream connection from %s to port %s", client_addr, server_port))
+    self.logger:log(ngx.INFO, 
+                   string.format("Stream connection from %s to port %s", 
+                               client_addr or "unknown", server_port or "unknown"))
     
     return self:ret(true, "Preread successful")
 end
 
-# Validate plugin settings
-function plugin:validate_settings(setting_value, timeout)
+function PLUGIN_NAME:log_stream()
+    if self.variables["USE_PLUGIN_PLUGIN_NAME_UPPER"] ~= "yes" then
+        return self:ret(true, "Plugin disabled")
+    end
+    
+    self.logger:log(ngx.NOTICE, "log_stream called")
+    return self:ret(true, "Stream log successful")
+end
+
+-- Validate plugin settings
+function PLUGIN_NAME:validate_settings(setting_value, timeout)
     if not setting_value or setting_value == "" then
-        self.logger:log(ngx.ERR, "PLUGIN_NAME", "Setting value is empty")
+        self.logger:log(ngx.ERR, "Setting value is empty")
         return false
     end
     
-    if timeout <= 0 or timeout > 60 then
-        self.logger:log(ngx.ERR, "PLUGIN_NAME", "Invalid timeout value: " .. timeout)
+    if timeout <= 0 or timeout > 300 then
+        self.logger:log(ngx.ERR, "Invalid timeout value: " .. timeout)
         return false
     end
     
     return true
 end
 
-# Execute main plugin logic
-function plugin:execute_main_logic(setting_value, timeout)
-    self.logger:log(ngx.INFO, "PLUGIN_NAME", 
-                   string.format("Executing with setting: %s, timeout: %d", setting_value, timeout))
+-- Execute main plugin logic
+function PLUGIN_NAME:execute_main_logic(setting_value, timeout)
+    self.logger:log(ngx.INFO, 
+                   string.format("Executing with setting: %s, timeout: %d", 
+                               setting_value, timeout))
     
+    -- Add your custom logic here
     local allow_request = true
     local reason = "Request allowed by plugin"
     
     return allow_request, reason
 end
 
-# Log request details based on log level
-function plugin:log_request_details(request_data, log_level)
-    local levels = {DEBUG = 4, INFO = 3, WARN = 2, ERROR = 1}
-    local current_level = levels[log_level] or 4
-    
-    if current_level >= 3 then
-        self.logger:log(ngx.INFO, "PLUGIN_NAME", 
-                       string.format("Request processed: %s %s from %s", 
-                                   request_data.method, request_data.uri, request_data.remote_addr))
-    end
-    
-    if current_level >= 4 then
-        self.logger:log(ngx.DEBUG, "PLUGIN_NAME", 
-                       string.format("Request details: %s", self.utils:json_encode(request_data)))
-    end
-end
-
-# Helper function to return consistent results
-function plugin:ret(ok, msg, status, redirect_url)
-    return ok, msg, status or nil, redirect_url or nil
-end
-
-return plugin
+return PLUGIN_NAME
 EOF
 
+    # Replace placeholders
     sed -i.bak "s|PLUGIN_NAME|${plugin_name}|g" "$plugin_dir/$plugin_name.lua"
+    
+    # Fix the uppercase variable names
+    local plugin_name_upper
+    plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
+    sed -i.bak "s|PLUGIN_NAME_UPPER|${plugin_name_upper}|g" "$plugin_dir/$plugin_name.lua"
+    
     rm -f "$plugin_dir/$plugin_name.lua.bak"
 }
 
@@ -786,6 +759,8 @@ EOF
 generate_job_files() {
     local plugin_dir="$1"
     local plugin_name="$2"
+    local plugin_name_upper
+    plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
     cat > "$plugin_dir/jobs/$plugin_name-job.py" << EOF
 #!/usr/bin/env python3
@@ -1719,10 +1694,11 @@ The plugin includes automated maintenance jobs that run daily:
 - **Metrics Updates**: Updates runtime statistics and performance metrics
 
 **Available Job Frequencies:**
-- \`hour\` - Run every hour
-- \`daily\` - Run once per day (default)
-- \`weekly\` - Run once per week
-- \`monthly\` - Run once per month
+- \`minute\` - Run every minute
+- \`hour\` - Run every hour  
+- \`day\` - Run once per day (default)
+- \`week\` - Run once per week
+- \`once\` - Run only once before configuration generation
 
 To change the job frequency, edit the \`every\` field in \`plugin.json\`:
 \`\`\`json
@@ -1730,7 +1706,8 @@ To change the job frequency, edit the \`every\` field in \`plugin.json\`:
     {
         \"name\": \"myplugin-job\",
         \"file\": \"myplugin-job.py\",
-        \"every\": \"hour\"
+        \"every\": \"hour\",
+        \"reload\": false
     }
 ]
 \`\`\`
