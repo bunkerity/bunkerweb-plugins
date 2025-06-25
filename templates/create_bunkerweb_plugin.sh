@@ -31,7 +31,6 @@ NOTE:
 - Script creates plugins in parent directory by default (assumes run from templates/)
 - Creates project README.md template if it doesn't exist
 - Jobs default to daily frequency. Edit plugin.json to change to hour/weekly/monthly.
-
 EOF
 }
 
@@ -93,7 +92,6 @@ create_docs() {
     
     mkdir -p "$plugin_dir/docs"
     
-    # Copy template files if they exist
     if [ -f "template_diagram.drawio" ]; then
         cp "template_diagram.drawio" "$plugin_dir/docs/"
     fi
@@ -107,7 +105,8 @@ create_docs() {
 generate_plugin_json() {
     local plugin_dir="$1"
     local plugin_name="$2"
-    local plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
+    local plugin_name_upper
+    plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
     cat > "$plugin_dir/plugin.json" << EOF
 {
@@ -180,7 +179,7 @@ local logger = require "bunkerweb.logger"
 local utils = require "bunkerweb.utils"
 local datastore = require "bunkerweb.datastore"
 
--- Constructor function
+# Constructor function
 function plugin:initialize(ctx)
     self.ctx = ctx
     self.logger = logger
@@ -188,7 +187,7 @@ function plugin:initialize(ctx)
     self.datastore = datastore
 end
 
--- Init phase - called during NGINX worker initialization
+# Init phase - called during NGINX worker initialization
 function plugin:init()
     if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
@@ -206,7 +205,7 @@ function plugin:init()
     return self:ret(true, "Init successful")
 end
 
--- Access phase - called for each request before content is served
+# Access phase - called for each request before content is served
 function plugin:access()
     if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
@@ -250,7 +249,7 @@ function plugin:access()
     return self:ret(true, "Access successful")
 end
 
--- Log phase - called after the request has been processed
+# Log phase - called after the request has been processed
 function plugin:log()
     if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
@@ -258,7 +257,8 @@ function plugin:log()
     
     local log_level = self.ctx.bw.variables["PLUGIN_PLUGIN_NAME_LOG_LEVEL"] or "DEBUG"
     
-    local request_data_str, err = self.datastore:get("plugin_PLUGIN_NAME_request_" .. ngx.var.request_id)
+    local request_data_str, err = self.datastore:get("plugin_PLUGIN_NAME_request_" .. 
+                                                   ngx.var.request_id)
     if request_data_str then
         local request_data = self.utils:json_decode(request_data_str)
         if request_data then
@@ -271,7 +271,7 @@ function plugin:log()
     return self:ret(true, "Log successful")
 end
 
--- Preread phase - called for stream module (TCP/UDP)
+# Preread phase - called for stream module (TCP/UDP)
 function plugin:preread()
     if self.ctx.bw.variables["USE_PLUGIN_PLUGIN_NAME"] ~= "yes" then
         return self:ret(true, "Plugin disabled")
@@ -288,7 +288,7 @@ function plugin:preread()
     return self:ret(true, "Preread successful")
 end
 
--- Validate plugin settings
+# Validate plugin settings
 function plugin:validate_settings(setting_value, timeout)
     if not setting_value or setting_value == "" then
         self.logger:log(ngx.ERR, "PLUGIN_NAME", "Setting value is empty")
@@ -303,7 +303,7 @@ function plugin:validate_settings(setting_value, timeout)
     return true
 end
 
--- Execute main plugin logic
+# Execute main plugin logic
 function plugin:execute_main_logic(setting_value, timeout)
     self.logger:log(ngx.INFO, "PLUGIN_NAME", 
                    string.format("Executing with setting: %s, timeout: %d", setting_value, timeout))
@@ -314,7 +314,7 @@ function plugin:execute_main_logic(setting_value, timeout)
     return allow_request, reason
 end
 
--- Log request details based on log level
+# Log request details based on log level
 function plugin:log_request_details(request_data, log_level)
     local levels = {DEBUG = 4, INFO = 3, WARN = 2, ERROR = 1}
     local current_level = levels[log_level] or 4
@@ -331,7 +331,7 @@ function plugin:log_request_details(request_data, log_level)
     end
 end
 
--- Helper function to return consistent results
+# Helper function to return consistent results
 function plugin:ret(ok, msg, status, redirect_url)
     return ok, msg, status or nil, redirect_url or nil
 end
@@ -380,46 +380,40 @@ def $plugin_name():
             if not validation_result["valid"]:
                 return jsonify({"error": validation_result["message"]}), 400
             
-            config_result = save_configuration(data)
+            save_result = save_configuration(data)
             
-            if config_result["success"]:
-                return jsonify({
-                    "success": True,
-                    "message": "Configuration saved successfully",
-                    "data": config_result["data"]
-                })
-            else:
-                return jsonify({
-                    "error": config_result["message"]
-                }), 500
-                
+            return jsonify({
+                "success": save_result["success"],
+                "message": save_result["message"]
+            })
+            
         except Exception as e:
-            current_app.logger.error(f"$plugin_name plugin error: {str(e)}")
-            return jsonify({"error": f"Internal error: {str(e)}"}), 500
+            current_app.logger.error(f"Failed to process $plugin_name request: {str(e)}")
+            return jsonify({"error": f"Request processing failed: {str(e)}"}), 500
 
 
 def validate_configuration(data):
     """
     Validate plugin configuration data
     """
-    required_fields = ["enabled", "setting", "timeout", "log_level"]
-    
-    for field in required_fields:
-        if field not in data:
-            return {"valid": False, "message": f"Missing required field: {field}"}
-    
     try:
-        timeout = int(data["timeout"])
-        if timeout <= 0 or timeout > 300:
+        required_fields = ["setting", "timeout", "log_level"]
+        
+        for field in required_fields:
+            if field not in data:
+                return {"valid": False, "message": f"Missing required field: {field}"}
+        
+        if not isinstance(data["timeout"], int) or data["timeout"] < 1 or data["timeout"] > 300:
             return {"valid": False, "message": "Timeout must be between 1 and 300 seconds"}
-    except (ValueError, TypeError):
-        return {"valid": False, "message": "Timeout must be a valid number"}
-    
-    valid_log_levels = ["DEBUG", "INFO", "WARN", "ERROR"]
-    if data["log_level"] not in valid_log_levels:
-        return {"valid": False, "message": f"Log level must be one of: {', '.join(valid_log_levels)}"}
-    
-    return {"valid": True, "message": "Configuration is valid"}
+        
+        valid_log_levels = ["DEBUG", "INFO", "WARN", "ERROR"]
+        if data["log_level"] not in valid_log_levels:
+            return {"valid": False, "message": f"Log level must be one of: {', '.join(valid_log_levels)}"}
+        
+        return {"valid": True, "message": "Configuration is valid"}
+        
+    except Exception as e:
+        return {"valid": False, "message": f"Validation error: {str(e)}"}
 
 
 def save_configuration(data):
@@ -427,24 +421,16 @@ def save_configuration(data):
     Save plugin configuration
     """
     try:
-        config = {
-            "enabled": bool(data.get("enabled", False)),
-            "setting": str(data.get("setting", "")).strip(),
-            "timeout": int(data.get("timeout", 5)),
-            "log_level": str(data.get("log_level", "INFO")),
-            "updated_at": datetime.utcnow().isoformat(),
-            "updated_by": "web_ui"
+        config_data = {
+            "plugin_name": "$plugin_name",
+            "setting": data["setting"],
+            "timeout": data["timeout"],
+            "log_level": data["log_level"],
+            "updated_at": datetime.utcnow().isoformat()
         }
-        
-        config_path = os.path.join("/tmp", f"$plugin_name_config.json")
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
-        
-        current_app.logger.info(f"$plugin_name configuration saved successfully")
         
         return {
             "success": True,
-            "data": config,
             "message": "Configuration saved successfully"
         }
         
@@ -481,11 +467,20 @@ EOF
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ plugin_name | title }} Plugin Configuration</title>
     <style>
+        @font-face {
+            font-family: 'Public Sans';
+            src: url('../fonts/Public_sans/PublicSans-Thin.woff2') format('woff2');
+            font-weight: 100;
+            font-style: normal;
+        }
+        @import url('./core.css');
+        
         .plugin-container {
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
+                         Roboto, sans-serif;
         }
         .plugin-header {
             background: #f8f9fa;
@@ -536,10 +531,10 @@ EOF
         }
         .form-control {
             width: 100%;
-            padding: 10px 12px;
+            padding: 12px 16px;
+            font-size: 1rem;
             border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 14px;
+            border-radius: 6px;
             transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
         }
         .form-control:focus {
@@ -547,68 +542,55 @@ EOF
             border-color: #80bdff;
             box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
         }
-        .form-check {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .form-check-input {
-            width: 18px;
-            height: 18px;
-        }
         .btn {
             display: inline-block;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: 600;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 500;
             text-align: center;
-            border: none;
-            border-radius: 4px;
+            text-decoration: none;
+            border: 1px solid transparent;
+            border-radius: 6px;
             cursor: pointer;
             transition: all 0.15s ease-in-out;
         }
         .btn-primary {
+            color: #fff;
             background-color: #007bff;
-            color: white;
+            border-color: #007bff;
         }
         .btn-primary:hover {
             background-color: #0056b3;
+            border-color: #004085;
         }
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-            margin-left: 10px;
-        }
-        .btn-secondary:hover {
-            background-color: #545b62;
-        }
-        .status-message {
+        .alert {
             padding: 12px 16px;
-            border-radius: 4px;
-            margin-top: 15px;
-            font-weight: 500;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 6px;
         }
-        .status-message.success {
-            background-color: #d4edda;
+        .alert-success {
             color: #155724;
-            border: 1px solid #c3e6cb;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
         }
-        .status-message.error {
-            background-color: #f8d7da;
+        .alert-danger {
             color: #721c24;
-            border: 1px solid #f5c6cb;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
         }
-        .loading {
-            opacity: 0.6;
-            pointer-events: none;
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
         }
-        @media (max-width: 600px) {
-            .plugin-container {
-                padding: 10px;
-            }
-            .plugin-info {
-                grid-template-columns: 1fr;
-            }
+        .status-active {
+            background-color: #28a745;
+        }
+        .status-inactive {
+            background-color: #dc3545;
         }
     </style>
 </head>
@@ -618,113 +600,108 @@ EOF
             <h1>{{ plugin_name | title }} Plugin</h1>
             <p>{{ plugin_description }}</p>
         </div>
-        
+
         <div class="plugin-info">
+            <div class="info-item">
+                <div class="info-label">Status</div>
+                <div class="info-value">
+                    <span class="status-indicator status-active"></span>
+                    Active
+                </div>
+            </div>
             <div class="info-item">
                 <div class="info-label">Version</div>
                 <div class="info-value">{{ plugin_version }}</div>
             </div>
             <div class="info-item">
-                <div class="info-label">Status</div>
-                <div class="info-value" id="plugin-status">Loading...</div>
+                <div class="info-label">Requests Processed</div>
+                <div class="info-value" id="requests-count">-</div>
             </div>
             <div class="info-item">
                 <div class="info-label">Last Activity</div>
                 <div class="info-value" id="last-activity">-</div>
             </div>
-            <div class="info-item">
-                <div class="info-label">Requests Processed</div>
-                <div class="info-value" id="requests-processed">-</div>
-            </div>
         </div>
-        
-        <form id="plugin-form" class="form-section">
+
+        <div class="form-section">
             <h3>Configuration</h3>
-            
-            <div class="form-group">
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="plugin-enabled" name="enabled" checked>
-                    <label for="plugin-enabled" class="form-label">Enable Plugin</label>
+            <form id="plugin-config-form">
+                <div class="form-group">
+                    <label for="plugin-setting" class="form-label">Plugin Setting</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="plugin-setting" 
+                           name="setting" 
+                           placeholder="Enter plugin setting value"
+                           value="default_value">
                 </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="plugin-setting" class="form-label">Main Setting</label>
-                <input type="text" class="form-control" id="plugin-setting" name="setting" 
-                       placeholder="Enter configuration value" value="default_value" required>
-                <small class="form-text text-muted">Configure the main setting for this plugin</small>
-            </div>
-            
-            <div class="form-group">
-                <label for="plugin-timeout" class="form-label">Timeout (seconds)</label>
-                <input type="number" class="form-control" id="plugin-timeout" name="timeout" 
-                       min="1" max="300" value="5" required>
-                <small class="form-text text-muted">Timeout for plugin operations (1-300 seconds)</small>
-            </div>
-            
-            <div class="form-group">
-                <label for="plugin-log-level" class="form-label">Log Level</label>
-                <select class="form-control" id="plugin-log-level" name="log_level" required>
-                    <option value="DEBUG" selected>Debug</option>
-                    <option value="INFO">Info</option>
-                    <option value="WARN">Warning</option>
-                    <option value="ERROR">Error</option>
-                </select>
-                <small class="form-text text-muted">Set the logging verbosity level</small>
-            </div>
-            
-            <div class="form-group">
+
+                <div class="form-group">
+                    <label for="plugin-timeout" class="form-label">Timeout (seconds)</label>
+                    <input type="number" 
+                           class="form-control" 
+                           id="plugin-timeout" 
+                           name="timeout" 
+                           min="1" 
+                           max="300" 
+                           value="5">
+                </div>
+
+                <div class="form-group">
+                    <label for="plugin-log-level" class="form-label">Log Level</label>
+                    <select class="form-control" id="plugin-log-level" name="log_level">
+                        <option value="DEBUG" selected>DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+
                 <button type="submit" class="btn btn-primary">Save Configuration</button>
-                <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
-            </div>
-        </form>
-        
-        <div id="status-message" class="status-message" style="display: none;"></div>
+            </form>
+        </div>
+
+        <div id="message-container"></div>
     </div>
-    
+
     <script>
-        let originalFormData = {};
-        
         document.addEventListener('DOMContentLoaded', function() {
             loadPluginStatus();
-            storeOriginalFormData();
-            setInterval(loadPluginStatus, 30000);
-        });
-        
-        function storeOriginalFormData() {
-            const form = document.getElementById('plugin-form');
-            const formData = new FormData(form);
-            originalFormData = {
-                enabled: document.getElementById('plugin-enabled').checked,
-                setting: formData.get('setting'),
-                timeout: formData.get('timeout'),
-                log_level: formData.get('log_level') || 'DEBUG'
-            };
-        }
-        
-        function loadPluginStatus() {
-            document.getElementById('plugin-status').textContent = 'Active';
-            document.getElementById('last-activity').textContent = new Date().toLocaleString();
-            document.getElementById('requests-processed').textContent = '12,345';
-        }
-        
-        document.getElementById('plugin-form').addEventListener('submit', function(e) {
-            e.preventDefault();
             
-            const form = this;
-            const formData = new FormData(form);
+            document.getElementById('plugin-config-form').addEventListener('submit', 
+                                                                           handleFormSubmit);
+        });
+
+        function loadPluginStatus() {
+            fetch('/api/plugins/{{ plugin_name }}/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.requests_processed) {
+                        document.getElementById('requests-count').textContent = 
+                            data.requests_processed.toLocaleString();
+                    }
+                    if (data.last_activity) {
+                        const date = new Date(data.last_activity);
+                        document.getElementById('last-activity').textContent = 
+                            date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load plugin status:', error);
+                });
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
             const data = {
-                enabled: document.getElementById('plugin-enabled').checked,
                 setting: formData.get('setting'),
                 timeout: parseInt(formData.get('timeout')),
-                log_level: formData.get('log_level'),
-                timestamp: new Date().toISOString()
+                log_level: formData.get('log_level')
             };
-            
-            form.classList.add('loading');
-            showStatus('Saving configuration...', 'info');
-            
-            fetch('', {
+
+            fetch('/api/plugins/{{ plugin_name }}/configure', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -732,41 +709,29 @@ EOF
                 body: JSON.stringify(data)
             })
             .then(response => response.json())
-            .then(data => {
-                form.classList.remove('loading');
-                if (data.success) {
-                    showStatus('Configuration saved successfully!', 'success');
-                    storeOriginalFormData();
-                } else {
-                    showStatus('Error: ' + data.error, 'error');
+            .then(result => {
+                showMessage(result.message, result.success ? 'success' : 'danger');
+                if (result.success) {
+                    loadPluginStatus();
                 }
             })
             .catch(error => {
-                form.classList.remove('loading');
-                console.error('Error:', error);
-                showStatus('Error saving configuration: ' + error.message, 'error');
+                showMessage('Failed to save configuration: ' + error.message, 'danger');
             });
-        });
-        
-        function resetForm() {
-            document.getElementById('plugin-enabled').checked = originalFormData.enabled;
-            document.getElementById('plugin-setting').value = originalFormData.setting;
-            document.getElementById('plugin-timeout').value = originalFormData.timeout;
-            document.getElementById('plugin-log-level').value = originalFormData.log_level;
-            showStatus('Form reset to original values', 'info');
         }
-        
-        function showStatus(message, type) {
-            const statusEl = document.getElementById('status-message');
-            statusEl.textContent = message;
-            statusEl.className = 'status-message ' + type;
-            statusEl.style.display = 'block';
+
+        function showMessage(message, type) {
+            const container = document.getElementById('message-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
             
-            if (type === 'success' || type === 'info') {
-                setTimeout(() => {
-                    statusEl.style.display = 'none';
-                }, 5000);
-            }
+            container.innerHTML = '';
+            container.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
         }
     </script>
 </body>
@@ -776,536 +741,421 @@ EOF
     cat > "$plugin_dir/ui/hooks.py" << EOF
 #!/usr/bin/env python3
 
-import logging
-from flask import current_app, g
+import os
+import json
+from flask import Flask
 
 
 def before_first_request():
     """
-    Hook executed before the first request to the plugin
+    Initialization hook called before the first request
     """
-    current_app.logger.info("$plugin_name plugin UI initialized")
+    pass
 
 
 def before_request():
     """
-    Hook executed before each request to the plugin
+    Hook called before each request
     """
-    g.plugin_name = "$plugin_name"
-    g.plugin_version = "$VERSION"
-    
-    if current_app.logger.isEnabledFor(logging.DEBUG):
-        current_app.logger.debug(f"$plugin_name plugin processing request")
+    pass
 
 
 def after_request(response):
     """
-    Hook executed after each request to the plugin
+    Hook called after each request
     """
-    response.headers['X-Plugin-Name'] = '$plugin_name'
-    response.headers['X-Plugin-Version'] = '$VERSION'
-    
-    if current_app.logger.isEnabledFor(logging.DEBUG):
-        current_app.logger.debug(f"$plugin_name plugin response: {response.status_code}")
-    
     return response
 
 
 def teardown_request(exception):
     """
-    Hook executed when tearing down a request
+    Hook called when request context is torn down
     """
-    if exception:
-        current_app.logger.error(f"$plugin_name plugin request teardown with exception: {exception}")
-    
-    if hasattr(g, 'plugin_resources'):
-        pass
+    pass
 
 
 def teardown_appcontext(exception):
     """
-    Hook executed when tearing down the application context
+    Hook called when application context is torn down
     """
-    if exception:
-        current_app.logger.error(f"$plugin_name plugin app context teardown with exception: {exception}")
+    pass
 EOF
 }
 
-# Generate job scheduler files
+# Generate job files for scheduled tasks
 generate_job_files() {
     local plugin_dir="$1"
     local plugin_name="$2"
-    local plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
     cat > "$plugin_dir/jobs/$plugin_name-job.py" << EOF
 #!/usr/bin/env python3
 
-"""
-$plugin_name Plugin - Scheduled Job
-
-This job runs daily by default. To change the frequency, modify the 'every' 
-field in plugin.json to one of: hour, daily, weekly, monthly
-
-Job performs:
-- Data cleanup and maintenance
-- Statistics processing and aggregation  
-- Health checks and validation
-- Metrics updates and monitoring
-"""
-
 import os
 import sys
-import json
 import time
+import json
 import logging
-import traceback
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+
+
+class PluginJob:
+    """
+    Main job class for $plugin_name plugin scheduled tasks
+    """
+    
+    def __init__(self):
+        self.plugin_name = "$plugin_name"
+        self.version = "$VERSION"
+        self.logger = self.setup_logging()
+        self.config = self.load_configuration()
+    
+    def setup_logging(self):
+        """
+        Configure logging for the job
+        """
+        log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        logging.basicConfig(level=logging.INFO, format=log_format)
+        return logging.getLogger(f"{self.plugin_name}-job")
+    
+    def load_configuration(self):
+        """
+        Load plugin configuration from environment variables
+        """
+        return {
+            'enabled': os.getenv('USE_PLUGIN_${plugin_name_upper}', 'no') == 'yes',
+            'setting': os.getenv('PLUGIN_${plugin_name_upper}_SETTING', 'default_value'),
+            'timeout': int(os.getenv('PLUGIN_${plugin_name_upper}_TIMEOUT', '5')),
+            'log_level': os.getenv('PLUGIN_${plugin_name_upper}_LOG_LEVEL', 'DEBUG')
+        }
+    
+    def run(self):
+        """
+        Main job execution method
+        """
+        try:
+            self.logger.info(f"Starting {self.plugin_name} job execution")
+            
+            if not self.config['enabled']:
+                self.logger.info("Plugin disabled, skipping job execution")
+                return True
+            
+            cleanup_success = self.cleanup_old_data()
+            processing_success = self.process_data()
+            health_success = self.perform_health_checks()
+            
+            all_success = cleanup_success and processing_success and health_success
+            
+            if all_success:
+                self.logger.info(f"{self.plugin_name} job completed successfully")
+            else:
+                self.logger.warning(f"{self.plugin_name} job completed with some failures")
+            
+            return all_success
+            
+        except Exception as e:
+            self.logger.error(f"Job execution failed: {str(e)}")
+            return False
+    
+    def cleanup_old_data(self):
+        """
+        Clean up old log files and temporary data
+        """
+        try:
+            self.logger.info("Starting data cleanup")
+            
+            cleanup_paths = [
+                '/var/log/bunkerweb/',
+                '/tmp/bunkerweb/',
+                f'/tmp/{self.plugin_name}/'
+            ]
+            
+            cutoff_date = datetime.now() - timedelta(days=7)
+            files_removed = 0
+            
+            for cleanup_path in cleanup_paths:
+                if os.path.exists(cleanup_path):
+                    for file_path in Path(cleanup_path).glob('**/*'):
+                        if file_path.is_file():
+                            file_modified = datetime.fromtimestamp(file_path.stat().st_mtime)
+                            if file_modified < cutoff_date:
+                                file_path.unlink()
+                                files_removed += 1
+            
+            self.logger.info(f"Cleanup completed. Removed {files_removed} old files")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Cleanup failed: {str(e)}")
+            return False
+    
+    def process_data(self):
+        """
+        Process accumulated data and generate reports
+        """
+        try:
+            if not self.config['enabled']:
+                self.logger.info("Plugin disabled, skipping data processing")
+                return True
+            
+            start_time = time.time()
+            
+            processed_requests = self.process_request_logs()
+            
+            stats = self.generate_statistics(processed_requests)
+            
+            self.save_processed_data(stats)
+            
+            processing_time = time.time() - start_time
+            self.logger.info(f"Data processing completed in {processing_time:.2f} seconds. "
+                           f"Processed {len(processed_requests)} requests")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Data processing failed: {str(e)}")
+            return False
+    
+    def process_request_logs(self):
+        """
+        Process request logs and extract relevant data
+        """
+        processed_requests = []
+        
+        log_pattern = f"*{self.plugin_name}*"
+        log_files = list(Path('/var/log/bunkerweb/').glob(log_pattern))
+        
+        for log_file in log_files:
+            try:
+                with open(log_file, 'r') as f:
+                    for line in f:
+                        if self.plugin_name in line:
+                            request_data = self.parse_log_line(line)
+                            if request_data:
+                                processed_requests.append(request_data)
+            except Exception as e:
+                self.logger.warning(f"Failed to process log file {log_file}: {str(e)}")
+        
+        return processed_requests
+    
+    def parse_log_line(self, line):
+        """
+        Parse individual log line and extract request data
+        """
+        try:
+            parts = line.strip().split()
+            if len(parts) >= 6:
+                return {
+                    'timestamp': parts[0] + ' ' + parts[1],
+                    'level': parts[3],
+                    'message': ' '.join(parts[5:])
+                }
+        except Exception:
+            pass
+        
+        return None
+    
+    def generate_statistics(self, processed_requests):
+        """
+        Generate statistics from processed request data
+        """
+        total_requests = len(processed_requests)
+        
+        level_counts = {}
+        for request in processed_requests:
+            level = request.get('level', 'UNKNOWN')
+            level_counts[level] = level_counts.get(level, 0) + 1
+        
+        return {
+            'total_requests': total_requests,
+            'level_distribution': level_counts,
+            'generated_at': datetime.utcnow().isoformat(),
+            'plugin_version': self.version
+        }
+    
+    def save_processed_data(self, stats):
+        """
+        Save processed statistics data
+        """
+        stats_file = f'/var/log/bunkerweb/{self.plugin_name}-stats.json'
+        
+        try:
+            with open(stats_file, 'w') as f:
+                json.dump(stats, f, indent=2)
+            self.logger.info(f"Statistics saved to {stats_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to save statistics: {str(e)}")
+    
+    def perform_health_checks(self):
+        """
+        Perform health checks and validation
+        """
+        try:
+            self.logger.info("Performing health checks")
+            
+            checks = [
+                self.check_plugin_configuration(),
+                self.check_system_resources(),
+                self.check_log_file_permissions()
+            ]
+            
+            all_healthy = all(checks)
+            
+            if all_healthy:
+                self.logger.info("All health checks passed")
+            else:
+                self.logger.warning("Some health checks failed")
+            
+            return all_healthy
+            
+        except Exception as e:
+            self.logger.error(f"Health checks failed: {str(e)}")
+            return False
+    
+    def check_plugin_configuration(self):
+        """
+        Validate plugin configuration
+        """
+        try:
+            required_configs = ['setting', 'timeout', 'log_level']
+            
+            for config in required_configs:
+                if config not in self.config:
+                    self.logger.error(f"Missing required configuration: {config}")
+                    return False
+            
+            if not (1 <= self.config['timeout'] <= 300):
+                self.logger.error(f"Invalid timeout value: {self.config['timeout']}")
+                return False
+            
+            valid_log_levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
+            if self.config['log_level'] not in valid_log_levels:
+                self.logger.error(f"Invalid log level: {self.config['log_level']}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Configuration check failed: {str(e)}")
+            return False
+    
+    def check_system_resources(self):
+        """
+        Check system resource availability
+        """
+        try:
+            import psutil
+            
+            memory_usage = psutil.virtual_memory().percent
+            disk_usage = psutil.disk_usage('/').percent
+            cpu_usage = psutil.cpu_percent(interval=1)
+            
+            if memory_usage > 90:
+                self.logger.warning(f"High memory usage: {memory_usage}%")
+                return False
+            
+            if disk_usage > 90:
+                self.logger.warning(f"High disk usage: {disk_usage}%")
+                return False
+            
+            if cpu_usage > 90:
+                self.logger.warning(f"High CPU usage: {cpu_usage}%")
+                return False
+            
+            self.logger.info(f"System resources OK - Memory: {memory_usage}%, "
+                           f"Disk: {disk_usage}%, CPU: {cpu_usage}%")
+            return True
+            
+        except ImportError:
+            self.logger.info("psutil not available, skipping resource checks")
+            return True
+        except Exception as e:
+            self.logger.error(f"Resource check failed: {str(e)}")
+            return False
+    
+    def check_log_file_permissions(self):
+        """
+        Check log file permissions and accessibility
+        """
+        try:
+            log_files = [
+                '/var/log/bunkerweb/error.log',
+                f'/var/log/bunkerweb/{self.plugin_name}.log'
+            ]
+            
+            for log_file in log_files:
+                if os.path.exists(log_file):
+                    if not os.access(log_file, os.R_OK | os.W_OK):
+                        self.logger.error(f"Insufficient permissions for log file: {log_file}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Log file permission check failed: {str(e)}")
+            return False
 
 
 def main():
     """
-    Main job function for $plugin_name plugin
-    Executes daily maintenance and data processing tasks
+    Main entry point for the job
     """
-    logger = setup_logging()
-    logger.info("Starting $plugin_name scheduled job")
+    job = PluginJob()
+    success = job.run()
     
-    try:
-        config = read_plugin_config()
-        
-        tasks_completed = 0
-        
-        if cleanup_old_data(config, logger):
-            tasks_completed = tasks_completed + 1
-        
-        if process_data(config, logger):
-            tasks_completed = tasks_completed + 1
-        
-        if update_statistics(config, logger):
-            tasks_completed = tasks_completed + 1
-        
-        if perform_health_check(config, logger):
-            tasks_completed = tasks_completed + 1
-        
-        logger.info(f"$plugin_name job completed successfully. Tasks completed: {tasks_completed}/4")
-        return 0
-        
-    except Exception as e:
-        logger.error(f"$plugin_name job failed with error: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return 1
-
-
-def setup_logging():
-    """
-    Configure logging for the scheduled job
-    """
-    log_dir = Path("/var/log/bunkerweb")
-    log_dir.mkdir(exist_ok=True)
-    
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_dir / "$plugin_name-job.log")
-        ]
-    )
-    
-    logger = logging.getLogger('$plugin_name-job')
-    logger.setLevel(logging.DEBUG)
-    
-    return logger
-
-
-def read_plugin_config():
-    """
-    Read plugin configuration from environment variables and config files
-    """
-    config = {
-        'enabled': os.getenv('USE_PLUGIN_${plugin_name_upper}', 'no').lower() == 'yes',
-        'setting': os.getenv('PLUGIN_${plugin_name_upper}_SETTING', 'default_value'),
-        'timeout': int(os.getenv('PLUGIN_${plugin_name_upper}_TIMEOUT', '5')),
-        'log_level': os.getenv('PLUGIN_${plugin_name_upper}_LOG_LEVEL', 'DEBUG'),
-        'data_retention_days': int(os.getenv('PLUGIN_${plugin_name_upper}_DATA_RETENTION_DAYS', '30'))
-    }
-    
-    config_file = Path('/etc/bunkerweb/plugins/$plugin_name/config.json')
-    if config_file.exists():
-        try:
-            with open(config_file, 'r') as f:
-                file_config = json.load(f)
-                config.update(file_config)
-        except Exception as e:
-            logging.warning(f"Failed to read config file: {e}")
-    
-    return config
-
-
-def cleanup_old_data(config, logger):
-    """
-    Clean up old data files and logs
-    """
-    try:
-        if not config['enabled']:
-            logger.info("Plugin disabled, skipping cleanup")
-            return True
-        
-        cutoff_date = datetime.now() - timedelta(days=config['data_retention_days'])
-        data_dir = Path('/var/lib/bunkerweb/$plugin_name')
-        
-        if not data_dir.exists():
-            logger.info("Data directory does not exist, creating it")
-            data_dir.mkdir(parents=True, exist_ok=True)
-            return True
-        
-        files_removed = 0
-        for file_path in data_dir.rglob('*'):
-            if file_path.is_file():
-                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                if file_mtime < cutoff_date:
-                    file_path.unlink()
-                    files_removed = files_removed + 1
-        
-        logger.info(f"Cleanup completed. Removed {files_removed} old files")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Cleanup failed: {str(e)}")
-        return False
-
-
-def process_data(config, logger):
-    """
-    Process accumulated data and generate reports
-    """
-    try:
-        if not config['enabled']:
-            logger.info("Plugin disabled, skipping data processing")
-            return True
-        
-        start_time = time.time()
-        
-        processed_requests = process_request_logs(config, logger)
-        
-        stats = generate_statistics(processed_requests, logger)
-        
-        save_processed_data(stats, logger)
-        
-        processing_time = time.time() - start_time
-        logger.info(f"Data processing completed in {processing_time:.2f} seconds. "
-                   f"Processed {processed_requests} requests")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Data processing failed: {str(e)}")
-        return False
-
-
-def process_request_logs(config, logger):
-    """
-    Process request logs and extract relevant data
-    """
-    processed_count = 0
-    log_dir = Path('/var/log/bunkerweb')
-    
-    for log_file in log_dir.glob('access*.log'):
-        try:
-            with open(log_file, 'r') as f:
-                for line in f:
-                    if '$plugin_name' in line:
-                        processed_count = processed_count + 1
-        except Exception as e:
-            logger.warning(f"Failed to process log file {log_file}: {e}")
-    
-    return processed_count
-
-
-def generate_statistics(processed_requests, logger):
-    """
-    Generate statistics from processed data
-    """
-    stats = {
-        'timestamp': datetime.now().isoformat(),
-        'processed_requests': processed_requests,
-        'plugin_version': '$VERSION',
-        'uptime': time.time(),
-        'memory_usage': 'N/A',
-        'cpu_usage': 'N/A'
-    }
-    
-    logger.info(f"Generated statistics: {json.dumps(stats, indent=2)}")
-    return stats
-
-
-def save_processed_data(stats, logger):
-    """
-    Save processed data and statistics
-    """
-    try:
-        stats_dir = Path('/var/lib/bunkerweb/$plugin_name/stats')
-        stats_dir.mkdir(parents=True, exist_ok=True)
-        
-        today = datetime.now().strftime('%Y-%m-%d')
-        stats_file = stats_dir / f"stats_{today}.json"
-        
-        with open(stats_file, 'w') as f:
-            json.dump(stats, f, indent=2)
-        
-        logger.info(f"Statistics saved to {stats_file}")
-        
-    except Exception as e:
-        logger.error(f"Failed to save statistics: {str(e)}")
-        raise
-
-
-def update_statistics(config, logger):
-    """
-    Update runtime statistics and metrics
-    """
-    try:
-        if not config['enabled']:
-            logger.info("Plugin disabled, skipping statistics update")
-            return True
-        
-        metrics = {
-            'last_job_run': datetime.now().isoformat(),
-            'job_run_count': get_job_run_count() + 1,
-            'plugin_status': 'active' if config['enabled'] else 'disabled',
-            'config_hash': hash(str(sorted(config.items())))
-        }
-        
-        save_metrics(metrics, logger)
-        logger.info("Statistics updated successfully")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Statistics update failed: {str(e)}")
-        return False
-
-
-def get_job_run_count():
-    """
-    Get the number of times this job has been executed
-    """
-    try:
-        metrics_file = Path('/var/lib/bunkerweb/$plugin_name/metrics.json')
-        if metrics_file.exists():
-            with open(metrics_file, 'r') as f:
-                metrics = json.load(f)
-                return metrics.get('job_run_count', 0)
-    except Exception:
-        pass
-    
-    return 0
-
-
-def save_metrics(metrics, logger):
-    """
-    Save runtime metrics to file
-    """
-    try:
-        metrics_dir = Path('/var/lib/bunkerweb/$plugin_name')
-        metrics_dir.mkdir(parents=True, exist_ok=True)
-        
-        metrics_file = metrics_dir / 'metrics.json'
-        with open(metrics_file, 'w') as f:
-            json.dump(metrics, f, indent=2)
-        
-        logger.debug(f"Metrics saved to {metrics_file}")
-        
-    except Exception as e:
-        logger.error(f"Failed to save metrics: {str(e)}")
-        raise
-
-
-def perform_health_check(config, logger):
-    """
-    Perform health check and validation
-    """
-    try:
-        health_status = {
-            'plugin_enabled': config['enabled'],
-            'config_valid': validate_config(config),
-            'data_directory_writable': check_data_directory(),
-            'log_directory_writable': check_log_directory(),
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        all_healthy = all(health_status.values() if isinstance(v, bool) else [True] 
-                         for v in health_status.values())
-        
-        if all_healthy:
-            logger.info("Health check passed")
-        else:
-            logger.warning(f"Health check issues detected: {health_status}")
-        
-        save_health_status(health_status, logger)
-        
-        return all_healthy
-        
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        return False
-
-
-def validate_config(config):
-    """
-    Validate plugin configuration
-    """
-    try:
-        if not isinstance(config.get('timeout'), int) or config['timeout'] <= 0:
-            return False
-        
-        if config.get('log_level') not in ['DEBUG', 'INFO', 'WARN', 'ERROR']:
-            return False
-        
-        return True
-        
-    except Exception:
-        return False
-
-
-def check_data_directory():
-    """
-    Check if data directory is writable
-    """
-    try:
-        data_dir = Path('/var/lib/bunkerweb/$plugin_name')
-        data_dir.mkdir(parents=True, exist_ok=True)
-        
-        test_file = data_dir / '.write_test'
-        test_file.write_text('test')
-        test_file.unlink()
-        
-        return True
-        
-    except Exception:
-        return False
-
-
-def check_log_directory():
-    """
-    Check if log directory is writable
-    """
-    try:
-        log_dir = Path('/var/log/bunkerweb')
-        test_file = log_dir / '.write_test'
-        test_file.write_text('test')
-        test_file.unlink()
-        
-        return True
-        
-    except Exception:
-        return False
-
-
-def save_health_status(health_status, logger):
-    """
-    Save health check results
-    """
-    try:
-        health_dir = Path('/var/lib/bunkerweb/$plugin_name')
-        health_dir.mkdir(parents=True, exist_ok=True)
-        
-        health_file = health_dir / 'health.json'
-        with open(health_file, 'w') as f:
-            json.dump(health_status, f, indent=2)
-        
-        logger.debug(f"Health status saved to {health_file}")
-        
-    except Exception as e:
-        logger.error(f"Failed to save health status: {str(e)}")
+    if success:
+        print(f"{job.plugin_name} job completed successfully")
+        sys.exit(0)
+    else:
+        print(f"{job.plugin_name} job completed with errors")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    exit_code = main()
-    sys.exit(exit_code)
+    main()
 EOF
-
-    chmod +x "$plugin_dir/jobs/$plugin_name-job.py"
 }
 
-# Generate comprehensive NGINX configuration templates
+# Generate NGINX configuration templates
 generate_config_templates() {
     local plugin_dir="$1"
     local plugin_name="$2"
-    local plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
+    local plugin_name_upper
+    plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
     cat > "$plugin_dir/confs/server-http/$plugin_name.conf" << EOF
 # $plugin_name Plugin - Server HTTP Configuration
-# Included in server {} context for each virtual host
 
 {% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
 
-# Plugin endpoint for status and configuration
-location /$plugin_name {
-    default_type 'application/json';
-    access_log off;
-    
-    content_by_lua_block {
-        local cjson = require "cjson"
-        local plugin_setting = "{{ PLUGIN_${plugin_name_upper}_SETTING }}"
-        local plugin_timeout = "{{ PLUGIN_${plugin_name_upper}_TIMEOUT }}"
-        
-        local response = {
-            plugin = "$plugin_name",
-            version = "$VERSION",
-            status = "active",
-            setting = plugin_setting,
-            timeout = tonumber(plugin_timeout),
+# Plugin status endpoint
+location /$plugin_name/status {
+    access_by_lua_block {
+        local plugin_status = {
+            active = true,
+            version = "{{ PLUGIN_${plugin_name_upper}_VERSION or '$VERSION' }}",
+            setting = "{{ PLUGIN_${plugin_name_upper}_SETTING }}",
             timestamp = ngx.time()
         }
         
-        ngx.header["Content-Type"] = "application/json"
-        ngx.header["Cache-Control"] = "no-cache"
-        ngx.say(cjson.encode(response))
+        ngx.header.content_type = "application/json"
+        ngx.say(require("cjson").encode(plugin_status))
+        ngx.exit(200)
     }
 }
 
-# Status endpoint for health checks
-location = /$plugin_name/status {
-    access_log off;
-    default_type 'text/plain';
-    
-    content_by_lua_block {
-        ngx.header["Content-Type"] = "text/plain"
-        ngx.header["Cache-Control"] = "no-cache"
-        ngx.say("$plugin_name plugin is active")
+# Plugin metrics endpoint
+location /$plugin_name/metrics {
+    access_by_lua_block {
+        local metrics = {
+            requests_processed = 0,
+            errors_count = 0,
+            avg_response_time = 0
+        }
+        
+        ngx.header.content_type = "application/json"
+        ngx.say(require("cjson").encode(metrics))
+        ngx.exit(200)
     }
-}
-
-# Metrics endpoint for monitoring
-location = /$plugin_name/metrics {
-    access_log off;
-    default_type 'text/plain';
-    
-    content_by_lua_block {
-        local datastore = require "bunkerweb.datastore"
-        
-        local requests_count, _ = datastore:get("plugin_${plugin_name}_requests_count")
-        local last_request, _ = datastore:get("plugin_${plugin_name}_last_request")
-        
-        local metrics = string.format(
-            "# HELP ${plugin_name}_requests_total Total requests processed by $plugin_name\\n" ..
-            "# TYPE ${plugin_name}_requests_total counter\\n" ..
-            "${plugin_name}_requests_total %s\\n" ..
-            "# HELP ${plugin_name}_last_request_timestamp Last request timestamp\\n" ..
-            "# TYPE ${plugin_name}_last_request_timestamp gauge\\n" ..
-            "${plugin_name}_last_request_timestamp %s\\n",
-            requests_count or "0",
-            last_request or "0"
-        )
-        
-        ngx.header["Content-Type"] = "text/plain"
-        ngx.say(metrics)
-    }
-}
-
-# Apply rate limiting to plugin endpoints
-location ~* ^/$plugin_name/(status|metrics)\$ {
-    limit_req zone=req_limit_per_ip burst=10 nodelay;
 }
 
 {% endif %}
@@ -1313,12 +1163,11 @@ EOF
 
     cat > "$plugin_dir/confs/http/$plugin_name.conf" << EOF
 # $plugin_name Plugin - HTTP Configuration
-# Included in http {} context
 
 {% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
 
-# Custom log format for plugin requests
-log_format ${plugin_name}_access_log 
+# Custom log format for plugin
+log_format ${plugin_name}_custom 
     '\$remote_addr - \$remote_user [\$time_local] '
     '"\$request" \$status \$body_bytes_sent '
     '"\$http_referer" "\$http_user_agent" '
@@ -1339,7 +1188,6 @@ EOF
 
     cat > "$plugin_dir/confs/default-server-http/$plugin_name.conf" << EOF
 # $plugin_name Plugin - Default Server Configuration
-# Applied to default server block
 
 {% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
 
@@ -1405,7 +1253,6 @@ EOF
 
     cat > "$plugin_dir/confs/modsec-crs/$plugin_name.conf" << EOF
 # $plugin_name Plugin - ModSecurity CRS Configuration
-# Rules to be loaded before the CRS
 
 {% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
 
@@ -1425,7 +1272,6 @@ EOF
 
     cat > "$plugin_dir/confs/stream/$plugin_name.conf" << EOF
 # $plugin_name Plugin - Stream Configuration
-# Included in stream {} context
 
 {% if USE_PLUGIN_${plugin_name_upper} == "yes" and LISTEN_STREAM == "yes" %}
 
@@ -1444,7 +1290,6 @@ EOF
 
     cat > "$plugin_dir/confs/server-stream/$plugin_name.conf" << EOF
 # $plugin_name Plugin - Server Stream Configuration
-# Included in server {} context for stream servers
 
 {% if USE_PLUGIN_${plugin_name_upper} == "yes" and LISTEN_STREAM == "yes" %}
 
@@ -1462,7 +1307,8 @@ EOF
 generate_custom_templates() {
     local plugin_dir="$1"
     local plugin_name="$2"
-    local plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
+    local plugin_name_upper
+    plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
     cat > "$plugin_dir/templates/$plugin_name-template.json" << EOF
 {
@@ -1471,26 +1317,21 @@ generate_custom_templates() {
     "version": "$VERSION",
     "settings": {
         "USE_PLUGIN_${plugin_name_upper}": "yes",
-        "PLUGIN_${plugin_name_upper}_SETTING": "production_value",
+        "PLUGIN_${plugin_name_upper}_SETTING": "template_value",
         "PLUGIN_${plugin_name_upper}_TIMEOUT": "10",
-        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "DEBUG"
-    },
-    "custom_configs": {
-        "server-http": {
-            "${plugin_name}-custom.conf": "# Custom configuration for $plugin_name\\nlocation /${plugin_name}-custom {\\n    return 200 'Custom endpoint active';\\n}"
-        }
+        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "INFO"
     }
 }
 EOF
 
     cat > "$plugin_dir/templates/$plugin_name-dev.json" << EOF
 {
-    "name": "$plugin_name-dev",
-    "description": "Development template for $plugin_name plugin",
+    "name": "$plugin_name-development",
+    "description": "Development configuration for $plugin_name plugin",
     "version": "$VERSION",
     "settings": {
         "USE_PLUGIN_${plugin_name_upper}": "yes",
-        "PLUGIN_${plugin_name_upper}_SETTING": "development_value",
+        "PLUGIN_${plugin_name_upper}_SETTING": "development_mode",
         "PLUGIN_${plugin_name_upper}_TIMEOUT": "30",
         "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "DEBUG"
     }
@@ -1499,53 +1340,52 @@ EOF
 
     cat > "$plugin_dir/templates/$plugin_name-prod.json" << EOF
 {
-    "name": "$plugin_name-prod",
-    "description": "Production template for $plugin_name plugin",
+    "name": "$plugin_name-production",
+    "description": "Production configuration for $plugin_name plugin",
     "version": "$VERSION",
     "settings": {
         "USE_PLUGIN_${plugin_name_upper}": "yes",
-        "PLUGIN_${plugin_name_upper}_SETTING": "production_value",
+        "PLUGIN_${plugin_name_upper}_SETTING": "production_mode",
         "PLUGIN_${plugin_name_upper}_TIMEOUT": "5",
-        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "DEBUG"
+        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": "WARN"
     }
 }
 EOF
 
     mkdir -p "$plugin_dir/templates/$plugin_name-template/configs/server-http"
+    
     cat > "$plugin_dir/templates/$plugin_name-template/configs/server-http/custom-endpoint.conf" << EOF
-# Custom endpoint configuration for $plugin_name template
-location /${plugin_name}-template {
-    default_type 'application/json';
-    content_by_lua_block {
-        local cjson = require "cjson"
-        ngx.say(cjson.encode({
-            message = "Template endpoint active",
-            plugin = "$plugin_name",
-            template = "$plugin_name-template"
-        }))
+# Custom endpoint configuration for $plugin_name plugin template
+
+location /$plugin_name/custom {
+    access_by_lua_block {
+        ngx.header.content_type = "application/json"
+        local response = {
+            message = "Custom endpoint for $plugin_name",
+            template = "$plugin_name-template",
+            timestamp = ngx.time()
+        }
+        ngx.say(require("cjson").encode(response))
+        ngx.exit(200)
     }
 }
 EOF
 }
 
-# Generate project-level README template for developers
+# Generate project README.md if it doesn't exist
 generate_project_readme() {
     local output_dir="$1"
-    local project_readme="$output_dir/README.md"
     
-    if [ -f "$project_readme" ]; then
-        echo "Project README.md already exists, skipping..."
+    if [ -f "$output_dir/README.md" ]; then
         return 0
     fi
     
-    cat > "$project_readme" << 'EOF'
-# BunkerWeb Plugins Project
+    cat > "$output_dir/README.md" << 'EOF'
+# BunkerWeb Plugins
 
-This repository contains custom BunkerWeb plugins for enhanced web application security.
-
-## Overview
-
-BunkerWeb is a next-generation Web Application Firewall (WAF) that provides comprehensive security for your web services. This project extends BunkerWeb's capabilities with custom plugins tailored to specific security requirements.
+BunkerWeb is a next-generation Web Application Firewall (WAF) that provides comprehensive 
+security for your web services. This project extends BunkerWeb's capabilities with custom 
+plugins tailored to specific security requirements.
 
 ## Plugin Structure
 
@@ -1572,12 +1412,9 @@ plugin-name/
 
 ## Available Plugins
 
-<!-- Add your plugins here as you create them -->
 | Plugin | Description | Version | Features |
 |--------|-------------|---------|----------|
 | [example-plugin](./example-plugin/) | Example plugin description | 1.0.0 | Feature list |
-
-> **Tip:** Add each new plugin to this table with a link to its directory and a brief description.
 
 ## Quick Start
 
@@ -1810,9 +1647,8 @@ app1.example.com_PLUGIN_MYPLUGIN_SETTING=app1_value
 app2.example.com_PLUGIN_MYPLUGIN_SETTING=app2_value
 ```
 
----
-
-**Note:** This project is designed to work with BunkerWeb 1.6.0+. For older versions, some features may not be available.
+**Note:** This project is designed to work with BunkerWeb 1.6.0+. For older versions, 
+some features may not be available.
 EOF
 }
 
@@ -1820,9 +1656,9 @@ EOF
 generate_readme() {
     local plugin_dir="$1"
     local plugin_name="$2"
-    local plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
+    local plugin_name_upper
+    plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
-    # Build features section
     local features="- **Core Integration**: Seamlessly integrates with BunkerWeb's NGINX Lua module
 - **Multisite Support**: Built-in support for global and per-service configurations
 - **Configurable Settings**: Multiple configuration options with validation
@@ -1853,7 +1689,6 @@ generate_readme() {
 - **Security Rules**: Integrated ModSecurity rules for protection
 - **Flexible Context**: Multisite context allows both global and service-specific settings"
     
-    # Build usage sections
     local web_ui_section=""
     if [ "$WITH_UI" = "yes" ]; then
         web_ui_section="
@@ -1903,7 +1738,6 @@ To change the job frequency, edit the \`every\` field in \`plugin.json\`:
 Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
     fi
     
-    # Build file structure sections
     local ui_structure=""
     if [ "$WITH_UI" = "yes" ]; then
         ui_structure="
@@ -1948,7 +1782,6 @@ Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
                 └── custom-endpoint.conf"
     fi
     
-    # Build development sections
     local ui_dev_section=""
     if [ "$WITH_UI" = "yes" ]; then
         ui_dev_section="
@@ -1969,7 +1802,6 @@ Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
 6. **NGINX Configs**: Modify templates in \`confs/\` directory"
     fi
     
-    # Build debugging sections
     local jobs_debug_section=""
     if [ "$WITH_JOBS" = "yes" ]; then
         jobs_debug_section="
@@ -1980,7 +1812,6 @@ Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
    \`\`\`"
     fi
     
-    # Build troubleshooting sections
     local jobs_troubleshoot_section=""
     if [ "$WITH_JOBS" = "yes" ]; then
         jobs_troubleshoot_section="
@@ -1998,17 +1829,7 @@ $DESCRIPTION
 
 ## Features
 
-- **Core Integration**: Seamlessly integrates with BunkerWeb's NGINX Lua module
-- **Multisite Support**: Built-in support for global and per-service configurations
-- **Configurable Settings**: Multiple configuration options with validation
-- **Performance Monitoring**: Built-in metrics and health checks$([ "$WITH_UI" = "yes" ] && echo "
-- **Web UI**: User-friendly configuration interface")$([ "$WITH_JOBS" = "yes" ] && echo "
-- **Scheduled Jobs**: Automated maintenance and data processing")$([ "$WITH_CONFIGS" = "yes" ] && echo "
-- **Custom NGINX Configs**: Flexible NGINX configuration templates")$([ "$WITH_TEMPLATES" = "yes" ] && echo "
-- **Configuration Templates**: Pre-defined configuration templates")
-- **Stream Support**: $(echo "$STREAM_MODE" | tr '[:lower:]' '[:upper:]') support for TCP/UDP protocols
-- **Security Rules**: Integrated ModSecurity rules for protection
-- **Flexible Context**: Multisite context allows both global and service-specific settings
+$features
 
 ## Installation
 
@@ -2048,30 +1869,50 @@ $DESCRIPTION
    systemctl restart bunkerweb
    \`\`\`
 
-## Configuration
+## Usage
 
-### Multisite Context
+### Basic Configuration
 
-All plugin settings use **multisite** context by default, which means:
-- Settings can be configured globally or per-service
-- Per-service settings override global settings  
-- Perfect for environments with multiple applications
-- Supports both single-site and multi-site deployments
+\`\`\`bash
+# Enable the plugin
+USE_PLUGIN_${plugin_name_upper}=yes
+
+# Configure main setting
+PLUGIN_${plugin_name_upper}_SETTING=your_custom_value
+
+# Set timeout (1-300 seconds)
+PLUGIN_${plugin_name_upper}_TIMEOUT=10
+
+# Set log level
+PLUGIN_${plugin_name_upper}_LOG_LEVEL=INFO
+\`\`\`$web_ui_section$jobs_section
+
+### Multisite Configuration
+
+The plugin supports both global and per-service configurations:
 
 **Global Configuration:**
 \`\`\`bash
+# Global defaults
 USE_PLUGIN_${plugin_name_upper}=yes
-PLUGIN_${plugin_name_upper}_SETTING=global_value
+PLUGIN_${plugin_name_upper}_SETTING=global_default
+PLUGIN_${plugin_name_upper}_TIMEOUT=30
+PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
 \`\`\`
 
 **Per-Service Configuration:**
 \`\`\`bash
-# For service: myapp.example.com
-myapp.example.com_USE_PLUGIN_${plugin_name_upper}=yes
-myapp.example.com_PLUGIN_${plugin_name_upper}_SETTING=service_specific_value
+# Service-specific overrides
+example.com_PLUGIN_${plugin_name_upper}_SETTING=production_strict
+example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=5
+example.com_PLUGIN_${plugin_name_upper}_LOG_LEVEL=WARN
+
+# API service with custom timeout
+api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=60
+api.example.com_PLUGIN_${plugin_name_upper}_SETTING=api_optimized
 \`\`\`
 
-### Multisite Best Practices
+### Best Practices for Multisite
 
 1. **Global Defaults**: Set reasonable global defaults for common settings
 2. **Service Overrides**: Override only specific settings per service as needed
@@ -2142,12 +1983,10 @@ services:
 
 networks:
   bw-universe:
-    driver: bridge
   bw-services:
-    driver: bridge
 \`\`\`
 
-**Multisite Configuration:**
+**Multisite:**
 \`\`\`yaml
 version: '3.8'
 
@@ -2155,192 +1994,51 @@ services:
   bunkerweb:
     image: bunkerity/bunkerweb:latest
     environment:
-      # Enable multisite mode
-      - MULTISITE=yes
-      
-      # Global plugin settings (fallback for all sites)
+      # Global configuration
       - USE_PLUGIN_${plugin_name_upper}=yes
       - PLUGIN_${plugin_name_upper}_SETTING=global_default
-      - PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
+      - PLUGIN_${plugin_name_upper}_TIMEOUT=30
+      - PLUGIN_${plugin_name_upper}_LOG_LEVEL=INFO
       
-      # Site-specific settings
-      - app1.example.com_USE_PLUGIN_${plugin_name_upper}=yes
+      # Per-service configuration
       - app1.example.com_PLUGIN_${plugin_name_upper}_SETTING=app1_config
       - app1.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=15
-      
-      - app2.example.com_USE_PLUGIN_${plugin_name_upper}=yes  
       - app2.example.com_PLUGIN_${plugin_name_upper}_SETTING=app2_config
-      - app2.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=30
+      - api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=60
     volumes:
       - ./bw-data:/data
-    networks:
-      - bw-universe
-      - bw-services
-
-  bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:latest
-    environment:
-      # Mirror the multisite configuration
-      - MULTISITE=yes
-      - USE_PLUGIN_${plugin_name_upper}=yes
-      - PLUGIN_${plugin_name_upper}_SETTING=global_default
-      - PLUGIN_${plugin_name_upper}_LOG_LEVEL=DEBUG
-      - app1.example.com_USE_PLUGIN_${plugin_name_upper}=yes
-      - app1.example.com_PLUGIN_${plugin_name_upper}_SETTING=app1_config
-      - app1.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=15
-      - app2.example.com_USE_PLUGIN_${plugin_name_upper}=yes
-      - app2.example.com_PLUGIN_${plugin_name_upper}_SETTING=app2_config
-      - app2.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=30
-    volumes:
-      - ./bw-data:/data
-    networks:
-      - bw-universe
-
-networks:
-  bw-universe:
-    driver: bridge
-  bw-services:
-    driver: bridge
 \`\`\`
 
-### Kubernetes Examples
+### Kubernetes Configuration
 
-**Single Service:**
 \`\`\`yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: my-app-ingress
+  name: example-ingress
   annotations:
+    # Global plugin configuration
     bunkerweb.io/USE_PLUGIN_${plugin_name_upper}: "yes"
     bunkerweb.io/PLUGIN_${plugin_name_upper}_SETTING: "kubernetes_value"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_TIMEOUT: "15"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_LOG_LEVEL: "DEBUG"
+    bunkerweb.io/PLUGIN_${plugin_name_upper}_TIMEOUT: "10"
+    bunkerweb.io/PLUGIN_${plugin_name_upper}_LOG_LEVEL: "INFO"
+    
+    # Per-service configuration
+    bunkerweb.io/api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT: "60"
+    bunkerweb.io/admin.example.com_PLUGIN_${plugin_name_upper}_LOG_LEVEL: "DEBUG"
 spec:
   rules:
-  - host: myapp.example.com
+  - host: example.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: my-app-service
+            name: example-service
             port:
               number: 80
 \`\`\`
-
-**Multiple Services with Different Configurations:**
-\`\`\`yaml
-# Service 1 - Production App
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: prod-app-ingress
-  annotations:
-    bunkerweb.io/USE_PLUGIN_${plugin_name_upper}: "yes"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_SETTING: "production_strict"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_TIMEOUT: "5"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_LOG_LEVEL: "WARN"
-spec:
-  rules:
-  - host: prod.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: prod-app-service
-            port:
-              number: 80
-
----
-# Service 2 - Development App  
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: dev-app-ingress
-  annotations:
-    bunkerweb.io/USE_PLUGIN_${plugin_name_upper}: "yes"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_SETTING: "development_permissive"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_TIMEOUT: "30"
-    bunkerweb.io/PLUGIN_${plugin_name_upper}_LOG_LEVEL: "DEBUG"
-spec:
-  rules:
-  - host: dev.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: dev-app-service
-            port:
-              number: 80
-\`\`\`
-
-## Usage
-
-### Plugin Endpoints
-
-Once enabled, the plugin provides several endpoints:
-
-- \`GET /$plugin_name\` - Plugin status and configuration
-- \`GET /$plugin_name/status\` - Health check endpoint
-- \`GET /$plugin_name/metrics\` - Prometheus-style metrics
-
-### Example API Calls
-
-\`\`\`bash
-# Check plugin status
-curl https://your-domain.com/$plugin_name/status
-
-# Get plugin metrics
-curl https://your-domain.com/$plugin_name/metrics
-
-# Get detailed plugin information
-curl https://your-domain.com/$plugin_name
-\`\`\`$([ "$WITH_UI" = "yes" ] && echo "
-
-### Web UI
-
-Access the plugin configuration interface at:
-\`https://your-bunkerweb-ui.com/plugins/$plugin_name\`
-
-The web UI provides:
-- Real-time plugin status
-- Configuration management
-- Statistics dashboard
-- Health monitoring")$([ "$WITH_JOBS" = "yes" ] && echo "
-
-### Scheduled Jobs
-
-The plugin includes automated maintenance jobs that run daily:
-
-- **Data Cleanup**: Removes old log files and temporary data
-- **Statistics Processing**: Aggregates request data and generates reports
-- **Health Checks**: Validates plugin configuration and system health
-- **Metrics Updates**: Updates runtime statistics and performance metrics
-
-**Available Job Frequencies:**
-- \`hour\` - Run every hour
-- \`daily\` - Run once per day (default)
-- \`weekly\` - Run once per week
-- \`monthly\` - Run once per month
-
-To change the job frequency, edit the \`every\` field in \`plugin.json\`:
-\`\`\`json
-"jobs": [
-    {
-        "name": "myplugin-job",
-        "file": "myplugin-job.py",
-        "every": "hour"
-    }
-]
-\`\`\`
-
-Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`")
 
 ## File Structure
 
@@ -2348,31 +2046,7 @@ Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`")
 $plugin_name/
 ├── plugin.json                    # Plugin metadata and settings
 ├── $plugin_name.lua              # Main Lua execution file
-├── README.md                      # This documentation$([ "$WITH_UI" = "yes" ] && echo "
-├── ui/                            # Web UI components
-│   ├── actions.py                 # Flask request handlers
-│   ├── template.html              # Web interface template
-│   ├── hooks.py                   # Flask lifecycle hooks
-│   ├── blueprints/               # Custom Flask blueprints
-│   └── templates/                # Additional UI templates")$([ "$WITH_JOBS" = "yes" ] && echo "
-├── jobs/                          # Scheduled maintenance jobs
-│   └── $plugin_name-job.py       # Main job scheduler script")$([ "$WITH_CONFIGS" = "yes" ] && echo "
-├── confs/                         # NGINX configuration templates
-│   ├── server-http/              # Server-level HTTP configurations
-│   ├── http/                     # HTTP-level configurations
-│   ├── default-server-http/      # Default server configurations
-│   ├── modsec/                   # ModSecurity rules
-│   ├── modsec-crs/              # ModSecurity CRS rules
-│   ├── stream/                   # Stream-level configurations
-│   └── server-stream/            # Server-level stream configurations")$([ "$WITH_TEMPLATES" = "yes" ] && echo "
-└── templates/                     # Configuration templates
-    ├── $plugin_name-template.json    # Main template
-    ├── $plugin_name-dev.json         # Development template
-    ├── $plugin_name-prod.json        # Production template
-    └── $plugin_name-template/        # Template with custom configs
-        └── configs/
-            └── server-http/
-                └── custom-endpoint.conf")
+├── README.md                      # This documentation$ui_structure$jobs_structure$configs_structure$templates_structure
 \`\`\`
 
 ## Development
@@ -2383,12 +2057,7 @@ $plugin_name/
 2. **Settings**: Update \`plugin.json\` for new configuration options
    - All settings use \`"context": "multisite"\` for maximum flexibility
    - Add new settings following the same pattern
-3. **Documentation**: Update this README.md with your changes$([ "$WITH_UI" = "yes" ] && echo "
-4. **Web Interface**: Modify files in \`ui/\` directory for UI changes")$([ "$WITH_JOBS" = "yes" ] && echo "
-5. **Scheduled Tasks**: Update \`jobs/$plugin_name-job.py\` for job modifications
-   - Change frequency in \`plugin.json\` (hour, daily, weekly, monthly)
-   - Modify job logic for different execution patterns")$([ "$WITH_CONFIGS" = "yes" ] && echo "
-6. **NGINX Configs**: Modify templates in \`confs/\` directory")
+3. **Documentation**: Update this README.md with your changes$ui_dev_section$jobs_dev_section$configs_dev_section
 
 ### Testing
 
@@ -2413,12 +2082,7 @@ curl -I https://your-domain.com/$plugin_name/status
 2. **Check plugin-specific logs:**
    \`\`\`bash
    grep "$plugin_name" /var/log/bunkerweb/error.log
-   \`\`\`$([ "$WITH_JOBS" = "yes" ] && echo "
-
-3. **Monitor job execution:**
-   \`\`\`bash
-   tail -f /var/log/bunkerweb/$plugin_name-job.log
-   \`\`\`")
+   \`\`\`$jobs_debug_section
 
 ## Troubleshooting
 
@@ -2437,12 +2101,7 @@ curl -I https://your-domain.com/$plugin_name/status
 3. **Performance issues:**
    - Adjust \`${plugin_name_upper}_TIMEOUT\` setting
    - Monitor system resources
-   - Check for excessive logging$([ "$WITH_JOBS" = "yes" ] && echo "
-
-4. **Job execution failures:**
-   - Check job log file for errors
-   - Verify file system permissions
-   - Ensure required directories exist")
+   - Check for excessive logging$jobs_troubleshoot_section
 
 ### Support
 
@@ -2466,7 +2125,7 @@ EOF
 create_plugin() {
     local plugin_name="$1"
     local output_dir="$2"
-    local plugin_dir="$output_dir/$plugin_name"
+    local plugin_dir="${output_dir}/${plugin_name}"
     
     echo "Creating BunkerWeb plugin: $plugin_name"
     echo "Output directory: $plugin_dir"
@@ -2478,7 +2137,8 @@ create_plugin() {
     
     if [ -d "$plugin_dir" ]; then
         echo "Warning: Directory $plugin_dir already exists"
-        read -p "Do you want to continue and overwrite? (y/N): " -r
+        printf "Do you want to continue and overwrite? (y/N): "
+        read -r
         if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
             echo "Aborted"
             return 1
