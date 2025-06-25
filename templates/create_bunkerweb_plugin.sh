@@ -74,6 +74,9 @@ create_directory_structure() {
         mkdir -p "$plugin_dir/confs/default-server-http"
         mkdir -p "$plugin_dir/confs/stream"
         mkdir -p "$plugin_dir/confs/server-stream"
+        # Note: modsec directories not created by default
+        # mkdir -p "$plugin_dir/confs/modsec"
+        # mkdir -p "$plugin_dir/confs/modsec-crs"
     fi
     
     if [ "$WITH_TEMPLATES" = "yes" ]; then
@@ -1159,6 +1162,29 @@ location /$plugin_name {
 {% endif %}
 EOF
 
+    # ModSecurity configurations disabled by default due to syntax complexity
+    # Uncomment and customize if needed:
+    
+    # cat > "$plugin_dir/confs/modsec/$plugin_name.conf" << EOF
+    # # $plugin_name Plugin - ModSecurity Configuration
+    # # NOTE: ModSecurity rules disabled by default
+    # # Uncomment and test carefully before enabling
+    # 
+    # # {% if USE_PLUGIN_${plugin_name_upper} == "yes" %}
+    # # 
+    # # # Custom ModSecurity rules for $plugin_name plugin
+    # # SecRule REQUEST_URI "@beginsWith /$plugin_name" \\
+    # #     "pass,\\
+    # #     id:${plugin_name}001,\\
+    # #     phase:1,\\
+    # #     msg:'$plugin_name plugin: Processing plugin request',\\
+    # #     tag:'$plugin_name',\\
+    # #     logdata:'Plugin setting: {{ PLUGIN_${plugin_name_upper}_SETTING }}',\\
+    # #     rev:'1'"
+    # # 
+    # # {% endif %}
+    # EOF
+
     cat > "$plugin_dir/confs/stream/$plugin_name.conf" << EOF
 # $plugin_name Plugin - Stream Configuration
 
@@ -1391,7 +1417,7 @@ generate_readme() {
     
     if [ "$WITH_CONFIGS" = "yes" ]; then
         features="${features}
-- **Custom NGINX Configs**: Flexible NGINX configuration templates"
+- **Custom NGINX Configs**: Flexible NGINX configuration templates (ModSecurity disabled by default)"
     fi
     
     if [ "$WITH_TEMPLATES" = "yes" ]; then
