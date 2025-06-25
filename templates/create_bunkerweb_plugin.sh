@@ -1,5 +1,4 @@
 #!/bin/bash
-#
 
 set -e
 
@@ -85,6 +84,22 @@ create_directory_structure() {
     
     if [ "$WITH_TEMPLATES" = "yes" ]; then
         mkdir -p "$plugin_dir/templates"
+    fi
+}
+
+# Create documentation directory and copy template files
+create_docs() {
+    local plugin_dir="$1"
+    
+    mkdir -p "$plugin_dir/docs"
+    
+    # Copy template files if they exist
+    if [ -f "template_diagram.drawio" ]; then
+        cp "template_diagram.drawio" "$plugin_dir/docs/"
+    fi
+    
+    if [ -f "template_diagram.svg" ]; then
+        cp "template_diagram.svg" "$plugin_dir/docs/"
     fi
 }
 
@@ -1807,6 +1822,175 @@ generate_readme() {
     local plugin_name="$2"
     local plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
     
+    # Build features section
+    local features="- **Core Integration**: Seamlessly integrates with BunkerWeb's NGINX Lua module
+- **Multisite Support**: Built-in support for global and per-service configurations
+- **Configurable Settings**: Multiple configuration options with validation
+- **Performance Monitoring**: Built-in metrics and health checks"
+    
+    if [ "$WITH_UI" = "yes" ]; then
+        features="${features}
+- **Web UI**: User-friendly configuration interface"
+    fi
+    
+    if [ "$WITH_JOBS" = "yes" ]; then
+        features="${features}
+- **Scheduled Jobs**: Automated maintenance and data processing"
+    fi
+    
+    if [ "$WITH_CONFIGS" = "yes" ]; then
+        features="${features}
+- **Custom NGINX Configs**: Flexible NGINX configuration templates"
+    fi
+    
+    if [ "$WITH_TEMPLATES" = "yes" ]; then
+        features="${features}
+- **Configuration Templates**: Pre-defined configuration templates"
+    fi
+    
+    features="${features}
+- **Stream Support**: $(echo "$STREAM_MODE" | tr '[:lower:]' '[:upper:]') support for TCP/UDP protocols
+- **Security Rules**: Integrated ModSecurity rules for protection
+- **Flexible Context**: Multisite context allows both global and service-specific settings"
+    
+    # Build usage sections
+    local web_ui_section=""
+    if [ "$WITH_UI" = "yes" ]; then
+        web_ui_section="
+
+### Web UI
+
+Access the plugin configuration interface at:
+\`https://your-bunkerweb-ui.com/plugins/$plugin_name\`
+
+The web UI provides:
+- Real-time plugin status
+- Configuration management
+- Statistics dashboard
+- Health monitoring"
+    fi
+    
+    local jobs_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_section="
+
+### Scheduled Jobs
+
+The plugin includes automated maintenance jobs that run daily:
+
+- **Data Cleanup**: Removes old log files and temporary data
+- **Statistics Processing**: Aggregates request data and generates reports
+- **Health Checks**: Validates plugin configuration and system health
+- **Metrics Updates**: Updates runtime statistics and performance metrics
+
+**Available Job Frequencies:**
+- \`hour\` - Run every hour
+- \`daily\` - Run once per day (default)
+- \`weekly\` - Run once per week
+- \`monthly\` - Run once per month
+
+To change the job frequency, edit the \`every\` field in \`plugin.json\`:
+\`\`\`json
+\"jobs\": [
+    {
+        \"name\": \"myplugin-job\",
+        \"file\": \"myplugin-job.py\",
+        \"every\": \"hour\"
+    }
+]
+\`\`\`
+
+Job logs are available in: \`/var/log/bunkerweb/$plugin_name-job.log\`"
+    fi
+    
+    # Build file structure sections
+    local ui_structure=""
+    if [ "$WITH_UI" = "yes" ]; then
+        ui_structure="
+├── ui/                            # Web UI components
+│   ├── actions.py                 # Flask request handlers
+│   ├── template.html              # Web interface template
+│   ├── hooks.py                   # Flask lifecycle hooks
+│   ├── blueprints/               # Custom Flask blueprints
+│   └── templates/                # Additional UI templates"
+    fi
+    
+    local jobs_structure=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_structure="
+├── jobs/                          # Scheduled maintenance jobs
+│   └── $plugin_name-job.py       # Main job scheduler script"
+    fi
+    
+    local configs_structure=""
+    if [ "$WITH_CONFIGS" = "yes" ]; then
+        configs_structure="
+├── confs/                         # NGINX configuration templates
+│   ├── server-http/              # Server-level HTTP configurations
+│   ├── http/                     # HTTP-level configurations
+│   ├── default-server-http/      # Default server configurations
+│   ├── modsec/                   # ModSecurity rules
+│   ├── modsec-crs/              # ModSecurity CRS rules
+│   ├── stream/                   # Stream-level configurations
+│   └── server-stream/            # Server-level stream configurations"
+    fi
+    
+    local templates_structure=""
+    if [ "$WITH_TEMPLATES" = "yes" ]; then
+        templates_structure="
+└── templates/                     # Configuration templates
+    ├── $plugin_name-template.json    # Main template
+    ├── $plugin_name-dev.json         # Development template
+    ├── $plugin_name-prod.json        # Production template
+    └── $plugin_name-template/        # Template with custom configs
+        └── configs/
+            └── server-http/
+                └── custom-endpoint.conf"
+    fi
+    
+    # Build development sections
+    local ui_dev_section=""
+    if [ "$WITH_UI" = "yes" ]; then
+        ui_dev_section="
+4. **Web Interface**: Modify files in \`ui/\` directory for UI changes"
+    fi
+    
+    local jobs_dev_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_dev_section="
+5. **Scheduled Tasks**: Update \`jobs/$plugin_name-job.py\` for job modifications
+   - Change frequency in \`plugin.json\` (hour, daily, weekly, monthly)
+   - Modify job logic for different execution patterns"
+    fi
+    
+    local configs_dev_section=""
+    if [ "$WITH_CONFIGS" = "yes" ]; then
+        configs_dev_section="
+6. **NGINX Configs**: Modify templates in \`confs/\` directory"
+    fi
+    
+    # Build debugging sections
+    local jobs_debug_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_debug_section="
+
+3. **Monitor job execution:**
+   \`\`\`bash
+   tail -f /var/log/bunkerweb/$plugin_name-job.log
+   \`\`\`"
+    fi
+    
+    # Build troubleshooting sections
+    local jobs_troubleshoot_section=""
+    if [ "$WITH_JOBS" = "yes" ]; then
+        jobs_troubleshoot_section="
+
+4. **Job execution failures:**
+   - Check job log file for errors
+   - Verify file system permissions
+   - Ensure required directories exist"
+    fi
+    
     cat > "$plugin_dir/README.md" << EOF
 # $plugin_name Plugin for BunkerWeb
 
@@ -1875,17 +2059,17 @@ All plugin settings use **multisite** context by default, which means:
 - Supports both single-site and multi-site deployments
 
 **Global Configuration:**
-```bash
+\`\`\`bash
 USE_PLUGIN_${plugin_name_upper}=yes
 PLUGIN_${plugin_name_upper}_SETTING=global_value
-```
+\`\`\`
 
 **Per-Service Configuration:**
-```bash
+\`\`\`bash
 # For service: myapp.example.com
 myapp.example.com_USE_PLUGIN_${plugin_name_upper}=yes
 myapp.example.com_PLUGIN_${plugin_name_upper}_SETTING=service_specific_value
-```
+\`\`\`
 
 ### Multisite Best Practices
 
@@ -1896,7 +2080,7 @@ myapp.example.com_PLUGIN_${plugin_name_upper}_SETTING=service_specific_value
 5. **Security Levels**: Apply stricter settings to production services
 
 **Example Multisite Strategy:**
-```bash
+\`\`\`bash
 # Global defaults (permissive for development)
 USE_PLUGIN_${plugin_name_upper}=yes
 PLUGIN_${plugin_name_upper}_SETTING=development_default
@@ -1911,7 +2095,7 @@ prod.example.com_PLUGIN_${plugin_name_upper}_LOG_LEVEL=WARN
 # API service (custom timeout)
 api.example.com_PLUGIN_${plugin_name_upper}_TIMEOUT=60
 api.example.com_PLUGIN_${plugin_name_upper}_SETTING=api_optimized
-```
+\`\`\`
 
 ### Environment Variables
 
@@ -2278,13 +2462,6 @@ Please follow the [BunkerWeb contribution guidelines](https://github.com/bunkeri
 EOF
 }
 
-create_docs(){
-mkdir -p cp "$plugin_dir"/docs
-cp template_diagram.drawio "$plugin_dir"/docs
-cp template_diagram.svg "$plugin_dir"/docs
-
-}
-
 # Main plugin creation function
 create_plugin() {
     local plugin_name="$1"
@@ -2311,7 +2488,7 @@ create_plugin() {
     
     echo "Creating directory structure..."
     create_directory_structure "$plugin_dir"
-    create_docs
+    create_docs "$plugin_dir"
     
     echo "Generating core files..."
     generate_plugin_json "$plugin_dir" "$plugin_name"
@@ -2338,15 +2515,13 @@ create_plugin() {
     fi
     
     echo "Generating documentation..."
-    # need_fix -> runs another shell
-    echo " # need_fix -> runs another shell"
-    # generate_readme "$plugin_dir" "$plugin_name"
+    generate_readme "$plugin_dir" "$plugin_name"
     
     project_readme_existed="no"
-    if [ -f "$plugin_dir/README.md" ]; then
+    if [ -f "$output_dir/README.md" ]; then
         project_readme_existed="yes"
     fi
-    generate_project_readme "$plugin_dir"
+    generate_project_readme "$output_dir"
     
     echo ""
     echo "Plugin structure created successfully!"
@@ -2356,7 +2531,7 @@ create_plugin() {
     find "$plugin_dir" -type f | sort | sed 's/^/  /'
     echo ""
     if [ "$project_readme_existed" = "no" ]; then
-        echo "Project README.md template created at: $plugin_dir/README.md"
+        echo "Project README.md template created at: $output_dir/README.md"
         echo ""
     fi
     echo "Next steps:"
