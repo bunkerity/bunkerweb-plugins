@@ -117,7 +117,7 @@ generate_plugin_json() {
             "context": "multisite",
             "default": "no",
             "help": "Enable or disable the $plugin_name plugin.",
-            "id": "use-plugin-${plugin_name}",
+            "id": "use-${plugin_name}",
             "label": "Use ${plugin_name}",
             "regex": "^(yes|no)$",
             "type": "check"
@@ -130,25 +130,6 @@ generate_plugin_json() {
             "label": "${plugin_name} Setting",
             "regex": "^.*$",
             "type": "text"
-        },
-        "PLUGIN_${plugin_name_upper}_TIMEOUT": {
-            "context": "multisite",
-            "default": "5",
-            "help": "Timeout in seconds for $plugin_name operations.",
-            "id": "plugin-${plugin_name}-timeout",
-            "label": "${plugin_name} Timeout",
-            "regex": "^[0-9]+$",
-            "type": "text"
-        },
-        "PLUGIN_${plugin_name_upper}_LOG_LEVEL": {
-            "context": "multisite",
-            "default": "DEBUG",
-            "help": "Log level for $plugin_name plugin.",
-            "id": "plugin-${plugin_name}-log-level",
-            "label": "${plugin_name} Log Level",
-            "regex": "^(DEBUG|INFO|WARN|ERROR)$",
-            "type": "select",
-            "select": ["DEBUG", "INFO", "WARN", "ERROR"]
         }
     }$([ "$WITH_JOBS" = "yes" ] && echo ',
     "jobs": [
@@ -170,138 +151,67 @@ generate_lua_file() {
     cat > "$plugin_dir/$plugin_name.lua" << 'EOF'
 local class = require "middleclass"
 local plugin = require "bunkerweb.plugin"
-local utils = require "bunkerweb.utils"
 
-local PLUGIN_NAME = class("PLUGIN_NAME", plugin)
+local PLUGIN_NAME_LOWER = class("PLUGIN_NAME_LOWER", plugin)
 
-function PLUGIN_NAME:initialize(ctx)
-    plugin.initialize(self, "PLUGIN_NAME", ctx)
+function PLUGIN_NAME_LOWER:initialize(ctx)
+    plugin.initialize(self, "PLUGIN_NAME_LOWER", ctx)
 end
 
-function PLUGIN_NAME:init()
+function PLUGIN_NAME_LOWER:access()
     if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
+        return self:ret(true, "plugin disabled")
     end
     
-    self.logger:log(ngx.NOTICE, "init called")
-    return self:ret(true, "Plugin initialized successfully")
-end
-
-function PLUGIN_NAME:set()
-    if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
-    end
-    
-    self.logger:log(ngx.NOTICE, "set called")
-    return self:ret(true, "Set phase completed")
-end
-
-function PLUGIN_NAME:access()
-    if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
-    end
-    
-    local start_time = ngx.now()
     self.logger:log(ngx.NOTICE, "access called")
-    
-    local setting_value = self.variables["PLUGIN_PLUGIN_NAME_UPPER_SETTING"] or "default_value"
-    local timeout = tonumber(self.variables["PLUGIN_PLUGIN_NAME_UPPER_TIMEOUT"]) or 5
-    local log_level = self.variables["PLUGIN_PLUGIN_NAME_UPPER_LOG_LEVEL"] or "DEBUG"
-    
-    if not self:validate_settings(setting_value, timeout) then
-        return self:ret(false, "Invalid settings")
-    end
-    
-    local success, result = self:execute_main_logic(setting_value, timeout)
-    if not success then
-        self.logger:log(ngx.ERR, "Main logic failed: " .. (result or "unknown error"))
-        return self:ret(false, "Plugin execution failed", 500)
-    end
-    
-    local duration = ngx.now() - start_time
-    self.logger:log(ngx.INFO, 
-                   string.format("Access phase completed in %.3f seconds", duration))
-    
-    return self:ret(true, "Access successful")
+    return self:ret(true, "success")
 end
 
-function PLUGIN_NAME:log()
+function PLUGIN_NAME_LOWER:log()
     if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
+        return self:ret(true, "plugin disabled")
     end
     
     self.logger:log(ngx.NOTICE, "log called")
-    return self:ret(true, "Log successful")
+    return self:ret(true, "success")
 end
 
-function PLUGIN_NAME:log_default()
+function PLUGIN_NAME_LOWER:log_default()
     if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
+        return self:ret(true, "plugin disabled")
     end
     
     self.logger:log(ngx.NOTICE, "log_default called")
-    return self:ret(true, "Log default successful")
+    return self:ret(true, "success")
 end
 
-function PLUGIN_NAME:preread()
+function PLUGIN_NAME_LOWER:preread()
     if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
+        return self:ret(true, "plugin disabled")
     end
     
     self.logger:log(ngx.NOTICE, "preread called")
-    
-    local client_addr = ngx.var.remote_addr
-    local server_port = ngx.var.server_port
-    
-    self.logger:log(ngx.INFO, 
-                   string.format("Stream connection from %s to port %s", 
-                               client_addr or "unknown", server_port or "unknown"))
-    
-    return self:ret(true, "Preread successful")
+    return self:ret(true, "success")
 end
 
-function PLUGIN_NAME:log_stream()
+function PLUGIN_NAME_LOWER:log_stream()
     if self.variables["USE_PLUGIN_NAME_UPPER"] ~= "yes" then
-        return self:ret(true, "Plugin disabled")
+        return self:ret(true, "plugin disabled")
     end
     
     self.logger:log(ngx.NOTICE, "log_stream called")
-    return self:ret(true, "Stream log successful")
+    return self:ret(true, "success")
 end
 
-function PLUGIN_NAME:validate_settings(setting_value, timeout)
-    if not setting_value or setting_value == "" then
-        self.logger:log(ngx.ERR, "Setting value is empty")
-        return false
-    end
-    
-    if timeout <= 0 or timeout > 300 then
-        self.logger:log(ngx.ERR, "Invalid timeout value: " .. timeout)
-        return false
-    end
-    
-    return true
-end
-
-function PLUGIN_NAME:execute_main_logic(setting_value, timeout)
-    self.logger:log(ngx.INFO, 
-                   string.format("Executing with setting: %s, timeout: %d", 
-                               setting_value, timeout))
-    
-    local allow_request = true
-    local reason = "Request allowed by plugin"
-    
-    return allow_request, reason
-end
-
-return PLUGIN_NAME
+return PLUGIN_NAME_LOWER
 EOF
 
-    sed -i.bak "s|PLUGIN_NAME|${plugin_name}|g" "$plugin_dir/$plugin_name.lua"
+    sed -i.bak "s|PLUGIN_NAME_LOWER|${plugin_name}|g" "$plugin_dir/$plugin_name.lua"
+    sed -i.bak "s|USE_PLUGIN_NAME_UPPER|USE_${plugin_name_upper}|g" "$plugin_dir/$plugin_name.lua"
     
     local plugin_name_upper
     plugin_name_upper=$(echo "$plugin_name" | tr '[:lower:]' '[:upper:]')
-    sed -i.bak "s|PLUGIN_NAME_UPPER|${plugin_name_upper}|g" "$plugin_dir/$plugin_name.lua"
+    sed -i.bak "s|PLUGIN_PLUGIN_NAME_UPPER|PLUGIN_${plugin_name_upper}|g" "$plugin_dir/$plugin_name.lua"
     
     rm -f "$plugin_dir/$plugin_name.lua.bak"
 }
