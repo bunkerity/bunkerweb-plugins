@@ -8,3 +8,5 @@ style.css
 malware-scan/.DS_Store
 *.bak
 *.bak2
+/malware-scan 2
+.DS_Store
