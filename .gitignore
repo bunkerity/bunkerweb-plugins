@@ -4,3 +4,5 @@
 env
 node_modules
 style.css
+/malware-scan/_dev
+malware-scan/.DS_Store
