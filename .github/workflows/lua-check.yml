@@ -1,0 +1,80 @@
+name: Lua Checks
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'malware-scan/**/*.lua'
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'malware-scan/**/*.lua'
+
+jobs:
+  lua-syntax:
+    name: Lua Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
+
+      - name: Lua Syntax Validation
+        run: |
+          echo "Checking Lua syntax for malware-scan plugin..."
+          cd malware-scan
+          FAILED=0
+          for file in *.lua; do
+            if [ -f "$file" ]; then
+              echo "✓ Checking $file..."
+              if ! luac5.4 -p "$file"; then
+                echo "✗ Syntax error in $file"
+                FAILED=1
+              fi
+            fi
+          done
+          if [ $FAILED -eq 1 ]; then
+            echo "❌ Lua syntax check failed"
+            exit 1
+          fi
+          echo "✅ All Lua files passed syntax check"
+
+  lua-static-analysis:
+    name: Lua Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Lua and LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks
+
+      - name: Install luacheck
+        run: |
+          sudo luarocks install luacheck
+
+      - name: Run luacheck
+        run: |
+          echo "Running luacheck static analysis on malware-scan plugin..."
+          cd malware-scan
+          # Run luacheck with relaxed settings appropriate for BunkerWeb plugin development
+          luacheck *.lua \
+            --no-unused-args \
+            --no-unused-secondary \
+            --max-line-length 200 \
+            --ignore 211 \
+            --ignore 212 \
+            --ignore 213 \
+            || echo "⚠️  luacheck found potential issues (review output above)"
+
+          echo ""
+          echo "Note: luacheck warnings don't fail the build but should be reviewed"
+          echo "Common false positives in BunkerWeb plugins:"
+          echo "  - 211/212/213: Unused variables (often BunkerWeb API requirements)"
+          echo "  - Line length: Can exceed for configuration strings"
