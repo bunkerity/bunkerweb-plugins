@@ -1,0 +1,30 @@
+name: SBOM Upload
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'malware-scan/sbom.json'
+      - '.github/workflows/sbom-upload.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  upload-sbom:
+    name: Upload SBOM to GitHub
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload malware-scan SBOM
+        uses: advanced-security/sbom-dependency-submission-action@v0.0.1
+        with:
+          sbom-file-path: malware-scan/sbom.json
+          token: ${{ secrets.GITHUB_TOKEN }}
