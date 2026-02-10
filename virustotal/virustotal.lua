@@ -248,6 +248,9 @@ function virustotal:request(url)
 	if not httpc then
 		return false, err
 	end
+	-- Set timeouts for connect, send, and read
+	local timeout = tonumber(self.variables["VIRUSTOTAL_TIMEOUT"]) or 1000
+	httpc:set_timeouts(timeout, timeout, timeout)
 	-- Send request
 	local res
 	res, err = httpc:request_uri("https://www.virustotal.com/api/v3" .. url, {

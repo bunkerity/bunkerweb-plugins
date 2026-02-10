@@ -2,7 +2,7 @@
   "id": "virustotal",
   "name": "VirusTotal",
   "description": "Automatic scan of uploaded files and ips optionally with the VirusTotal API.",
-  "version": "1.9",
+  "version": "1.10",
   "stream": "partial",
   "settings": {
     "USE_VIRUSTOTAL": {
@@ -22,6 +22,15 @@
       "label": "API key",
       "regex": "^.*$",
       "type": "password"
+    },
+    "VIRUSTOTAL_TIMEOUT": {
+      "context": "global",
+      "default": "1000",
+      "help": "Timeout in milliseconds for VirusTotal API requests.",
+      "id": "virustotal-timeout",
+      "label": "API timeout (ms)",
+      "regex": "^[0-9]+$",
+      "type": "text"
     },
     "VIRUSTOTAL_SCAN_FILE": {
       "context": "multisite",
