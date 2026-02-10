@@ -2,7 +2,7 @@
   "id": "virustotal",
   "name": "VirusTotal",
   "description": "Automatic scan of uploaded files and ips optionally with the VirusTotal API.",
-  "version": "1.9",
+  "version": "1.10",
   "stream": "partial",
   "settings": {
     "USE_VIRUSTOTAL": {
