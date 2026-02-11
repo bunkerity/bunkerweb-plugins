@@ -24,6 +24,7 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 - [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
 - [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 - [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
+- [Matrix](https://github.com/bunkerity/bunkerweb-plugins/tree/main/matrix)
 - [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
 - [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 - [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)

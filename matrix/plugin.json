@@ -1,0 +1,63 @@
+{
+  "id": "matrix",
+  "name": "Matrix",
+  "description": "Send alerts to a Matrix room via the Matrix API.",
+  "version": "1.1",
+  "stream": "yes",
+  "settings": {
+    "USE_MATRIX": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Enable sending alerts to a Matrix room.",
+      "id": "use-matrix",
+      "label": "Use Matrix",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "MATRIX_BASE_URL": {
+      "context": "global",
+      "default": "https://matrix.org",
+      "help": "Base URL of the Matrix server (e.g., https://matrix.org).",
+      "id": "matrix-base-url",
+      "label": "Matrix Base URL",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "MATRIX_ROOM_ID": {
+      "context": "global",
+      "default": "!yourRoomID:matrix.org",
+      "help": "Room ID of the Matrix room to send notifications to.",
+      "id": "matrix-room-id",
+      "label": "Matrix Room ID",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "MATRIX_ACCESS_TOKEN": {
+      "context": "global",
+      "default": "",
+      "help": "Access token to authenticate with the Matrix server.",
+      "id": "matrix-access-token",
+      "label": "Matrix Access Token",
+      "regex": "^.*$",
+      "type": "password"
+    },
+    "MATRIX_ANONYMIZE_IP": {
+      "context": "global",
+      "default": "no",
+      "help": "Mask the IP address in notifications.",
+      "id": "matrix-anonymize-ip",
+      "label": "Anonymize IP",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "MATRIX_INCLUDE_HEADERS": {
+      "context": "global",
+      "default": "no",
+      "help": "Include request headers in notifications.",
+      "id": "matrix-include-headers",
+      "label": "Include Headers",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    }
+  }
+}
