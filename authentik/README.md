@@ -144,6 +144,8 @@ In the Authentik admin UI:
 | `AUTHENTIK_TIMEOUT`           | `5000`                   | global    | no       | Timeout (ms) for the Lua auth subrequest.                                                                |
 | `AUTHENTIK_PROXY_BUFFER_SIZE` | `32k`                    | multisite | no       | `proxy_buffer_size` for this server. Raise if Authentik headers overflow.                                |
 | `AUTHENTIK_PROXY_BUFFERS`     | `8 16k`                  | multisite | no       | `proxy_buffers` for this server.                                                                         |
+| `AUTHENTIK_PASS_IDENTITY_HEADERS` | `no`                 | multisite | no       | Forward Authentik's identity headers (`X-authentik-username`, `-groups`, `-email`, ...) to the upstream. The client-supplied copy of each listed header is stripped first to prevent spoofing. Enable only for trusted-header backends. |
+| `AUTHENTIK_IDENTITY_HEADERS`  | `X-authentik-username X-authentik-groups X-authentik-email X-authentik-name X-authentik-uid` | multisite | no | Space/comma-separated list of headers forwarded (and stripped from the request) when the above is `yes`. Include every `X-authentik-*` header your backend trusts. |
 
 # Troubleshooting
 
@@ -167,12 +169,20 @@ In the Authentik admin UI:
 
 # Notes
 
-- **No identity headers downstream.** This plugin only gates access; it does
-  not forward `X-authentik-username` / `-groups` / `-email` to the upstream.
-  If your backend needs to read the SSO identity (Nextcloud, Grafana
-  header-auth, Bookstack, ...), it's a small addition via
-  `ngx.req.set_header` in `authentik.lua` — open an issue if you'd like it
-  upstreamed.
+- **Identity headers downstream (opt-in).** By default this plugin only gates
+  access and forwards nothing about the user to the upstream. If your backend
+  uses trusted-header authentication (Nextcloud, Grafana header-auth,
+  Bookstack, ...), set `AUTHENTIK_PASS_IDENTITY_HEADERS=yes` to relay
+  Authentik's `X-authentik-*` headers from the auth response to the upstream.
+  Customize the set via `AUTHENTIK_IDENTITY_HEADERS`.
+
+  **Security:** every header in `AUTHENTIK_IDENTITY_HEADERS` is stripped from
+  the incoming request *before* the Authentik values are applied, so a client
+  cannot spoof an identity by sending its own `X-authentik-username` (etc.).
+  Only headers Authentik actually returns are set; missing ones are left
+  absent rather than carrying a client-supplied value. Make sure the list
+  covers **every** identity header your backend trusts — anything not listed
+  is neither forwarded nor stripped.
 - **Per-request cost.** Every gated request makes one HTTP call to the
   Authentik outpost's `/auth/nginx`. The outpost caches session lookups, so
   this is cheap — but keep `AUTHENTIK_URL` pointing at something nearby

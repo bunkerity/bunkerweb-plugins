@@ -17,6 +17,7 @@ local tostring = tostring
 local tonumber = tonumber
 local sub = string.sub
 local len = string.len
+local gmatch = string.gmatch
 
 local function starts_with(s, prefix)
 	if not s or not prefix or prefix == "" then
@@ -33,6 +34,18 @@ local function rstrip_slash(s)
 		s = sub(s, 1, -2)
 	end
 	return s
+end
+
+-- Split a space/comma separated header list into an array of names.
+local function split_headers(s)
+	local t = {}
+	if not s then
+		return t
+	end
+	for name in gmatch(s, "[^%s,]+") do
+		t[#t + 1] = name
+	end
+	return t
 end
 
 function authentik:initialize(ctx)
@@ -66,7 +79,7 @@ function authentik:access()
 	-- Outpost endpoints (start, callback, sign_out, ...) handle their own flow,
 	-- and the /auth/nginx subrequest must not loop into us. Pass through.
 	local uri = self.ctx.bw.uri or ngx.var.uri or ""
-	if starts_with(uri, outpost_path) then
+	if uri == outpost_path or starts_with(uri, outpost_path .. "/") then
 		return self:ret(true, "outpost endpoint, no auth check")
 	end
 
@@ -130,13 +143,25 @@ function authentik:access()
 	end
 
 	if res.status == 200 then
+		-- Optionally forward Authentik's identity headers to the upstream so a
+		-- header-auth backend (Grafana, Nextcloud, ...) knows who the user is.
+		-- The client-supplied copy of every listed header is stripped first so
+		-- it can't be spoofed; only values from Authentik's auth response are set.
+		if self.variables["AUTHENTIK_PASS_IDENTITY_HEADERS"] == "yes" then
+			for _, h in ipairs(split_headers(self.variables["AUTHENTIK_IDENTITY_HEADERS"])) do
+				ngx_req.clear_header(h)
+				local value = res.headers[h]
+				if value then
+					ngx_req.set_header(h, value)
+				end
+			end
+		end
 		return self:ret(true, "authentik authorized request")
 	end
 
 	if res.status == 401 or res.status == 403 then
 		local redirect = outpost_path .. "/start?rd=" .. ngx.escape_uri(original_url)
-		ngx.header["Location"] = redirect
-		return self:ret(true, "authentik signin redirect", HTTP_MOVED_TEMPORARILY)
+		return self:ret(true, "authentik signin redirect", HTTP_MOVED_TEMPORARILY, redirect)
 	end
 
 	return self:ret(
