@@ -1,0 +1,72 @@
+{
+  "id": "authentik",
+  "name": "Authentik",
+  "description": "Protect any site (reverse proxy, served files, ...) with Authentik forward authentication (auth_request).",
+  "version": "1.10",
+  "stream": "no",
+  "settings": {
+    "USE_AUTHENTIK": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate Authentik forward authentication for this site.",
+      "id": "use-authentik",
+      "label": "Use Authentik",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "AUTHENTIK_URL": {
+      "context": "multisite",
+      "default": "",
+      "help": "Base URL of the Authentik outpost (e.g. http://authentik:9000 for the embedded outpost or http://outpost:9000 for a standalone one). The plugin will append /outpost.goauthentik.io to this URL.",
+      "id": "authentik-url",
+      "label": "Authentik outpost URL",
+      "regex": "^(https?://[^ ]+)?$",
+      "type": "text"
+    },
+    "AUTHENTIK_OUTPOST_PATH": {
+      "context": "multisite",
+      "default": "/outpost.goauthentik.io",
+      "help": "Local URL path under which the Authentik outpost endpoints (auth, start, callback, sign_out, ...) are exposed on this site. Must start with /.",
+      "id": "authentik-outpost-path",
+      "label": "Outpost local path",
+      "regex": "^/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$",
+      "type": "text"
+    },
+    "AUTHENTIK_SSL_VERIFY": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Verify the TLS certificate of the Authentik outpost (used both by the Lua auth subrequest and the outpost proxy_pass).",
+      "id": "authentik-ssl-verify",
+      "label": "Verify Authentik TLS certificate",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "AUTHENTIK_TIMEOUT": {
+      "context": "global",
+      "default": "5000",
+      "help": "Timeout (ms) for the Lua auth subrequest to the Authentik outpost.",
+      "id": "authentik-timeout",
+      "label": "Auth subrequest timeout (ms)",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "AUTHENTIK_PROXY_BUFFER_SIZE": {
+      "context": "multisite",
+      "default": "32k",
+      "help": "Value used for proxy_buffer_size on this server. Authentik sets large response headers that may overflow the default buffer.",
+      "id": "authentik-proxy-buffer-size",
+      "label": "proxy_buffer_size",
+      "regex": "^[0-9]+[kKmM]?$",
+      "type": "text"
+    },
+    "AUTHENTIK_PROXY_BUFFERS": {
+      "context": "multisite",
+      "default": "8 16k",
+      "help": "Value used for proxy_buffers on this server. Authentik sets large response headers that may overflow the default buffers.",
+      "id": "authentik-proxy-buffers",
+      "label": "proxy_buffers",
+      "regex": "^[0-9]+ +[0-9]+[kKmM]?$",
+      "type": "text"
+    }
+  }
+}
