@@ -83,7 +83,7 @@
       "help": "Space/comma-separated list of identity headers to forward when AUTHENTIK_PASS_IDENTITY_HEADERS is yes. The same list is stripped from the incoming request before forwarding, so include every X-authentik-* header your backend trusts.",
       "id": "authentik-identity-headers",
       "label": "Identity headers to forward",
-      "regex": "^[A-Za-z0-9-]+([ ,]+[A-Za-z0-9-]+)*$",
+      "regex": "^X-authentik-[A-Za-z0-9-]+([ ,]+X-authentik-[A-Za-z0-9-]+)*$",
       "type": "text"
     }
   }
