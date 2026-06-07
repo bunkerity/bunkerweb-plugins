@@ -5,58 +5,63 @@ adds [Authentik](https://goauthentik.io/) forward authentication to a
 BunkerWeb site. It works on top of any existing service configuration —
 reverse proxy, served files, custom location blocks — without replacing them.
 
-The auth check runs from Lua inside BunkerWeb's access phase, so all of
+The auth check runs from Lua during BunkerWeb's access phase, so all of
 BunkerWeb's built-in checks (rate limit, bad behavior, antibot, DNSBL,
-whitelist / blacklist, ...) get to run *before* the Authentik subrequest
-fires. Cheap denies stay cheap.
+whitelist / blacklist, ...) run *before* the Authentik subrequest fires.
+Bots and rate-limited clients get denied without ever touching Authentik.
 
 # Table of contents
 
 - [Authentik plugin](#authentik-plugin)
 - [Table of contents](#table-of-contents)
-- [How it works](#how-it-works)
+- [Request flow](#request-flow)
 - [Setup](#setup)
   - [Docker / Swarm](#docker--swarm)
   - [Authentik configuration](#authentik-configuration)
+  - [Verifying it works](#verifying-it-works)
 - [Settings](#settings)
+- [Troubleshooting](#troubleshooting)
 - [Notes](#notes)
 
-# How it works
+# Request flow
 
-Two pieces:
+For a request to `https://app.example.com/something`:
 
-1. **`authentik.lua` (access phase).** For every request that isn't already
-   denied by a higher-priority BunkerWeb check, the handler:
-   - skips internal requests and any URI under `AUTHENTIK_OUTPOST_PATH` (so
-     the login flow itself is not gated and there's no auth-loop),
-   - calls `GET <AUTHENTIK_URL>/outpost.goauthentik.io/auth/nginx` with the
-     original cookies, `X-Original-URL`, and `X-Forwarded-*`,
-   - on `200` → forwards any returned `Set-Cookie` to the client and lets
-     the request continue to its normal destination (reverse proxy / file
-     serving / whatever),
-   - on `401`/`403` → 302 to `<outpost_path>/start?rd=<original_url>` to
-     start the SSO flow.
-2. **`confs/server-http/authentik.conf`.** A small server-level snippet that:
-   - raises `proxy_buffers` / `proxy_buffer_size` so large Authentik headers
-     don't overflow,
-   - sets `port_in_redirect off`,
-   - adds a `location {{ AUTHENTIK_OUTPOST_PATH }}` block that proxies the
-     outpost endpoints (`/auth`, `/start`, `/callback`, `/sign_out`, ...) on
-     the protected site's own domain. Keeping these on-domain is what lets
-     the proxy provider's session cookie be scoped correctly.
-
-Because authentication is no longer a `auth_request` directive at server
-scope, there's no interference with BunkerWeb's `add_header` / `proxy_set_header`
-inside `location /`, no antibot redirect loop, and no risk that a
-multi-redirect SSO round-trip blocks itself by hitting `bad_behavior` /
-`limit_req` ahead of the user's real request — those run first by design.
+1. BunkerWeb's access-phase checks run (rate limit, bad behavior, antibot,
+   DNSBL, blacklist, ...). If any of them deny, the request stops here.
+2. `authentik.lua` runs. If the URI is under `AUTHENTIK_OUTPOST_PATH`
+   (default `/outpost.goauthentik.io`), it passes through untouched — that's
+   the SSO flow itself, served by the outpost.
+3. Otherwise the handler does an HTTP `GET` against
+   `<AUTHENTIK_URL>/outpost.goauthentik.io/auth/nginx`, forwarding the
+   browser's cookies and `X-Original-URL`.
+   - **200** — request continues to its normal destination (reverse proxy,
+     file serving, custom location). Any `Set-Cookie` from Authentik is
+     relayed to the client so the session refreshes correctly.
+   - **401 / 403** — `302` to `<outpost_path>/start?rd=<original_url>`, which
+     kicks off the SSO login.
+4. The server-level snippet (`confs/server-http/authentik.conf`) raises
+   `proxy_buffers` / `proxy_buffer_size`, sets `port_in_redirect off`, and
+   declares the `location <outpost_path>` block that proxies the SSO
+   endpoints (`/auth`, `/start`, `/callback`, `/sign_out`, ...) back to the
+   Authentik outpost. Keeping these on the protected site's own domain is
+   what lets the proxy provider's session cookie be scoped correctly.
 
 # Setup
 
 See the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github)
-of the BunkerWeb documentation for the generic plugin installation procedure.
+of the BunkerWeb documentation for the generic plugin installation procedure
+(the short version: drop the `authentik/` directory into the scheduler's
+`/data/plugins/` and restart).
 
 ## Docker / Swarm
+
+`AUTHENTIK_URL` is the URL **BunkerWeb itself** uses to call Authentik —
+typically an internal Docker network address. Users still complete the
+login on Authentik's own public URL (configured separately in Authentik,
+not here). Both BunkerWeb and the user's browser need to be able to reach
+that public URL; otherwise login redirects from `/outpost.../start` go
+nowhere.
 
 ```yaml
 services:
@@ -79,11 +84,12 @@ services:
       REVERSE_PROXY_URL: "/"
 
       USE_AUTHENTIK: "yes"
-      # Embedded outpost on the Authentik server itself:
+      # Internal URL — what BunkerWeb uses to call Authentik:
       AUTHENTIK_URL: "http://authentik-server:9000"
-      # Standalone outpost would be e.g. http://authentik-outpost:9000
 
   authentik-server:
+    # Must also be reachable on a public URL (e.g. https://authentik.example.com)
+    # so users can complete the login flow.
     image: ghcr.io/goauthentik/server:latest
     ...
     networks:
@@ -100,41 +106,79 @@ networks:
 
 In the Authentik admin UI:
 
-1. Create a **Proxy Provider** for the protected site. Forward Auth (single
-   application) is the most common mode. "External host" should match the
-   public URL of the protected site (e.g. `https://app.example.com`).
+1. Create a **Proxy Provider** for the protected site in **Forward Auth
+   (single application)** mode. *External host* should be the public URL of
+   the protected site (e.g. `https://app.example.com`).
 2. Create or assign an **Application** that uses the provider.
-3. Attach the application to an **Outpost** (the built-in *authentik Embedded
-   Outpost* works out of the box). `AUTHENTIK_URL` points at this outpost.
+3. Attach the application to an **Outpost**. The built-in *authentik Embedded
+   Outpost* is the simplest choice — `AUTHENTIK_URL` then points at the
+   Authentik server itself (`http://authentik-server:9000` in the example
+   above). For a standalone outpost, point `AUTHENTIK_URL` at that outpost's
+   address instead.
+4. Make sure the Authentik server itself has a public URL (defined in
+   *System → Brands* or via the `AUTHENTIK_HOST` env var). Browsers are
+   redirected there to enter credentials.
+
+## Verifying it works
+
+1. Reload the scheduler. The Authentik plugin should appear in BunkerWeb's
+   plugins list (web UI or scheduler logs).
+2. Visit a protected URL in a private window. You should land on the
+   Authentik login page (note the URL — it's served by Authentik, not by
+   BunkerWeb).
+3. After logging in, you should be redirected back to the protected URL and
+   see the upstream service's response.
+4. In the Authentik server logs you should see one `/outpost.goauthentik.io/auth/nginx`
+   call per protected request. If you see far more (e.g. one per static
+   asset), the outpost-path skip isn't matching — double-check
+   `AUTHENTIK_OUTPOST_PATH`.
 
 # Settings
 
 | Setting                       | Default                  | Context   | Multiple | Description                                                                                              |
 | ----------------------------- | ------------------------ | --------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | `USE_AUTHENTIK`               | `no`                     | multisite | no       | Activate Authentik forward authentication for this site.                                                 |
-| `AUTHENTIK_URL`               | ``                       | multisite | no       | Base URL of the Authentik outpost. The plugin appends `/outpost.goauthentik.io/*` to it.                 |
-| `AUTHENTIK_OUTPOST_PATH`      | `/outpost.goauthentik.io`| multisite | no       | Local URL path on the protected site where the outpost endpoints are exposed. Must start with `/`.       |
+| `AUTHENTIK_URL`               | ``                       | multisite | no       | Internal base URL BunkerWeb uses to reach the Authentik outpost. The plugin appends `/outpost.goauthentik.io/auth/nginx` for the subrequest and uses the same base for the outpost proxy. **Required when `USE_AUTHENTIK=yes`.** |
+| `AUTHENTIK_OUTPOST_PATH`      | `/outpost.goauthentik.io`| multisite | no       | Local URL path under which the outpost endpoints (`/auth`, `/start`, `/callback`, ...) are exposed on the protected site. Must start with `/`. Changing it does not change the upstream path. |
 | `AUTHENTIK_SSL_VERIFY`        | `yes`                    | multisite | no       | Verify the Authentik outpost TLS certificate.                                                            |
 | `AUTHENTIK_TIMEOUT`           | `5000`                   | global    | no       | Timeout (ms) for the Lua auth subrequest.                                                                |
-| `AUTHENTIK_PROXY_BUFFER_SIZE` | `32k`                    | multisite | no       | `proxy_buffer_size` for this server.                                                                     |
+| `AUTHENTIK_PROXY_BUFFER_SIZE` | `32k`                    | multisite | no       | `proxy_buffer_size` for this server. Raise if Authentik headers overflow.                                |
 | `AUTHENTIK_PROXY_BUFFERS`     | `8 16k`                  | multisite | no       | `proxy_buffers` for this server.                                                                         |
+
+# Troubleshooting
+
+- **HTTP 500 on every protected URL, scheduler log says "AUTHENTIK_URL not
+  configured".** `USE_AUTHENTIK=yes` is set but `AUTHENTIK_URL` is empty.
+- **`upstream sent too big header while reading response header from upstream`.**
+  Raise `AUTHENTIK_PROXY_BUFFER_SIZE` (try `64k`) and/or `AUTHENTIK_PROXY_BUFFERS`.
+- **Login loop — browser cycles between the protected URL and the Authentik
+  login page.** Almost always a cookie-domain mismatch. Confirm that
+  `AUTHENTIK_OUTPOST_PATH` resolves on the *same domain* as the protected
+  app, and that the Authentik proxy provider's *External host* matches that
+  domain exactly (scheme included).
+- **`502` from the outpost path.** BunkerWeb can't reach `AUTHENTIK_URL` —
+  check the Docker network membership and that the Authentik service is up.
+- **Auth subrequests time out.** Increase `AUTHENTIK_TIMEOUT`, or move the
+  Authentik outpost closer to BunkerWeb (ideally same Docker network).
+- **Bots are still hitting Authentik.** They shouldn't be — `bad_behavior`
+  and friends run before the Authentik subrequest. If you're seeing
+  unauthenticated traffic at the outpost, it's likely the SSO redirect
+  fanout from real users; check the Authentik logs by user agent.
 
 # Notes
 
-- **Cookie scope.** Keeping `AUTHENTIK_OUTPOST_PATH` on the protected site's
-  own domain (rather than redirecting users straight to the Authentik server)
-  is what lets the proxy provider's session cookie land on the protected
-  domain. Changing the path is fine as long as it's used consistently across
-  sites that share a session.
-- **Buffer size.** If you see `upstream sent too big header while reading
-  response header from upstream`, raise `AUTHENTIK_PROXY_BUFFER_SIZE` /
-  `AUTHENTIK_PROXY_BUFFERS`.
 - **No identity headers downstream.** This plugin only gates access; it does
-  not forward `X-authentik-username` / `-groups` / `-email` to the upstream
-  service. If your backend needs to read the SSO identity (Nextcloud, Grafana
-  header-auth, ...), file an issue — it's a small addition via
-  `ngx.req.set_header`.
-- **Per-request cost.** Every gated request makes a single HTTP call to the
-  Authentik outpost's `/auth/nginx`. The Authentik outpost itself caches
-  session lookups, so this is fast — but keep `AUTHENTIK_URL` pointing at
-  something close to BunkerWeb (same Docker network is ideal).
+  not forward `X-authentik-username` / `-groups` / `-email` to the upstream.
+  If your backend needs to read the SSO identity (Nextcloud, Grafana
+  header-auth, Bookstack, ...), it's a small addition via
+  `ngx.req.set_header` in `authentik.lua` — open an issue if you'd like it
+  upstreamed.
+- **Per-request cost.** Every gated request makes one HTTP call to the
+  Authentik outpost's `/auth/nginx`. The outpost caches session lookups, so
+  this is cheap — but keep `AUTHENTIK_URL` pointing at something nearby
+  (same Docker network is ideal).
+- **Domain-level vs single-application mode.** This plugin assumes the
+  *Forward Auth (single application)* provider mode. Domain-level mode
+  (shared SSO cookie across `*.example.com`) needs additional Authentik
+  configuration but works with the same plugin settings as long as
+  `AUTHENTIK_OUTPOST_PATH` resolves on the protected domain.
