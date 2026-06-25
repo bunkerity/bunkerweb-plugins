@@ -42,7 +42,7 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 
 	for _, rule := range rules {
 		if rule.Message() != "" {
-			WarningLogger.Printf(rule.AuditLog())
+			WarningLogger.Printf("%s", rule.AuditLog())
 		}
 	}
 
