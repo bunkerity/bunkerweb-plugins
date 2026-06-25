@@ -17,8 +17,9 @@ do_and_check_cmd cp -r ./slack /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd cp -r ./webhook /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/notifier/bw-data
 
-# Copy compose
+# Copy compose + the rate-limit mock config
 do_and_check_cmd cp .tests/notifier/docker-compose.yml /tmp/bunkerweb-plugins/notifier
+do_and_check_cmd cp .tests/notifier/ratelimit.conf /tmp/bunkerweb-plugins/notifier
 
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/notifier/docker-compose.yml
@@ -52,44 +53,101 @@ if [ "$success" = "ko" ] ; then
 	exit 1
 fi
 
-# For each plugin: provoke a deny (403), then assert its async POST reached the
-# mock. The POST is fired from ngx.timer.at AFTER the 403 is returned, so we poll
-# the mock logs instead of inspecting the curl response.
 fail=0
-for plugin in discord slack webhook ; do
+
+# Negative control: a request that is NOT denied must NOT notify. Hit a benign
+# URL (proxied to hello, 200) and confirm no POST reaches the mock. Runs BEFORE
+# any deny so the echo mock log is still empty of notifier POSTs.
+echo "ℹ️ Negative test: a non-denied request must not notify ..."
+code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: slack.example.com" http://localhost/)"
+if [ "$code" != "200" ] ; then
+	echo "❌ benign request to slack vhost expected 200, got $code"
+	fail=1
+fi
+sleep 3
+if docker compose logs mock 2>/dev/null | grep -qF "/slack" ; then
+	echo "❌ benign request triggered a notifier POST"
+	fail=1
+else
+	echo "✔️ benign request did not notify"
+fi
+
+# discord/slack/webhook log() fire on a DENIED request, then POST asynchronously
+# from ngx.timer.at AFTER the 403 is returned — so we poll the mock logs.
+
+# slack/webhook post to the echo mock; assert path + payload-shape key.
+check_echo_notifier() {
+	# $1=plugin  $2=path needle  $3=payload-shape needle
+	local plugin="$1" path="$2" shape="$3" site found="ko" code r=0
 	site="${plugin}.example.com"
 	echo "ℹ️ [$plugin] provoking deny on http://$site/blocked ..."
-
 	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $site" http://localhost/blocked)"
 	if [ "$code" != "403" ] ; then
 		echo "❌ [$plugin] expected 403 on /blocked, got $code"
 		fail=1
-		continue
+		return
 	fi
-	echo "✔️ [$plugin] got 403 (deny triggered)"
-
-	found="ko"
-	retry=0
-	while [ $retry -lt 60 ] ; do
-		if docker compose logs mock 2>/dev/null | grep -F "/$plugin" >/dev/null 2>&1 ; then
+	while [ $r -lt 60 ] ; do
+		if docker compose logs mock 2>/dev/null | grep -qF "$path" ; then
 			found="ok"
 			break
 		fi
-		retry=$((retry + 1))
+		r=$((r + 1))
 		sleep 1
 	done
-
-	if [ "$found" = "ok" ] ; then
-		echo "✔️ [$plugin] async POST received by mock (path /$plugin)"
+	if [ "$found" != "ok" ] ; then
+		echo "❌ [$plugin] mock never received the POST ($path)"
+		fail=1
+		return
+	fi
+	echo "✔️ [$plugin] async POST received ($path)"
+	if docker compose logs mock 2>/dev/null | grep -qF "$shape" ; then
+		echo "✔️ [$plugin] payload shape ok ($shape)"
 	else
-		echo "❌ [$plugin] mock never received the POST (timeout 60s)"
+		echo "❌ [$plugin] payload missing expected key $shape"
 		fail=1
 	fi
-done
+}
 
-# Cross-check that the denied-request payload (not a /ping test) was sent.
-if ! docker compose logs mock 2>/dev/null | grep -F "Denied request for IP" >/dev/null 2>&1 ; then
-	echo "❌ mock logs never contained a denied-request payload"
+check_echo_notifier slack /slack '"text"'
+check_echo_notifier webhook /webhook '"content"'
+
+# discord posts to the rate-limit mock (429 + Retry-After, then 200). With
+# DISCORD_RETRY_IF_LIMITED=yes the plugin retries once, so the mock should see
+# two requests to /discord.
+echo "ℹ️ [discord] provoking deny (retry path) ..."
+code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: discord.example.com" http://localhost/blocked)"
+if [ "$code" != "403" ] ; then
+	echo "❌ [discord] expected 403 on /blocked, got $code"
+	fail=1
+fi
+n=0
+retry=0
+while [ $retry -lt 60 ] ; do
+	n="$(docker compose logs ratelimit 2>/dev/null | grep -c "uri=/discord")"
+	if [ "$n" -ge 2 ] ; then
+		break
+	fi
+	retry=$((retry + 1))
+	sleep 1
+done
+if [ "$n" -ge 2 ] ; then
+	echo "✔️ [discord] retry fired after 429 ($n requests to /discord)"
+else
+	echo "❌ [discord] retry did not fire (only $n request(s) to /discord)"
+	fail=1
+fi
+if docker compose logs ratelimit 2>/dev/null | grep -qF '"username"' \
+	&& docker compose logs ratelimit 2>/dev/null | grep -qF "Denied request for IP" ; then
+	echo "✔️ [discord] payload shape ok (username/embeds, denied payload)"
+else
+	echo "❌ [discord] payload shape or denied-content missing"
+	fail=1
+fi
+
+# Cross-check the denied payload reached the echo mock (slack/webhook).
+if ! docker compose logs mock 2>/dev/null | grep -qF "Denied request for IP" ; then
+	echo "❌ echo mock never received a denied-request payload"
 	fail=1
 fi
 

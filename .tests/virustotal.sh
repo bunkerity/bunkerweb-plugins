@@ -89,6 +89,38 @@ if [ "$success" == "ko" ] ; then
 	echo "❌ Error did not receive 403 code"
 	exit 1
 fi
+
+# Assert the plugin actually queried the mock VT API for the EICAR hash
+# (proves the 403 came from VirusTotal, not some other deny).
+echo "ℹ️ Checking the mock VT API was queried ..."
+if ! docker compose logs mock 2>/dev/null | grep -F "/files/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: plugin never queried the mock VT API for the EICAR hash"
+	exit 1
+fi
+
+# A clean file must pass through (mock returns 404 = not found on VT = clean)
+echo "ℹ️ Testing that a clean file passes ..."
+printf 'just a clean file\n' > /tmp/bunkerweb-plugins/virustotal/clean.txt
+code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/clean.txt" http://localhost)"
+if [ "$code" != "200" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: clean file should pass (got $code, expected 200)"
+	exit 1
+fi
+
+# A malicious IP must be denied (real-ip trusts the X-Forwarded-For we send)
+echo "ℹ️ Testing that a malicious IP is denied ..."
+code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: 1.2.3.4" http://localhost/)"
+if [ "$code" != "403" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: malicious IP should be denied (got $code, expected 403)"
+	exit 1
+fi
+
 if [ "$1" = "verbose" ] ; then
 	docker compose logs
 fi

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,11 @@ import (
 
 	"github.com/corazawaf/coraza/v3"
 )
+
+// errReader fails on the first Read, to exercise the body-read error path.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, fmt.Errorf("forced read error") }
 
 // newTestWAF builds a self-contained WAF from inline directives so tests never
 // depend on the vendored coreruleset/ (gitignored, only present after a Docker
@@ -143,5 +149,46 @@ func TestHandleRequest_RuleEngineOff(t *testing.T) {
 	}
 	if resp.Msg != "rule engine is set to off" {
 		t.Fatalf("expected rule-engine-off message, got %q", resp.Msg)
+	}
+}
+
+func TestHandleRequest_BodyReadError(t *testing.T) {
+	waf = newTestWAF(t, "SecRuleEngine On\nSecRequestBodyAccess On")
+	req := httptest.NewRequest(http.MethodPost, "/request", errReader{})
+	corazaHeaders(req, "body-error", "POST", "/")
+	req.Header.Set("X-Coraza-Header-Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handleRequest(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on body read error, got %d (%q)", rec.Code, rec.Body.String())
+	}
+}
+
+const limitRule = `
+SecRuleEngine On
+SecRequestBodyAccess On
+SecRequestBodyLimit 128
+SecRequestBodyLimitAction Reject
+`
+
+func TestHandleRequest_OversizedBody(t *testing.T) {
+	waf = newTestWAF(t, limitRule)
+	big := strings.Repeat("A", 4096)
+	req := httptest.NewRequest(http.MethodPost, "/request", strings.NewReader("payload="+big))
+	corazaHeaders(req, "oversized", "POST", "/")
+	req.Header.Set("X-Coraza-Header-Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handleRequest(rec, req)
+
+	// Must not panic and must return a well-formed result (deny or 500), never a
+	// silent pass of an over-limit body.
+	if rec.Code == http.StatusOK {
+		resp := decodeResp(t, rec)
+		if !resp.Deny {
+			t.Fatalf("expected an over-limit body to be denied, got %+v", resp)
+		}
+	} else if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 200(deny) or 500 for oversized body, got %d", rec.Code)
 	}
 }

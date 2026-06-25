@@ -38,7 +38,9 @@ services:
       - REDIRECT_HTTP_TO_HTTPS=no
       - AUTO_REDIRECT_HTTP_TO_HTTPS=no
       # Notifier webhook URLs are global; point each at a distinct mock path.
-      - DISCORD_WEBHOOK_URL=http://mock:8080/discord
+      # discord -> ratelimit mock (429 then 200) to exercise the retry path.
+      - DISCORD_WEBHOOK_URL=http://ratelimit:8080/discord
+      - DISCORD_RETRY_IF_LIMITED=yes
       - SLACK_WEBHOOK_URL=http://mock:8080/slack
       - WEBHOOK_URL=http://mock:8080/webhook
       # discord.example.com : notify on a blacklisted URI
@@ -71,6 +73,15 @@ services:
     image: mendhak/http-https-echo:31
     environment:
       - HTTP_PORT=8080
+    networks:
+      - bw-services
+
+  # Stateful sink for discord: 429 + Retry-After on the first hit, then 200, so
+  # the retry path (DISCORD_RETRY_IF_LIMITED=yes) can be asserted.
+  ratelimit:
+    image: openresty/openresty:alpine
+    volumes:
+      - ./ratelimit.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - bw-services
 

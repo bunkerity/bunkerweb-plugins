@@ -25,9 +25,15 @@ services:
       # Point the plugin at the local mock VT API (deterministic, no real key).
       - VIRUSTOTAL_API_KEY=dummy
       - VIRUSTOTAL_API_URL=http://mock:8080
-      # Isolate the file-scan assertion (mock returns clean for IPs anyway).
-      - VIRUSTOTAL_SCAN_IP=no
       - LOG_LEVEL=info
+      # Trust X-Forwarded-For from the test client so the IP-deny case can
+      # present a global IP (the real docker client IP is private and would
+      # skip the IP scan via ip_is_global). File-scan cases send no XFF, so they
+      # keep the private client IP and only exercise the file path.
+      - USE_REAL_IP=yes
+      - REAL_IP_FROM=0.0.0.0/0
+      - REAL_IP_HEADER=X-Forwarded-For
+      - REAL_IP_RECURSIVE=no
       - USE_BAD_BEHAVIOR=no
       - USE_LIMIT_REQ=no
       - USE_LIMIT_CONN=no
