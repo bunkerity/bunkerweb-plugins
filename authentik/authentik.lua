@@ -15,39 +15,15 @@ local http_new = http.new
 local has_variable = utils.has_variable
 local tostring = tostring
 local tonumber = tonumber
-local sub = string.sub
-local len = string.len
-local gmatch = string.gmatch
 local lower = string.lower
 
-local function starts_with(s, prefix)
-	if not s or not prefix or prefix == "" then
-		return false
-	end
-	return sub(s, 1, len(prefix)) == prefix
-end
-
-local function rstrip_slash(s)
-	if not s or s == "" then
-		return s
-	end
-	while sub(s, -1) == "/" do
-		s = sub(s, 1, -2)
-	end
-	return s
-end
-
--- Split a space/comma separated header list into an array of names.
-local function split_headers(s)
-	local t = {}
-	if not s then
-		return t
-	end
-	for name in gmatch(s, "[^%s,]+") do
-		t[#t + 1] = name
-	end
-	return t
-end
+-- Pure string helpers live in a sibling module so busted can unit-test them
+-- outside OpenResty (see spec/authentik_helpers_spec.lua). BunkerWeb requires
+-- plugins as "<id>/<id>", so the sibling resolves as "authentik/authentik_helpers".
+local helpers = require("authentik/authentik_helpers")
+local starts_with = helpers.starts_with
+local rstrip_slash = helpers.rstrip_slash
+local split_headers = helpers.split_headers
 
 function authentik:initialize(ctx)
 	plugin.initialize(self, "authentik", ctx)

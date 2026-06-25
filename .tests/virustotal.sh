@@ -13,13 +13,17 @@ do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/virustotal/bw-data/plugins
 do_and_check_cmd cp -r ./virustotal /tmp/bunkerweb-plugins/virustotal/bw-data/plugins
 do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/virustotal/bw-data
 
-# Copy compose
+# Copy compose + mock VT API config
 do_and_check_cmd cp .tests/virustotal/docker-compose.yml /tmp/bunkerweb-plugins/virustotal
+do_and_check_cmd cp .tests/virustotal/vt-mock.conf /tmp/bunkerweb-plugins/virustotal
 
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
-do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
+
+# The compose points the plugin at a local mock VT API, so no real key is needed.
+# To exercise the real API locally instead, edit docker-compose.yml and set
+# VIRUSTOTAL_API_URL=https://www.virustotal.com/api/v3 + a real VIRUSTOTAL_API_KEY.
 
 # Download EICAR file
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/virustotal/eicar.com https://secure.eicar.org/eicar.com

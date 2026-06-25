@@ -252,8 +252,16 @@ function virustotal:request(url)
 	local timeout = tonumber(self.variables["VIRUSTOTAL_TIMEOUT"]) or 1000
 	httpc:set_timeouts(timeout, timeout, timeout)
 	-- Send request
+	local base_url = self.variables["VIRUSTOTAL_API_URL"]
+	if base_url == nil or base_url == "" then
+		base_url = "https://www.virustotal.com/api/v3"
+	end
+	-- Strip trailing slash(es) so base_url .. "/files/..." never doubles the slash.
+	while base_url:sub(-1) == "/" do
+		base_url = base_url:sub(1, -2)
+	end
 	local res
-	res, err = httpc:request_uri("https://www.virustotal.com/api/v3" .. url, {
+	res, err = httpc:request_uri(base_url .. url, {
 		headers = {
 			["x-apikey"] = self.variables["VIRUSTOTAL_API_KEY"],
 		},

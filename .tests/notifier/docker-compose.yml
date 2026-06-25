@@ -1,0 +1,91 @@
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0
+    ports:
+      - 80:8080/tcp
+      - 443:8443/tcp
+      - 443:8443/udp
+    environment:
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+    networks:
+      - bw-universe
+      - bw-services
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0
+    depends_on:
+      - bunkerweb
+    volumes:
+      - ./bw-data/plugins:/data/plugins
+    environment:
+      - BUNKERWEB_INSTANCES=bunkerweb
+      - MULTISITE=yes
+      - SERVER_NAME=discord.example.com slack.example.com webhook.example.com
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+      - LOG_LEVEL=info
+      - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
+      - USE_BUNKERNET=no
+      - USE_BLACKLIST=no
+      - USE_GREYLIST=no
+      - USE_WHITELIST=no
+      - USE_MODSECURITY=no
+      - USE_ANTIBOT=no
+      - SERVE_FILES=no
+      - DISABLE_DEFAULT_SERVER=yes
+      - AUTO_LETS_ENCRYPT=no
+      - USE_LETS_ENCRYPT=no
+      - REDIRECT_HTTP_TO_HTTPS=no
+      - AUTO_REDIRECT_HTTP_TO_HTTPS=no
+      # Notifier webhook URLs are global; point each at a distinct mock path.
+      - DISCORD_WEBHOOK_URL=http://mock:8080/discord
+      - SLACK_WEBHOOK_URL=http://mock:8080/slack
+      - WEBHOOK_URL=http://mock:8080/webhook
+      # discord.example.com : notify on a blacklisted URI
+      - discord.example.com_USE_REVERSE_PROXY=yes
+      - discord.example.com_REVERSE_PROXY_HOST=http://hello:8080
+      - discord.example.com_REVERSE_PROXY_URL=/
+      - discord.example.com_USE_DISCORD=yes
+      - discord.example.com_USE_BLACKLIST=yes
+      - discord.example.com_BLACKLIST_URI=/blocked
+      # slack.example.com
+      - slack.example.com_USE_REVERSE_PROXY=yes
+      - slack.example.com_REVERSE_PROXY_HOST=http://hello:8080
+      - slack.example.com_REVERSE_PROXY_URL=/
+      - slack.example.com_USE_SLACK=yes
+      - slack.example.com_USE_BLACKLIST=yes
+      - slack.example.com_BLACKLIST_URI=/blocked
+      # webhook.example.com
+      - webhook.example.com_USE_REVERSE_PROXY=yes
+      - webhook.example.com_REVERSE_PROXY_HOST=http://hello:8080
+      - webhook.example.com_REVERSE_PROXY_URL=/
+      - webhook.example.com_USE_WEBHOOK=yes
+      - webhook.example.com_USE_BLACKLIST=yes
+      - webhook.example.com_BLACKLIST_URI=/blocked
+    networks:
+      - bw-universe
+
+  # Webhook sink: logs every inbound request (incl. JSON body) to stdout, so the
+  # async POST from each notifier plugin can be asserted via `docker compose logs`.
+  mock:
+    image: mendhak/http-https-echo:31
+    environment:
+      - HTTP_PORT=8080
+    networks:
+      - bw-services
+
+  # Upstream so the readiness poll (curl | grep hello) works like the other tests.
+  hello:
+    image: nginxdemos/nginx-hello
+    networks:
+      - bw-services
+
+networks:
+  bw-universe:
+    name: bw-universe
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.30.0/24
+  bw-services:
+    name: bw-services

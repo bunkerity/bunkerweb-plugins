@@ -5,3 +5,11 @@ env
 node_modules
 style.css
 .idea
+
+# Python test artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Go: deps are resolved at build time; go.sum is regenerated, not committed
+coraza/api/go.sum

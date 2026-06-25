@@ -23,6 +23,15 @@
       "regex": "^.*$",
       "type": "password"
     },
+    "VIRUSTOTAL_API_URL": {
+      "context": "global",
+      "default": "https://www.virustotal.com/api/v3",
+      "help": "Base URL of the VirusTotal API (or a VirusTotal-compatible endpoint).",
+      "id": "virustotal-api-url",
+      "label": "API URL",
+      "regex": "^https?://.*$",
+      "type": "text"
+    },
     "VIRUSTOTAL_TIMEOUT": {
       "context": "global",
       "default": "1000",
