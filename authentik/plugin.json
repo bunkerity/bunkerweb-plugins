@@ -17,7 +17,7 @@
     "AUTHENTIK_URL": {
       "context": "multisite",
       "default": "",
-      "help": "Base URL of the Authentik outpost (e.g. http://authentik:9000 for the embedded outpost or http://outpost:9000 for a standalone one). The plugin will append /outpost.goauthentik.io to this URL.",
+      "help": "Base URL of the Authentik outpost (e.g. http://authentik:9000 for the embedded outpost or http://outpost:9000 for a standalone one). The plugin calls <AUTHENTIK_URL>/outpost.goauthentik.io/auth/nginx for the auth check and uses the same base for the outpost proxy.",
       "id": "authentik-url",
       "label": "Authentik outpost URL",
       "regex": "^(https?://[^ ]+)?$",
