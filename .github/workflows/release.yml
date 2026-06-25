@@ -1,0 +1,81 @@
+name: Release
+
+# Cut a GitHub release once per plugin version bump. Mirrors the release-creation
+# step of bunkerity/bunkerweb (softprops/action-gh-release, pinned SHA, draft for
+# human review) without the heavy build matrix the plugins repo does not need.
+#
+# Fires only after the "Tests" workflow succeeds on main, and only when the
+# version in plugin.json does not already have a release — so a normal push to
+# main that does not bump the version is a no-op.
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the tag + release
+    steps:
+      - name: Checkout the tested commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0 # full history so generated release notes are complete
+
+      - name: Resolve plugin version
+        id: version
+        run: |
+          # All plugin.json carry the same version (kept in lockstep by
+          # misc/update_version.sh), so any one of them is the source of truth.
+          version="$(jq -r .version clamav/plugin.json)"
+          case "$version" in
+          "" | null | *[!0-9.]*)
+            echo "::error::unexpected plugin version '$version'"
+            exit 1
+            ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version is already released
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Match on tag_name across ALL releases, drafts included. A draft has
+          # no git tag until it is published, so `gh release view <tag>` would
+          # miss an unpublished draft and we'd create a duplicate on every push.
+          # The assignment aborts the step if `gh api` fails (no fail-open to
+          # "create" on an auth/network error).
+          tags="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name')"
+          if grep -Fxq "$TAG" <<<"$tags"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists (including drafts) — nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No release for $TAG yet — creating a draft."
+          fi
+
+      - name: Create draft release
+        if: steps.guard.outputs.exists == 'false'
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          name: ${{ steps.version.outputs.tag }}
+          draft: true # published by a maintainer after a quick review
+          generate_release_notes: true # auto-changelog from merged PRs/commits
+          body: |
+            BunkerWeb external plugins **${{ steps.version.outputs.tag }}**.
+
+            Install a plugin by mounting its directory into the scheduler's `/data/plugins`
+            (see the README). Coraza ships its WAF API as `bunkerity/bunkerweb-coraza`.

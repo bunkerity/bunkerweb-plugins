@@ -2,7 +2,7 @@
   "id": "authentik",
   "name": "Authentik",
   "description": "Protect any site (reverse proxy, served files, ...) with Authentik forward authentication (auth_request).",
-  "version": "1.10",
+  "version": "1.11",
   "stream": "no",
   "settings": {
     "USE_AUTHENTIK": {

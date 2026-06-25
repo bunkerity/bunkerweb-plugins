@@ -15,4 +15,7 @@ fi
 echo "Updating version of plugins to \"$1\""
 
 find . -type f -name "plugin.json" -exec sed -i 's@"version": "[0-9].*"@"version": "'"$1"'"@' {} \;
-sed -i 's@"bunkerweb_plugins\-[0-9].*\-blue"@"bunkerweb_plugins-'"$1"'-blue@' README.md
+# Anchor on the shields.io URL path (/badge/), not a leading quote — the badge
+# is inside src="…/badge/bunkerweb_plugins-<ver>-blue", so the old `"bunkerweb…`
+# pattern never matched and the badge silently went stale.
+sed -i 's@/badge/bunkerweb_plugins-[0-9][0-9.]*-blue@/badge/bunkerweb_plugins-'"$1"'-blue@' README.md
