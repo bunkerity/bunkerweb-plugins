@@ -1,0 +1,38 @@
+flowchart TD
+    accTitle: BunkerWeb Authentik plugin request flow
+    accDescr: A client request first passes BunkerWeb core checks, then authentik.lua calls the Authentik outpost auth endpoint. On 200 the request reaches the upstream with optional identity headers while client-supplied identity headers are stripped. On 401 or 403 the client is redirected to the Authentik SSO login.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb access phase]
+        direction TB
+        core["1. Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
+        lua["2. authentik.lua:<br/>GET AUTHENTIK_URL + /outpost.goauthentik.io/auth/nginx<br/>(forwards cookies)"]
+        core --> lua
+    end
+
+    verdict{"Outpost verdict"}
+    allow["Allow to upstream:<br/>forward X-authentik-* (opt-in),<br/>client X-authentik-* stripped"]
+    redirect["302 to /outpost.goauthentik.io/start"]
+    upstream([Upstream app:<br/>reverse proxy or served files])
+    outpost[["Authentik outpost:<br/>/auth/nginx, /start, /callback, /sign_out"]]
+    server([Authentik server:<br/>SSO login flow])
+
+    client -->|request| core
+    lua -.->|auth sub-request| outpost
+    outpost -.->|status| verdict
+    verdict -->|200| allow
+    verdict -->|401 or 403| redirect
+    allow --> upstream
+    redirect -->|browser follows| client
+    client -->|"/outpost.goauthentik.io/* SSO, proxied by authentik.conf"| outpost
+    outpost --- server
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef ak fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class allow,upstream ok;
+    class redirect deny;
+    class outpost,server ak;
+    class client,core,lua app;

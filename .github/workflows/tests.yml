@@ -46,6 +46,9 @@ jobs:
         env:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
 
+      - name: Run Authentik tests
+        run: ./.tests/authentik.sh
+
       - name: Build and push APIs
         if: env.BW_TAG == '1.6.1'
         run: ./.tests/build-push.sh "${{ env.BW_TAG }}"
