@@ -18,6 +18,7 @@ local tonumber = tonumber
 local sub = string.sub
 local len = string.len
 local gmatch = string.gmatch
+local lower = string.lower
 
 local function starts_with(s, prefix)
 	if not s or not prefix or prefix == "" then
@@ -143,13 +144,22 @@ function authentik:access()
 	end
 
 	if res.status == 200 then
-		-- Optionally forward Authentik's identity headers to the upstream so a
-		-- header-auth backend (Grafana, Nextcloud, ...) knows who the user is.
-		-- The client-supplied copy of every listed header is stripped first so
-		-- it can't be spoofed; only values from Authentik's auth response are set.
+		-- Anti-spoofing: strip EVERY client-supplied X-authentik-* request header
+		-- before the request reaches the upstream, regardless of whether we forward
+		-- Authentik's own. A client must never be able to inject its own identity.
+		-- get_headers(0) lifts the default 100-header cap so a header flood can't
+		-- hide an entry past the limit.
+		local in_headers = ngx_req.get_headers(0)
+		for name in pairs(in_headers) do
+			if type(name) == "string" and starts_with(lower(name), "x-authentik-") then
+				ngx_req.clear_header(name)
+			end
+		end
+		-- Optionally forward Authentik's identity headers to a trusted-header backend
+		-- (Grafana, Nextcloud, ...) so it knows who the user is. Only values from
+		-- Authentik's auth response are set; client copies were stripped above.
 		if self.variables["AUTHENTIK_PASS_IDENTITY_HEADERS"] == "yes" then
 			for _, h in ipairs(split_headers(self.variables["AUTHENTIK_IDENTITY_HEADERS"])) do
-				ngx_req.clear_header(h)
 				local value = res.headers[h]
 				if value then
 					ngx_req.set_header(h, value)
