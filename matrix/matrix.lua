@@ -1,9 +1,9 @@
 local cjson = require("cjson")
 local class = require("middleclass")
 local http = require("resty.http")
+local matrix_utils = require("matrix.utils")
 local plugin = require("bunkerweb.plugin")
 local utils = require("bunkerweb.utils")
-local matrix_utils = require("matrix.utils")
 
 local matrix = class("matrix", plugin)
 
@@ -23,6 +23,45 @@ local get_asn = utils.get_asn
 local get_asn_org = matrix_utils.get_asn_org
 local tostring = tostring
 local encode = cjson.encode
+local escape_uri = ngx.escape_uri
+
+-- Escape characters that are significant in the org.matrix.custom.html body so that
+-- attacker-controlled values (URI, Host, header names/values) can't break the markup.
+local function html_escape(str)
+	return (string.gsub(tostring(str), "[&<>]", { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" }))
+end
+
+-- Escape Lua pattern magic characters so a literal string can be used as a gsub pattern.
+local function escape_pattern(str)
+	return (string.gsub(str, "([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"))
+end
+
+-- Mask an IP for notifications. Handles both IPv4 and IPv6.
+local function anonymize_ip(ip)
+	if string.find(ip, ":", 1, true) then
+		-- IPv6: keep the first three hextets, mask the remainder
+		local prefix = string.match(ip, "^(%x*:%x*:%x*):")
+		return prefix and (prefix .. ":xxxx") or "xxxx::xxxx"
+	end
+	-- IPv4: mask the last two octets
+	return (string.gsub(ip, "%d+%.%d+$", "xxx.xxx"))
+end
+
+-- Per-worker, monotonically increasing counter to guarantee transaction-ID uniqueness.
+-- ngx.now() is cached per event-loop cycle, so time + pid alone can still collide.
+local txn_counter = 0
+
+-- Build the Matrix "send message" endpoint URL.
+-- The room ID (e.g. "!abc:matrix.org") must be percent-encoded in the path, and the
+-- transaction ID must be unique: os.time() has 1s resolution and Matrix silently drops
+-- duplicate transaction IDs, so bursts within the same second would lose notifications.
+local function message_url(self)
+	local base_url = string.gsub(self.variables["MATRIX_BASE_URL"], "/+$", "")
+	local room_id = self.variables["MATRIX_ROOM_ID"]
+	txn_counter = txn_counter + 1
+	local txn_id = string.format("%d_%d_%d", math.floor(ngx.now() * 1000), ngx.worker.pid(), txn_counter)
+	return string.format("%s/_matrix/client/r0/rooms/%s/send/m.room.message/%s", base_url, escape_uri(room_id), txn_id)
+end
 
 function matrix:initialize(ctx)
 	-- Call parent initialize
@@ -45,21 +84,23 @@ function matrix:log(bypass_use_matrix)
 	local request_host = ngx.var.host or "unknown host"
 	local remote_addr = self.ctx.bw.remote_addr
 	local request_method = self.ctx.bw.request_method
-	local country, err = get_country(self.ctx.bw.remote_addr)
+	local country, err = get_country(remote_addr)
 	if not country then
-		elf.logger:log(ERR, "can't get Country of IP " .. remote_addr .. " : " .. err)
+		self.logger:log(ERR, "can't get Country of IP " .. remote_addr .. " : " .. err)
 		country = "Country unknown"
 	else
 		country = tostring(country)
 	end
-	local asn, err = get_asn(remote_addr)
+	local asn
+	asn, err = get_asn(remote_addr)
 	if not asn then
 		self.logger:log(ERR, "can't get ASN of IP " .. remote_addr .. " : " .. err)
 		asn = "ASN unknown"
 	else
 		asn = "ASN " .. tostring(asn)
 	end
-	local asn_org, err = get_asn_org(remote_addr)
+	local asn_org
+	asn_org, err = get_asn_org(remote_addr)
 	if not asn_org then
 		self.logger:log(ERR, "can't get Organization of IP " .. remote_addr .. " : " .. err)
 		asn_org = "AS Organization unknown"
@@ -67,34 +108,75 @@ function matrix:log(bypass_use_matrix)
 		asn_org = tostring(asn_org)
 	end
 	local data = {}
-	data["formatted_body"] = "<p>Denied " .. request_method .. " from <b>" .. remote_addr .. "</b> (" .. country .. " • \"<i>" .. asn_org .. "</i>\" • " .. asn .. ") to " .. request_host .. self.ctx.bw.uri .. "<br>"
-	data["formatted_body"] = data["formatted_body"] .. "Reason <b>" .. reason .. "</b> (" .. encode(reason_data or {}) .. ").</p>"
-	data["body"] = "Denied " .. request_method .. " from " .. remote_addr .. " (" .. country .. " • \"" .. asn_org .. "\" • " .. asn .. ") to " .. request_host .. self.ctx.bw.uri .. "\n"
+	data["formatted_body"] = "<p>Denied "
+		.. html_escape(request_method)
+		.. " from <b>"
+		.. remote_addr
+		.. "</b> ("
+		.. country
+		.. ' • "<i>'
+		.. html_escape(asn_org)
+		.. '</i>" • '
+		.. asn
+		.. ") to "
+		.. html_escape(request_host)
+		.. html_escape(self.ctx.bw.uri)
+		.. "<br>"
+	data["formatted_body"] = data["formatted_body"]
+		.. "Reason <b>"
+		.. html_escape(reason)
+		.. "</b> ("
+		.. html_escape(encode(reason_data or {}))
+		.. ").</p>"
+	data["body"] = "Denied "
+		.. request_method
+		.. " from "
+		.. remote_addr
+		.. " ("
+		.. country
+		.. ' • "'
+		.. asn_org
+		.. '" • '
+		.. asn
+		.. ") to "
+		.. request_host
+		.. self.ctx.bw.uri
+		.. "\n"
 	data["body"] = data["body"] .. "Reason " .. reason .. " (" .. encode(reason_data or {}) .. ")."
 	-- Add headers if enabled
 	if self.variables["MATRIX_INCLUDE_HEADERS"] == "yes" then
-		local headers, err = ngx_req.get_headers()
+		local headers
+		headers, err = ngx_req.get_headers()
 		if not headers then
 			data["formatted_body"] = data["formatted_body"] .. "error while getting headers: " .. err
 			data["body"] = data["body"] .. "\n error while getting headers: " .. err
 		else
-            data["formatted_body"] = data["formatted_body"] .. "<table><tr><th>Header</th><th>Value</th></tr>"
+			data["formatted_body"] = data["formatted_body"] .. "<table><tr><th>Header</th><th>Value</th></tr>"
 			data["body"] = data["body"] .. "\n\n"
 			for header, value in pairs(headers) do
-				data["formatted_body"] = data["formatted_body"] .. "<tr><td>" .. header .. "</td><td>" .. value .. "</td></tr>"
-				data["body"] = data["body"] .. header .. ": " .. value .. "\n"
+				-- Repeated headers are returned as a table by ngx.req.get_headers()
+				local header_value = type(value) == "table" and table.concat(value, ", ") or value
+				data["formatted_body"] = data["formatted_body"]
+					.. "<tr><td>"
+					.. html_escape(header)
+					.. "</td><td>"
+					.. html_escape(header_value)
+					.. "</td></tr>"
+				data["body"] = data["body"] .. header .. ": " .. header_value .. "\n"
 			end
 			data["formatted_body"] = data["formatted_body"] .. "</table>"
 		end
 	end
 	-- Anonymize IP if enabled
 	if self.variables["MATRIX_ANONYMIZE_IP"] == "yes" then
-		remote_addr = string.gsub(remote_addr, "%d+%.%d+$", "xxx.xxx")
-		data["formatted_body"] = string.gsub(data["formatted_body"], self.ctx.bw.remote_addr, remote_addr)
-		data["body"] = string.gsub(data["body"], self.ctx.bw.remote_addr, remote_addr)
+		local masked = anonymize_ip(remote_addr)
+		local pattern = escape_pattern(remote_addr)
+		data["formatted_body"] = (string.gsub(data["formatted_body"], pattern, masked))
+		data["body"] = (string.gsub(data["body"], pattern, masked))
 	end
 	-- Send request
-	local hdr, err = ngx_timer.at(0, self.send, self, data)
+	local hdr
+	hdr, err = ngx_timer.at(0, self.send, self, data)
 	if not hdr then
 		return self:ret(true, "can't create report timer: " .. err)
 	end
@@ -106,32 +188,31 @@ function matrix.send(premature, self, data)
 	local httpc, err = http_new()
 	if not httpc then
 		self.logger:log(ERR, "can't instantiate http object : " .. err)
+		return
 	end
-	-- Prapare data
-	local base_url = self.variables["MATRIX_BASE_URL"]
+	-- Prepare data
 	local access_token = self.variables["MATRIX_ACCESS_TOKEN"]
-	local room_id = self.variables["MATRIX_ROOM_ID"]
-	local txn_id = tostring(os.time())
-	local url = string.format("%s/_matrix/client/r0/rooms/%s/send/m.room.message/%s", base_url, room_id, txn_id)
+	local url = message_url(self)
 	local message_data = {
 		msgtype = "m.text",
 		body = data["body"],
 		format = "org.matrix.custom.html",
-		formatted_body = data["formatted_body"]
+		formatted_body = data["formatted_body"],
 	}
-	local post_data = cjson.encode(message_data)
+	local post_data = encode(message_data)
 	-- Send request
 	local res, err_http = httpc:request_uri(url, {
 		method = "PUT",
 		body = post_data,
 		headers = {
 			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. access_token  -- Access Token im Header
-		}
+			["Authorization"] = "Bearer " .. access_token,
+		},
 	})
 	httpc:close()
 	if not res then
 		self.logger:log(ERR, "error while sending request : " .. err_http)
+		return
 	end
 	if res.status < 200 or res.status > 299 then
 		self.logger:log(ERR, "request returned status " .. tostring(res.status))
@@ -172,32 +253,31 @@ function matrix:api()
 			return self:ret(true, "matrix plugin not enabled")
 		end
 		-- Prepare data
-		local base_url = self.variables["MATRIX_BASE_URL"]
 		local access_token = self.variables["MATRIX_ACCESS_TOKEN"]
-		local room_id = self.variables["MATRIX_ROOM_ID"]
-		local txn_id = tostring(os.time())
-		local url = string.format("%s/_matrix/client/r0/rooms/%s/send/m.room.message/%s", base_url, room_id, txn_id)
+		local url = message_url(self)
 		local message_data = {
-				msgtype = "m.text",
-				body = "Test message from bunkerweb."
-			}
+			msgtype = "m.text",
+			body = "Test message from bunkerweb.",
+		}
 		-- Send request
 		local httpc
 		httpc, err = http_new()
 		if not httpc then
 			self.logger:log(ERR, "can't instantiate http object : " .. err)
+			return self:ret(true, "can't instantiate http object", HTTP_INTERNAL_SERVER_ERROR)
 		end
 		local res, err_http = httpc:request_uri(url, {
 			method = "PUT",
 			headers = {
-                ["Content-Type"] = "application/json",
-                ["Authorization"] = "Bearer " .. access_token 
-            },
+				["Content-Type"] = "application/json",
+				["Authorization"] = "Bearer " .. access_token,
+			},
 			body = encode(message_data),
 		})
 		httpc:close()
 		if not res then
 			self.logger:log(ERR, "error while sending request : " .. err_http)
+			return self:ret(true, "error while sending request", HTTP_INTERNAL_SERVER_ERROR)
 		end
 		if res.status < 200 or res.status > 299 then
 			return self:ret(true, "request returned status " .. tostring(res.status), HTTP_INTERNAL_SERVER_ERROR)

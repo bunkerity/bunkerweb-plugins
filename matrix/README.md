@@ -12,15 +12,15 @@ This [BunkerWeb](https://www.bunkerweb.io/?utm_campaign=self&utm_source=github) 
   - [Swarm](#swarm)
   - [Kubernetes](#kubernetes)
 - [Settings](#settings)
-- [TODO](#todo)
 
 # Prerequisites
 
 Please read the [plugins section](https://docs.bunkerweb.io/latest/plugins/?utm_campaign=self&utm_source=github) of the BunkerWeb documentation first.
 
 You will need:
+
 - A Matrix server URL (e.g., `https://matrix.org`).
-- A valid access token for the Matrix user you want to sent notifications from.
+- A valid access token for the Matrix user you want to send notifications from.
 - A room ID where notifications will be sent to. The matrix user has to be Member of that room.
 
 Please refer to your homeserver's docs if you need help setting these up.
@@ -39,7 +39,7 @@ version: '3'
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.5.10
+    image: bunkerity/bunkerweb:1.5.9
     ...
     environment:
       - USE_MATRIX=yes
@@ -57,7 +57,7 @@ version: '3'
 services:
 
   mybunker:
-    image: bunkerity/bunkerweb:1.5.10
+    image: bunkerity/bunkerweb:1.5.9
     ..
     environment:
       - USE_MATRIX=yes
@@ -83,11 +83,11 @@ metadata:
 
 # Settings
 
-| Setting              | Default                      | Context   | Multiple | Description                                                                                         |
-| -------------------- | ---------------------------- | --------- | -------- | --------------------------------------------------------------------------------------------------- |
-| `USE_MATRIX`         | `no`                         | multisite | no       | Enable sending alerts to a Matrix room.                                                             |
-| `MATRIX_BASE_URL`     | `https://matrix.org`          | global    | no       | Base URL of the Matrix server.                                                                      |
-| `MATRIX_ROOM_ID`      | `!yourRoomID:matrix.org`      | global    | no       | Room ID of the Matrix room to send notifications to.                                                |
-| `MATRIX_ACCESS_TOKEN` | ` `                           | global    | no       | Access token to authenticate with the Matrix server.                                                |
-| `MATRIX_ANONYMIZE_IP`        | `no`                         | global | no       | Mask the IP address in notifications.                                                               |
-| `MATRIX_INCLUDE_HEADERS`     | `no`                        | global | no       | Include request headers in notifications.                                                           |
+| Setting                  | Default                  | Context   | Multiple | Description                                               |
+| ------------------------ | ------------------------ | --------- | -------- | --------------------------------------------------------- |
+| `USE_MATRIX`             | `no`                     | multisite | no       | Enable sending alerts to a Matrix room.                   |
+| `MATRIX_BASE_URL`        | `https://matrix.org`     | global    | no       | Base URL of the Matrix server (e.g., https://matrix.org). |
+| `MATRIX_ROOM_ID`         | `!yourRoomID:matrix.org` | global    | no       | Room ID of the Matrix room to send notifications to.      |
+| `MATRIX_ACCESS_TOKEN`    |                          | global    | no       | Access token to authenticate with the Matrix server.      |
+| `MATRIX_ANONYMIZE_IP`    | `no`                     | global    | no       | Mask the IP address in notifications.                     |
+| `MATRIX_INCLUDE_HEADERS` | `no`                     | global    | no       | Include request headers in notifications.                 |

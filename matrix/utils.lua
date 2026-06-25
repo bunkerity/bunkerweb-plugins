@@ -1,9 +1,9 @@
-local mmdb = require "bunkerweb.mmdb"
+local mmdb = require("bunkerweb.mmdb")
 
 local _utils = {}
 
 _utils.get_asn_org = function(ip)
-	-- Check if mmdp is loaded
+	-- Check if mmdb is loaded
 	if not mmdb.asn_db then
 		return false, "mmdb asn not loaded"
 	end
