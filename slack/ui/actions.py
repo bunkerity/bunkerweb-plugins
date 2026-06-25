@@ -18,10 +18,7 @@ def pre_render(**kwargs):
     except BaseException as e:
         logger.debug(format_exc())
         logger.error(f"Failed to get slack ping: {e}")
-        ret["error"] = str(e)
-
-    if "error" in ret:
-        return ret
+        ret["error"] = "Could not retrieve the plugin status"
 
     return ret
 

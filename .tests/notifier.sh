@@ -82,7 +82,9 @@ check_echo_notifier() {
 	local plugin="$1" path="$2" shape="$3" site found="ko" code r=0
 	site="${plugin}.example.com"
 	echo "ℹ️ [$plugin] provoking deny on http://$site/blocked ..."
-	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $site" http://localhost/blocked)"
+	# Send a credential header: the notifier must redact it (see redact_header in
+	# each plugin's *_helpers.lua) before forwarding the request to the sink.
+	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $site" -H "Cookie: redactme-supersecret" http://localhost/blocked)"
 	if [ "$code" != "403" ] ; then
 		echo "❌ [$plugin] expected 403 on /blocked, got $code"
 		fail=1
@@ -120,7 +122,7 @@ check_echo_notifier matrix "/_matrix/client" '"formatted_body"'
 # DISCORD_RETRY_IF_LIMITED=yes the plugin retries once, so the mock should see
 # two requests to /discord.
 echo "ℹ️ [discord] provoking deny (retry path) ..."
-code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: discord.example.com" http://localhost/blocked)"
+code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: discord.example.com" -H "Cookie: redactme-supersecret" http://localhost/blocked)"
 if [ "$code" != "403" ] ; then
 	echo "❌ [discord] expected 403 on /blocked, got $code"
 	fail=1
@@ -149,9 +151,35 @@ else
 	fail=1
 fi
 
+# discord posts to the ratelimit sink (not the echo mock), so assert its
+# header redaction separately: the Cookie sent on the deny must be [REDACTED].
+if docker compose logs ratelimit 2>/dev/null | grep -qF "redactme-supersecret" ; then
+	echo "❌ [discord] sensitive header value leaked to the notifier payload"
+	fail=1
+elif docker compose logs ratelimit 2>/dev/null | grep -qF "[REDACTED]" ; then
+	echo "✔️ [discord] sensitive header redacted in the notifier payload"
+else
+	echo "❌ [discord] expected [REDACTED] marker missing from the notifier payload"
+	fail=1
+fi
+
 # Cross-check the denied payload reached the echo mock (slack/webhook).
 if ! docker compose logs mock 2>/dev/null | grep -qF "Denied request for IP" ; then
 	echo "❌ echo mock never received a denied-request payload"
+	fail=1
+fi
+
+# Sensitive-header redaction: the Cookie value sent on the denied requests must
+# never reach the notification sink — it is replaced by [REDACTED]. This guards
+# the redact_header() logic shared by all notifier plugins (slack/webhook/matrix
+# post their header table to the echo mock).
+if docker compose logs mock 2>/dev/null | grep -qF "redactme-supersecret" ; then
+	echo "❌ sensitive header value leaked to the notifier payload"
+	fail=1
+elif docker compose logs mock 2>/dev/null | grep -qF "[REDACTED]" ; then
+	echo "✔️ sensitive header redacted in the notifier payload"
+else
+	echo "❌ expected [REDACTED] marker missing from the notifier payload"
 	fail=1
 fi
 

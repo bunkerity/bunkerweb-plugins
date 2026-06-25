@@ -35,7 +35,7 @@
     "CLAMAV_TIMEOUT": {
       "context": "global",
       "default": "1000",
-      "help": "Network timeout (in ms) when communicating with ClamAV.",
+      "help": "Network timeout in milliseconds when communicating with ClamAV (e.g. 1000 = 1 second).",
       "id": "clamav-timeout",
       "label": "Network timeout",
       "regex": "^.*$",

@@ -37,9 +37,14 @@ def test_pre_render_happy_path(plugin, fake_ping_utils):
 @pytest.mark.parametrize("plugin", PLUGINS)
 def test_pre_render_error_path(plugin, fake_ping_utils):
     module = load_actions(plugin)
-    fake = fake_ping_utils(exc=RuntimeError("boom"))
+    # The exception message stands in for something sensitive (e.g. an internal
+    # URL) that must never reach the rendered card.
+    fake = fake_ping_utils(exc=RuntimeError("boom https://internal.scheduler:8080"))
     ret = module.pre_render(bw_instances_utils=fake)
-    assert ret["error"] == "boom"
+    # A generic marker is shown; the raw exception text is not leaked to the UI.
+    assert ret["error"] == "Could not retrieve the plugin status"
+    assert "boom" not in ret["error"]
+    assert "internal" not in ret["error"]
     assert ret["ping_status"]["value"] == "error"
 
 

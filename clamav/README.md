@@ -145,12 +145,12 @@ metadata:
 
 # Settings
 
-| Setting          | Default  | Context   | Multiple | Description                                             |
-| ---------------- | -------- | --------- | -------- | ------------------------------------------------------- |
-| `USE_CLAMAV`     | `no`     | multisite | no       | Activate automatic scan of uploaded files with ClamAV.  |
-| `CLAMAV_HOST`    | `clamav` | global    | no       | ClamAV hostname or IP address.                          |
-| `CLAMAV_PORT`    | `3310`   | global    | no       | ClamAV port.                                            |
-| `CLAMAV_TIMEOUT` | `1000`   | global    | no       | Network timeout (in ms) when communicating with ClamAV. |
+| Setting          | Default  | Context   | Multiple | Description                                                                            |
+| ---------------- | -------- | --------- | -------- | -------------------------------------------------------------------------------------- |
+| `USE_CLAMAV`     | `no`     | multisite | no       | Activate automatic scan of uploaded files with ClamAV.                                 |
+| `CLAMAV_HOST`    | `clamav` | global    | no       | ClamAV hostname or IP address.                                                         |
+| `CLAMAV_PORT`    | `3310`   | global    | no       | ClamAV port.                                                                           |
+| `CLAMAV_TIMEOUT` | `1000`   | global    | no       | Network timeout in milliseconds when communicating with ClamAV (e.g. 1000 = 1 second). |
 
 # TODO
 

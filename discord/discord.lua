@@ -25,6 +25,7 @@ local format = string.format
 local encode = cjson.encode
 local floor = math.floor
 local date = os.date
+local redact_header = discord_helpers.redact_header
 
 function discord:initialize(ctx)
 	-- Call parent initialize
@@ -98,14 +99,18 @@ function discord:log(bypass_use_discord)
 		if count > 23 then
 			data.embeds[1].description = "Headers :\n```"
 			for header, value in pairs(headers) do
-				data.embeds[1].description = data.embeds[1].description .. header .. ": " .. value .. "\n"
+				data.embeds[1].description = data.embeds[1].description
+					.. header
+					.. ": "
+					.. redact_header(header, value)
+					.. "\n"
 			end
 			data.embeds[1].description = data.embeds[1].description .. "```"
 		else
 			for header, value in pairs(headers) do
 				table.insert(data.embeds[1].fields, {
 					name = header,
-					value = formatField(value),
+					value = formatField(redact_header(header, value)),
 					inline = true,
 				})
 			end
@@ -125,6 +130,7 @@ function discord.send(premature, self, data)
 	local httpc, err = http_new()
 	if not httpc then
 		self.logger:log(ERR, "can't instantiate http object : " .. err)
+		return
 	end
 	local res, err_http = httpc:request_uri(self.variables["DISCORD_WEBHOOK_URL"], {
 		method = "POST",
@@ -136,6 +142,7 @@ function discord.send(premature, self, data)
 	httpc:close()
 	if not res then
 		self.logger:log(ERR, "error while sending request : " .. err_http)
+		return
 	end
 	if self.variables["DISCORD_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
 		self.logger:log(WARN, "Discord API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
@@ -211,6 +218,7 @@ function discord:api()
 		httpc, err = http_new()
 		if not httpc then
 			self.logger:log(ERR, "can't instantiate http object : " .. err)
+			return self:ret(true, "can't instantiate http object", HTTP_INTERNAL_SERVER_ERROR)
 		end
 		local res, err_http = httpc:request_uri(self.variables["DISCORD_WEBHOOK_URL"], {
 			method = "POST",

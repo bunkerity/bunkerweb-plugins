@@ -31,6 +31,7 @@ local escape_uri = ngx.escape_uri
 local html_escape = matrix_helpers.html_escape
 local escape_pattern = matrix_helpers.escape_pattern
 local anonymize_ip = matrix_helpers.anonymize_ip
+local redact_header = matrix_helpers.redact_header
 
 -- Per-worker, monotonically increasing counter to guarantee transaction-ID uniqueness.
 -- ngx.now() is cached per event-loop cycle, so time + pid alone can still collide.
@@ -96,7 +97,7 @@ function matrix:log(bypass_use_matrix)
 	data["formatted_body"] = "<p>Denied "
 		.. html_escape(request_method)
 		.. " from <b>"
-		.. remote_addr
+		.. html_escape(remote_addr)
 		.. "</b> ("
 		.. country
 		.. ' • "<i>'
@@ -139,8 +140,9 @@ function matrix:log(bypass_use_matrix)
 			data["formatted_body"] = data["formatted_body"] .. "<table><tr><th>Header</th><th>Value</th></tr>"
 			data["body"] = data["body"] .. "\n\n"
 			for header, value in pairs(headers) do
-				-- Repeated headers are returned as a table by ngx.req.get_headers()
-				local header_value = type(value) == "table" and table.concat(value, ", ") or value
+				-- Redact credential headers and flatten repeated headers (which arrive
+				-- as a table from ngx.req.get_headers()) before leaving the instance.
+				local header_value = redact_header(header, value)
 				data["formatted_body"] = data["formatted_body"]
 					.. "<tr><td>"
 					.. html_escape(header)
