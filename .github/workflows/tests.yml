@@ -44,6 +44,12 @@ jobs:
           python-version: "3.9"
       - name: Install pre-commit
         run: pip install pre-commit
+      - name: Install Lua toolchain
+        # The luacheck pre-commit hook is language:lua and needs luarocks on the
+        # runner to bootstrap its environment.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 liblua5.4-dev luarocks
       - name: Run pre-commit
         run: pre-commit run --all-files
 
