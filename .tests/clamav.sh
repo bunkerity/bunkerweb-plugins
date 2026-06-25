@@ -85,6 +85,37 @@ if [ "$success" == "ko" ] ; then
 	echo "❌ Error did not receive 403 code"
 	exit 1
 fi
+
+# A clean file must NOT be denied by ClamAV. The hello upstream only accepts GET,
+# so a clean multipart POST reaches it and comes back 405 (method). Accept any 2xx
+# or non-403 4xx, but fail on 403 (denied) and on 5xx/000 (a crash or fail-closed
+# regression must not hide behind "not 403").
+echo "ℹ️ Testing that a clean file is not blocked ..."
+printf 'just a clean file\n' > /tmp/bunkerweb-plugins/clamav/clean.txt
+code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/clean.txt" http://localhost)"
+case "$code" in
+403) clean_err="should not be denied by ClamAV" ;;
+000 | 5??) clean_err="caused an upstream error/crash" ;;
+*) clean_err="" ;;
+esac
+if [ -n "$clean_err" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: clean file $clean_err (got $code)"
+	exit 1
+fi
+
+# Upload EICAR a second time: it must still be denied. This re-hits the same
+# SHA-512, exercising the result cache (is_in_cache) rather than a fresh scan.
+echo "ℹ️ Testing repeated EICAR is still denied (cache path) ..."
+code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" http://localhost)"
+if [ "$code" != "403" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: repeated EICAR should stay denied (got $code, expected 403)"
+	exit 1
+fi
+
 if [ "$1" = "verbose" ] ; then
 	docker compose logs
 fi

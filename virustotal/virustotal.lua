@@ -6,6 +6,7 @@ local sha256 = require("resty.sha256")
 local str = require("resty.string")
 local upload = require("resty.upload")
 local utils = require("bunkerweb.utils")
+local virustotal_helpers = require("virustotal.virustotal_helpers")
 
 local virustotal = class("virustotal", plugin)
 
@@ -213,17 +214,14 @@ function virustotal:check_file()
 end
 
 function virustotal:get_result(response, type)
-	local result = "clean"
-	if
-		response["suspicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_SUSPICIOUS"])
-		or response["malicious"] > tonumber(self.variables["VIRUSTOTAL_" .. type .. "_MALICIOUS"])
-	then
-		result = tostring(response["suspicious"])
-			.. " suspicious and "
-			.. tostring(response["malicious"])
-			.. " malicious"
-	end
-	return result
+	-- Threshold evaluation lives in virustotal/virustotal_helpers.lua so it can be
+	-- unit-tested with busted outside OpenResty (see spec/virustotal_helpers_spec.lua).
+	return virustotal_helpers.evaluate(
+		response["suspicious"],
+		response["malicious"],
+		tonumber(self.variables["VIRUSTOTAL_" .. type .. "_SUSPICIOUS"]),
+		tonumber(self.variables["VIRUSTOTAL_" .. type .. "_MALICIOUS"])
+	)
 end
 
 function virustotal:is_in_cache(key)

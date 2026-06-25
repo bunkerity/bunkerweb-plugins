@@ -1,9 +1,10 @@
 """Unit tests for every plugin's ``ui/actions.py``.
 
-The six ``actions.py`` files are byte-identical apart from the plugin name, so
-one parametrized suite covers them all. Each module is loaded under a unique
+The ``actions.py`` files are byte-identical apart from the plugin name, so one
+parametrized suite covers them all. Each module is loaded under a unique
 synthetic name to avoid the ``sys.modules`` collision that would otherwise make
-us test a single plugin six times.
+us test a single plugin many times. (authentik is excluded: it ships no
+``ui/actions.py``.)
 """
 
 import importlib.util
@@ -12,7 +13,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLUGINS = ["clamav", "coraza", "discord", "slack", "virustotal", "webhook"]
+PLUGINS = ["clamav", "coraza", "discord", "matrix", "slack", "virustotal", "webhook"]
 
 
 def load_actions(plugin):

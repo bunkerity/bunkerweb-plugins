@@ -1,3 +1,4 @@
+local clamav_helpers = require("clamav.clamav_helpers")
 local class = require("middleclass")
 local plugin = require("bunkerweb.plugin")
 local sha512 = require("resty.sha512")
@@ -17,18 +18,9 @@ local to_hex = str.to_hex
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local tonumber = tonumber
-local floor = math.floor
-
-local stream_size = function(size)
-	return ("%c%c%c%c")
-		:format(
-			size % 0x100,
-			floor(size / 0x100) % 0x100,
-			floor(size / 0x10000) % 0x100,
-			floor(size / 0x1000000) % 0x100
-		)
-		:reverse()
-end
+-- The big-endian INSTREAM length prefix lives in clamav/clamav_helpers.lua so it
+-- can be unit-tested with busted outside OpenResty (see spec/clamav_helpers_spec.lua).
+local stream_size = clamav_helpers.stream_size
 
 local read_all = function(form)
 	while true do

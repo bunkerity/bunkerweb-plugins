@@ -100,14 +100,22 @@ if ! docker compose logs mock 2>/dev/null | grep -F "/files/275a021bbfb6489e54d4
 	exit 1
 fi
 
-# A clean file must pass through (mock returns 404 = not found on VT = clean)
-echo "ℹ️ Testing that a clean file passes ..."
+# A clean file must NOT be denied (mock returns 404 = not found on VT = clean).
+# The hello upstream only accepts GET, so the clean multipart POST reaches it and
+# comes back 405 (method). Accept any 2xx or non-403 4xx, but fail on 403 (denied)
+# and on 5xx/000 (a crash or fail-closed regression must not hide behind "not 403").
+echo "ℹ️ Testing that a clean file is not blocked ..."
 printf 'just a clean file\n' > /tmp/bunkerweb-plugins/virustotal/clean.txt
 code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/clean.txt" http://localhost)"
-if [ "$code" != "200" ] ; then
+case "$code" in
+403) clean_err="should not be denied by VirusTotal" ;;
+000 | 5??) clean_err="caused an upstream error/crash" ;;
+*) clean_err="" ;;
+esac
+if [ -n "$clean_err" ] ; then
 	docker compose logs
 	docker compose down -v
-	echo "❌ Error: clean file should pass (got $code, expected 200)"
+	echo "❌ Error: clean file $clean_err (got $code)"
 	exit 1
 fi
 
@@ -120,6 +128,20 @@ if [ "$code" != "403" ] ; then
 	echo "❌ Error: malicious IP should be denied (got $code, expected 403)"
 	exit 1
 fi
+
+# Error paths: a VT API failure must FAIL OPEN — the request is allowed through,
+# never denied (403) and never leaked as a server error (5xx) to the client.
+# 5.5.5.5 -> mock returns 500 ; 6.6.6.6 -> mock returns unparsable JSON.
+for bad_ip in 5.5.5.5 6.6.6.6 ; do
+	echo "ℹ️ Testing fail-open when VT API errors for $bad_ip ..."
+	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: $bad_ip" http://localhost/)"
+	if [ "$code" != "200" ] ; then
+		docker compose logs
+		docker compose down -v
+		echo "❌ Error: VT API failure for $bad_ip should fail open (got $code, expected 200)"
+		exit 1
+	fi
+done
 
 if [ "$1" = "verbose" ] ; then
 	docker compose logs

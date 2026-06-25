@@ -1,6 +1,7 @@
 local cjson = require("cjson")
 local class = require("middleclass")
 local http = require("resty.http")
+local matrix_helpers = require("matrix.matrix_helpers")
 local matrix_utils = require("matrix.utils")
 local plugin = require("bunkerweb.plugin")
 local utils = require("bunkerweb.utils")
@@ -25,27 +26,11 @@ local tostring = tostring
 local encode = cjson.encode
 local escape_uri = ngx.escape_uri
 
--- Escape characters that are significant in the org.matrix.custom.html body so that
--- attacker-controlled values (URI, Host, header names/values) can't break the markup.
-local function html_escape(str)
-	return (string.gsub(tostring(str), "[&<>]", { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" }))
-end
-
--- Escape Lua pattern magic characters so a literal string can be used as a gsub pattern.
-local function escape_pattern(str)
-	return (string.gsub(str, "([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"))
-end
-
--- Mask an IP for notifications. Handles both IPv4 and IPv6.
-local function anonymize_ip(ip)
-	if string.find(ip, ":", 1, true) then
-		-- IPv6: keep the first three hextets, mask the remainder
-		local prefix = string.match(ip, "^(%x*:%x*:%x*):")
-		return prefix and (prefix .. ":xxxx") or "xxxx::xxxx"
-	end
-	-- IPv4: mask the last two octets
-	return (string.gsub(ip, "%d+%.%d+$", "xxx.xxx"))
-end
+-- Pure string helpers live in matrix/matrix_helpers.lua so they can be unit-tested
+-- with busted outside the OpenResty runtime (see spec/matrix_helpers_spec.lua).
+local html_escape = matrix_helpers.html_escape
+local escape_pattern = matrix_helpers.escape_pattern
+local anonymize_ip = matrix_helpers.anonymize_ip
 
 -- Per-worker, monotonically increasing counter to guarantee transaction-ID uniqueness.
 -- ngx.now() is cached per event-loop cycle, so time + pid alone can still collide.

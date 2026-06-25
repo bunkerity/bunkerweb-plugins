@@ -1,5 +1,6 @@
 local cjson = require("cjson")
 local class = require("middleclass")
+local discord_helpers = require("discord.discord_helpers")
 local http = require("resty.http")
 local plugin = require("bunkerweb.plugin")
 local utils = require("bunkerweb.utils")
@@ -20,8 +21,6 @@ local has_variable = utils.has_variable
 local get_variable = utils.get_variable
 local get_reason = utils.get_reason
 local tostring = tostring
-local len = string.len
-local sub = string.sub
 local format = string.format
 local encode = cjson.encode
 local floor = math.floor
@@ -48,13 +47,9 @@ function discord:log(bypass_use_discord)
 	local timestamp = ngx_req.start_time()
 	local formattedTimestamp = date("!%Y-%m-%dT%H:%M:%S", timestamp)
 	local milliseconds = floor((timestamp - floor(timestamp)) * 1000)
-	local formatField = function(inputString)
-		if len(inputString) <= 1021 then
-			return inputString
-		else
-			return sub(inputString, 1, 1021) .. "..."
-		end
-	end
+	-- Discord caps embed field values at 1024 chars; truncation lives in
+	-- discord/discord_helpers.lua (see spec/discord_helpers_spec.lua).
+	local formatField = discord_helpers.format_field
 
 	local data = {
 		username = "BunkerWeb",

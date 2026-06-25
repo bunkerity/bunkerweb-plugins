@@ -20,7 +20,7 @@ services:
     environment:
       - BUNKERWEB_INSTANCES=bunkerweb
       - MULTISITE=yes
-      - SERVER_NAME=discord.example.com slack.example.com webhook.example.com
+      - SERVER_NAME=discord.example.com slack.example.com webhook.example.com matrix.example.com
       - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
@@ -43,6 +43,12 @@ services:
       - DISCORD_RETRY_IF_LIMITED=yes
       - SLACK_WEBHOOK_URL=http://mock:8080/slack
       - WEBHOOK_URL=http://mock:8080/webhook
+      # matrix posts a PUT to /_matrix/client/... on the catch-all echo mock (no
+      # 429-retry path of its own). Globals are mandatory; values are dummies.
+      - MATRIX_BASE_URL=http://mock:8080
+      - MATRIX_ROOM_ID=!test:example.com
+      - MATRIX_ACCESS_TOKEN=test-token
+      - MATRIX_INCLUDE_HEADERS=yes
       # discord.example.com : notify on a blacklisted URI
       - discord.example.com_USE_REVERSE_PROXY=yes
       - discord.example.com_REVERSE_PROXY_HOST=http://hello:8080
@@ -64,6 +70,13 @@ services:
       - webhook.example.com_USE_WEBHOOK=yes
       - webhook.example.com_USE_BLACKLIST=yes
       - webhook.example.com_BLACKLIST_URI=/blocked
+      # matrix.example.com
+      - matrix.example.com_USE_REVERSE_PROXY=yes
+      - matrix.example.com_REVERSE_PROXY_HOST=http://hello:8080
+      - matrix.example.com_REVERSE_PROXY_URL=/
+      - matrix.example.com_USE_MATRIX=yes
+      - matrix.example.com_USE_BLACKLIST=yes
+      - matrix.example.com_BLACKLIST_URI=/blocked
     networks:
       - bw-universe
 

@@ -3,7 +3,7 @@
 # shellcheck disable=SC1091
 . .tests/utils.sh
 
-echo "ℹ️ Starting Notifier (discord/slack/webhook) tests ..."
+echo "ℹ️ Starting Notifier (discord/slack/webhook/matrix) tests ..."
 
 # Create working directory
 if [ -d /tmp/bunkerweb-plugins ] ; then
@@ -11,10 +11,11 @@ if [ -d /tmp/bunkerweb-plugins ] ; then
 fi
 do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 
-# Copy all three notifier plugins
+# Copy all four notifier plugins
 do_and_check_cmd cp -r ./discord /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd cp -r ./slack /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd cp -r ./webhook /tmp/bunkerweb-plugins/notifier/bw-data/plugins
+do_and_check_cmd cp -r ./matrix /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/notifier/bw-data
 
 # Copy compose + the rate-limit mock config
@@ -111,6 +112,9 @@ check_echo_notifier() {
 
 check_echo_notifier slack /slack '"text"'
 check_echo_notifier webhook /webhook '"content"'
+# matrix posts a PUT to the Matrix "send message" endpoint on the same echo mock.
+# Assert the room-send path was hit and the org.matrix.custom.html payload shape.
+check_echo_notifier matrix "/_matrix/client" '"formatted_body"'
 
 # discord posts to the rate-limit mock (429 + Retry-After, then 200). With
 # DISCORD_RETRY_IF_LIMITED=yes the plugin retries once, so the mock should see
