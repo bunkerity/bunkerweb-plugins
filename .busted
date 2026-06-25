@@ -1,0 +1,10 @@
+return {
+	default = {
+		-- Run from the repo root so `require("authentik/authentik_helpers")`
+		-- resolves authentik/authentik_helpers.lua, mirroring how BunkerWeb
+		-- requires plugins ("<id>/<id>").
+		lpath = "./?.lua",
+		ROOT = { "spec" },
+		pattern = "_spec",
+	},
+}
