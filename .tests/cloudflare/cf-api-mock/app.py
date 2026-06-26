@@ -64,8 +64,7 @@ def sign_csr(csr_pem: str) -> str:
         builder = builder.add_extension(san.value, critical=False)
     except x509.ExtensionNotFound:
         pass
-    cert = builder.sign(_ca_key, hashes.SHA256())
-    return cert.public_bytes(serialization.Encoding.PEM).decode()
+    return builder.sign(_ca_key, hashes.SHA256()).public_bytes(serialization.Encoding.PEM).decode()
 
 
 def envelope(result):

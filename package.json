@@ -1,0 +1,13 @@
+{
+  "name": "bunkerweb-plugins",
+  "version": "1.0.0",
+  "description": "Tooling dependencies (code formatting) for the BunkerWeb external plugins repository",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.8.4"
+  }
+}
