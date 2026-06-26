@@ -23,6 +23,7 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 
 - [Authentik](https://github.com/bunkerity/bunkerweb-plugins/tree/main/authentik)
 - [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
+- [Cloudflare](https://github.com/bunkerity/bunkerweb-plugins/tree/main/cloudflare)
 - [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 - [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
 - [Matrix](https://github.com/bunkerity/bunkerweb-plugins/tree/main/matrix)

@@ -1,0 +1,123 @@
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.11 # sed -> bunkerweb:tests
+    # No host port mapping: the tests reach BunkerWeb in-network from the client
+    # containers (bunkerweb:8080 / :8443), so publishing 80/443 only risks an
+    # "address already in use" clash on the host / CI runner.
+    environment:
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24 10.20.40.0/24
+    networks:
+      - bw-universe
+      - bw-services
+      - cf-net
+      - evil-net
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.11 # sed -> bunkerweb-scheduler:tests
+    depends_on:
+      - bunkerweb
+    volumes:
+      - ./bw-data/plugins:/data/plugins:ro # plugin/ copied in as ./bw-data/plugins/cloudflare
+    environment:
+      - BUNKERWEB_INSTANCES=bunkerweb
+      - SERVER_NAME=www.example.com
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24 10.20.40.0/24
+      - LOG_LEVEL=info
+      # --- cloudflare: trusted IPs + deny (mock IP-list endpoints) ---
+      - USE_CLOUDFLARE=yes
+      - CLOUDFLARE_DENY_NON_TRUSTED_IPS=yes
+      - CLOUDFLARE_IPS_V4_URL=http://cfips-mock/ips-v4/
+      - CLOUDFLARE_IPS_V6_URL=http://cfips-mock/ips-v6/
+      # --- cloudflare: zero-config real IP ---
+      - CLOUDFLARE_AUTO_REAL_IP=yes
+      - CLOUDFLARE_REAL_IP_HEADER=CF-Connecting-IP
+      # --- cloudflare: origin CA certs (mock CF API) ---
+      - CLOUDFLARE_API_TOKEN=dummy-token
+      - CLOUDFLARE_ZONE_ID=zone-mock-123
+      - CLOUDFLARE_MANAGE_ORIGIN_CERTS=yes
+      - CLOUDFLARE_API_URL=http://cf-api-mock:8080
+      - CLOUDFLARE_ORIGIN_CERT_TYPE=rsa
+      # --- cloudflare: Authenticated Origin Pulls (log mode, mock CA) ---
+      - CLOUDFLARE_AUTHENTICATED_ORIGIN_PULLS=yes
+      - CLOUDFLARE_AOP_MODE=log
+      - CLOUDFLARE_AOP_CA_URL=http://cf-api-mock:8080/aop-ca.pem
+      # --- isolate the cloudflare verdict from other deny sources / SSL sources ---
+      - USE_REAL_IP=no
+      - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
+      - USE_LIMIT_CONN=no
+      - USE_BUNKERNET=no
+      - USE_BLACKLIST=no
+      - USE_GREYLIST=no
+      - USE_WHITELIST=no
+      - USE_MODSECURITY=no
+      - USE_ANTIBOT=no
+      - USE_MTLS=no
+      - AUTO_LETS_ENCRYPT=no
+      - GENERATE_SELF_SIGNED_SSL=no
+      - USE_CUSTOM_SSL=no
+      - REDIRECT_HTTP_TO_HTTPS=no
+      - DISABLE_DEFAULT_SERVER=no
+      - USE_REVERSE_PROXY=yes
+      - REVERSE_PROXY_HOST=http://hello:8080
+      - REVERSE_PROXY_URL=/
+    networks:
+      - bw-universe
+      - bw-services
+
+  hello:
+    image: nginxdemos/nginx-hello
+    networks:
+      - bw-services
+
+  # Mock Cloudflare public IP-range endpoints (static).
+  cfips-mock:
+    image: nginx:alpine
+    volumes:
+      - ./cfips-mock.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - bw-services
+
+  # Mock Cloudflare API (dynamic: signs the CSR, serves the AOP CA).
+  cf-api-mock:
+    build: ./cf-api-mock
+    networks:
+      - bw-services
+
+  # Trusted client: source IP inside a real Cloudflare range.
+  cf-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      cf-net:
+        ipv4_address: 173.245.48.2
+
+  # Untrusted client: source IP in TEST-NET-1, never a Cloudflare range.
+  evil-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      evil-net:
+        ipv4_address: 192.0.2.10
+
+networks:
+  bw-universe:
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.30.0/24
+  bw-services:
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.40.0/24
+  cf-net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 173.245.48.0/20
+  evil-net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.0.2.0/24

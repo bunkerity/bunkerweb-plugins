@@ -1,0 +1,241 @@
+{
+  "id": "cloudflare",
+  "name": "Cloudflare",
+  "description": "Effortlessly configure Cloudflare's trusted IPs and manage Origin CA certificates.",
+  "version": "1.11",
+  "stream": "partial",
+  "settings": {
+    "USE_CLOUDFLARE": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate Cloudflare automations (real IP, trusted-IP allowlisting, Origin CA certificates, mTLS, ...).",
+      "id": "use-cloudflare",
+      "label": "Use Cloudflare automations",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_API_TOKEN": {
+      "context": "multisite",
+      "default": "",
+      "help": "Cloudflare API token to authenticate with the Cloudflare API.",
+      "id": "cloudflare-api-token",
+      "label": "Cloudflare API token",
+      "regex": "^.*$",
+      "type": "password"
+    },
+    "CLOUDFLARE_ZONE_ID": {
+      "context": "multisite",
+      "default": "",
+      "help": "Cloudflare Zone ID (if no zone ID is provided, the plugin will try to get it from the API).",
+      "id": "cloudflare-zone-id",
+      "label": "Cloudflare Zone ID",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "CLOUDFLARE_MANAGE_ORIGIN_CERTS": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Activate automatic management of Origin CA certificates.",
+      "id": "cloudflare-manage-origin-certs",
+      "label": "Automatic management of Origin CA certificates",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_ORIGIN_CERT_TYPE": {
+      "context": "multisite",
+      "default": "rsa",
+      "help": "Signature type desired on origin CA certificates (\"rsa\", or \"ecdsa\").",
+      "id": "cloudflare-origin-certs-type",
+      "label": "Origin CA certificates type",
+      "regex": "^(rsa|ecdsa)$",
+      "type": "select",
+      "select": ["rsa", "ecdsa"]
+    },
+    "CLOUDFLARE_ORIGIN_CERT_VALIDITY": {
+      "context": "multisite",
+      "default": "5475",
+      "help": "Validity period of origin CA certificates in days.",
+      "id": "cloudflare-origin-certs-validity",
+      "label": "Origin CA certificates validity",
+      "regex": "^(7|30|90|365|730|1095|5475)$",
+      "type": "select",
+      "select": ["7", "30", "90", "365", "730", "1095", "5475"]
+    },
+    "CLOUDFLARE_ADDITIONAL_TRUSTED_FROM": {
+      "context": "multisite",
+      "default": "",
+      "help": "Additional IPs/networks to consider as trusted, separated with spaces (CIDR notation).",
+      "id": "cloudflare-additional-trusted-ips",
+      "label": "Additional trusted IPs",
+      "regex": "^(?! )( *(((\\b25[0-5]|\\b2[0-4]\\d|\\b[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3})(\\/([1-2][0-9]?|3[0-2]?|[04-9]))?|(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{1,4}){0,4}%[0-9a-zA-Z]+|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?\\d)?\\d)\\.){3}(25[0-5]|(2[0-4]|1?\\d)?\\d)|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?\\d)?\\d)\\.){3}(25[0-5]|(2[0-4]|1?\\d)?\\d))(\\/(12[0-8]|1[01][0-9]|[0-9][0-9]?))?)(?!.*\\D\\2([^\\d\\/]|$)) *)*$",
+      "type": "multivalue",
+      "separator": " "
+    },
+    "CLOUDFLARE_DENY_NON_TRUSTED_IPS": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Deny access to non-trusted IPs (the ones not in Cloudflare's official list and the additional trusted IPs).",
+      "id": "cloudflare-deny-non-trusted-ips",
+      "label": "Deny non-trusted IPs",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_API_URL": {
+      "context": "global",
+      "default": "https://api.cloudflare.com/client/v4",
+      "help": "Base URL of the Cloudflare API (advanced; for a Cloudflare-compatible/proxied endpoint or testing).",
+      "id": "cloudflare-api-url",
+      "label": "Cloudflare API URL",
+      "regex": "^https?://.*$",
+      "type": "text"
+    },
+    "CLOUDFLARE_API_TIMEOUT": {
+      "context": "global",
+      "default": "10",
+      "help": "Timeout in seconds for Cloudflare API requests.",
+      "id": "cloudflare-api-timeout",
+      "label": "Cloudflare API timeout (s)",
+      "regex": "^[0-9]+$",
+      "type": "number"
+    },
+    "CLOUDFLARE_IPS_V4_URL": {
+      "context": "global",
+      "default": "https://www.cloudflare.com/ips-v4/",
+      "help": "URL to download Cloudflare's IPv4 ranges from (advanced/testing).",
+      "id": "cloudflare-ips-v4-url",
+      "label": "Cloudflare IPv4 list URL",
+      "regex": "^https?://.*$",
+      "type": "text"
+    },
+    "CLOUDFLARE_IPS_V6_URL": {
+      "context": "global",
+      "default": "https://www.cloudflare.com/ips-v6/",
+      "help": "URL to download Cloudflare's IPv6 ranges from (advanced/testing).",
+      "id": "cloudflare-ips-v6-url",
+      "label": "Cloudflare IPv6 list URL",
+      "regex": "^https?://.*$",
+      "type": "text"
+    },
+    "CLOUDFLARE_AUTO_REAL_IP": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Automatically configure NGINX real_ip_header/real_ip_recursive for Cloudflare. Disable if the core Real IP plugin (USE_REAL_IP) already manages them to avoid duplicate directives.",
+      "id": "cloudflare-auto-real-ip",
+      "label": "Auto-configure real IP",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_REAL_IP_HEADER": {
+      "context": "multisite",
+      "default": "CF-Connecting-IP",
+      "help": "Header carrying the real client IP. CF-Connecting-IP (default), True-Client-IP (Enterprise alias) or CF-Connecting-IPv6 (when Pseudo-IPv4 is enabled).",
+      "id": "cloudflare-real-ip-header",
+      "label": "Real IP header",
+      "regex": "^(CF-Connecting-IP|True-Client-IP|CF-Connecting-IPv6)$",
+      "type": "select",
+      "select": ["CF-Connecting-IP", "True-Client-IP", "CF-Connecting-IPv6"]
+    },
+    "CLOUDFLARE_STRIP_SPOOFED_HEADERS": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Strip client-supplied CF-* headers (CF-Connecting-IP, CF-IPCountry, CF-RAY, True-Client-IP, ...) when the connection is not from a trusted Cloudflare IP, to prevent spoofing.",
+      "id": "cloudflare-strip-spoofed-headers",
+      "label": "Strip spoofed Cloudflare headers",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_AUTHENTICATED_ORIGIN_PULLS": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Require Cloudflare Authenticated Origin Pulls (mTLS): verify the connection presents Cloudflare's origin-pull client certificate. Mutually exclusive with the core mTLS plugin on the same server.",
+      "id": "cloudflare-authenticated-origin-pulls",
+      "label": "Authenticated Origin Pulls (mTLS)",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_AOP_MODE": {
+      "context": "multisite",
+      "default": "log",
+      "help": "Authenticated Origin Pulls enforcement: 'log' only warns on connections without a valid Cloudflare client certificate, 'enforce' denies them.",
+      "id": "cloudflare-aop-mode",
+      "label": "Authenticated Origin Pulls mode",
+      "regex": "^(log|enforce)$",
+      "type": "select",
+      "select": ["log", "enforce"]
+    },
+    "CLOUDFLARE_AOP_CA_URL": {
+      "context": "global",
+      "default": "https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem",
+      "help": "URL of the Cloudflare Authenticated Origin Pull CA certificate (advanced/testing).",
+      "id": "cloudflare-aop-ca-url",
+      "label": "Authenticated Origin Pull CA URL",
+      "regex": "^https?://.*$",
+      "type": "text"
+    },
+    "USE_CLOUDFLARE_EDGE_BAN_SYNC": {
+      "context": "global",
+      "default": "no",
+      "help": "Push BunkerWeb's active bans to a Cloudflare account IP List so offenders are blocked at the edge. Requires USE_REDIS=yes and an account-scoped API token (Account Filter Lists:Edit).",
+      "id": "use-cloudflare-edge-ban-sync",
+      "label": "Sync bans to Cloudflare edge",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "CLOUDFLARE_ACCOUNT_ID": {
+      "context": "global",
+      "default": "",
+      "help": "Cloudflare Account ID owning the edge ban IP List.",
+      "id": "cloudflare-account-id",
+      "label": "Cloudflare Account ID",
+      "regex": "^[a-zA-Z0-9]*$",
+      "type": "text"
+    },
+    "CLOUDFLARE_BAN_LIST_NAME": {
+      "context": "global",
+      "default": "bunkerweb_bans",
+      "help": "Name of the Cloudflare account IP List used for edge ban sync (lowercase letters, digits and underscores).",
+      "id": "cloudflare-ban-list-name",
+      "label": "Edge ban IP List name",
+      "regex": "^[a-z0-9_]{1,50}$",
+      "type": "text"
+    },
+    "CLOUDFLARE_EDGE_BAN_API_TOKEN": {
+      "context": "global",
+      "default": "",
+      "help": "Account-scoped API token (Account Filter Lists:Edit, optionally Account WAF:Edit) for edge ban sync. Falls back to CLOUDFLARE_API_TOKEN if empty.",
+      "id": "cloudflare-edge-ban-api-token",
+      "label": "Edge ban API token",
+      "regex": "^.*$",
+      "type": "password"
+    }
+  },
+  "jobs": [
+    {
+      "name": "cf-trusted-ips-download",
+      "file": "cf-trusted-ips-download.py",
+      "every": "day",
+      "reload": true,
+      "async": true
+    },
+    {
+      "name": "cf-manage-origin-certs",
+      "file": "cf-manage-origin-certs.py",
+      "every": "day",
+      "reload": true
+    },
+    {
+      "name": "cf-aop-ca-download",
+      "file": "cf-aop-ca-download.py",
+      "every": "week",
+      "reload": true,
+      "async": true
+    },
+    {
+      "name": "cf-edge-ban-sync",
+      "file": "cf-edge-ban-sync.py",
+      "every": "minute",
+      "reload": false,
+      "async": true
+    }
+  ]
+}
