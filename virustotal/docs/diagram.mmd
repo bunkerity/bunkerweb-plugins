@@ -1,0 +1,40 @@
+flowchart TD
+    accTitle: BunkerWeb VirusTotal plugin request flow
+    accDescr: A client request first passes BunkerWeb core checks, then virustotal.lua optionally checks the client IP and any uploaded file against the VirusTotal API v3. Both paths share a 24-hour cache (IP keyed by address, file keyed by SHA-256). The suspicious and malicious counts are compared to configurable thresholds, and a result over threshold denies the request.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb access phase]
+        direction TB
+        core["1. Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
+        lua["2. virustotal.lua"]
+        ipscan["IP scan (opt-in):<br/>GET /api/v3/ip_addresses/{ip}"]
+        filescan["File scan (opt-in):<br/>SHA-256, GET /api/v3/files/{hash}"]
+        cache{{"24h cache hit?"}}
+        core --> lua
+        lua --> ipscan --> cache
+        lua --> filescan --> cache
+    end
+
+    vt[["VirusTotal API v3"]]
+    verdict{"evaluate():<br/>suspicious / malicious<br/>over threshold?"}
+    allow["Allow to upstream"]
+    deny["Deny request<br/>(get_deny_status)"]
+    upstream([Upstream app])
+
+    client -->|request| core
+    cache -.->|miss| vt
+    vt -.->|"last_analysis_stats"| verdict
+    cache -->|hit| verdict
+    verdict -->|no| allow
+    verdict -->|yes| deny
+    allow --> upstream
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef svc fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class allow,upstream ok;
+    class deny deny;
+    class vt svc;
+    class client,core,lua,ipscan,filescan,cache app;

@@ -1,0 +1,22 @@
+flowchart TD
+    accTitle: BunkerWeb plugin request flow
+    accDescr: A client request passes through BunkerWeb, where this plugin runs its checks on the access or log phase before the request is forwarded to the upstream application. Replace this template with the plugin's real flow.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb]
+        direction TB
+        core["Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
+        plugin["plugin.lua:<br/>plugin logic"]
+        core --> plugin
+    end
+
+    upstream([Upstream app])
+
+    client -->|request| core
+    plugin --> upstream
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class upstream ok;
+    class client,core,plugin app;

@@ -1,0 +1,95 @@
+-- luacheck: std min+busted
+local fake = require("spec/helpers/fake_ipmatcher")
+local helpers = require("cloudflare/cloudflare_helpers")
+
+describe("cloudflare helpers", function()
+	describe("parse_additional", function()
+		it("returns an empty list for nil or empty input", function()
+			assert.same({}, helpers.parse_additional(nil))
+			assert.same({}, helpers.parse_additional(""))
+			assert.same({}, helpers.parse_additional("   "))
+		end)
+		it("splits on arbitrary whitespace", function()
+			assert.same({ "1.2.3.4", "5.6.7.0/24", "::1" }, helpers.parse_additional("  1.2.3.4   5.6.7.0/24\t::1 "))
+		end)
+	end)
+
+	describe("cache_key", function()
+		it("separates server_name and element so they can't collide", function()
+			-- Without the separator "example.com" .. "1.2.3.4" would collide with
+			-- "example.com1" .. ".2.3.4".
+			assert.equals("plugin_cloudflare_example.com_1.2.3.4", helpers.cache_key("example.com", "1.2.3.4"))
+			assert.are_not.equals(
+				helpers.cache_key("example.com", "1.2.3.4"),
+				helpers.cache_key("example.com1", ".2.3.4")
+			)
+		end)
+	end)
+
+	describe("classify_cache", function()
+		it("maps a miss (nil) to 'miss'", function()
+			assert.equals("miss", helpers.classify_cache(nil))
+		end)
+		it("maps a cached 'ko' to 'deny' (regression: was wrongly allowed)", function()
+			-- This is the bug that silently disabled CLOUDFLARE_DENY_NON_TRUSTED_IPS:
+			-- a cached not-trusted verdict must deny, not allow.
+			assert.equals("deny", helpers.classify_cache("ko"))
+		end)
+		it("maps a cached trust type to 'allow'", function()
+			assert.equals("allow", helpers.classify_cache("ipv4"))
+			assert.equals("allow", helpers.classify_cache("ipv6"))
+			assert.equals("allow", helpers.classify_cache("additional"))
+		end)
+	end)
+
+	describe("trusted_list_empty", function()
+		it("is true for nil / all-empty categories", function()
+			assert.is_true(helpers.trusted_list_empty(nil))
+			assert.is_true(helpers.trusted_list_empty({}))
+			assert.is_true(helpers.trusted_list_empty({ ipv4 = {}, ipv6 = {}, additional = {} }))
+		end)
+		it("is false when any category has an entry", function()
+			assert.is_false(helpers.trusted_list_empty({ ipv4 = { "1.2.3.4" } }))
+			assert.is_false(helpers.trusted_list_empty({ ipv6 = {}, additional = { "9.9.9.0/24" } }))
+		end)
+	end)
+
+	describe("match_trusted", function()
+		local function ips(t)
+			return { ipv4 = t.ipv4 or {}, ipv6 = t.ipv6 or {}, additional = t.additional or {} }
+		end
+
+		it("matches an ipv4 address and labels it", function()
+			assert.same({ true, "ipv4" }, { helpers.match_trusted(ips({ ipv4 = { "1.2.3.4" } }), "1.2.3.4", fake.new) })
+		end)
+		it("matches ipv6 and labels it", function()
+			assert.same({ true, "ipv6" }, { helpers.match_trusted(ips({ ipv6 = { "::1" } }), "::1", fake.new) })
+		end)
+		it("falls back to the additional list", function()
+			assert.same(
+				{ true, "additional" },
+				{ helpers.match_trusted(ips({ additional = { "9.9.9.9" } }), "9.9.9.9", fake.new) }
+			)
+		end)
+		it("checks ipv4 before additional (order matters)", function()
+			local t = ips({ ipv4 = { "1.2.3.4" }, additional = { "1.2.3.4" } })
+			assert.same({ true, "ipv4" }, { helpers.match_trusted(t, "1.2.3.4", fake.new) })
+		end)
+		it("returns false/'ko' when nothing matches", function()
+			assert.same({ false, "ko" }, { helpers.match_trusted(ips({ ipv4 = { "1.2.3.4" } }), "8.8.8.8", fake.new) })
+		end)
+		it("treats missing categories as empty (no nil index)", function()
+			assert.same({ false, "ko" }, { helpers.match_trusted({}, "8.8.8.8", fake.new) })
+		end)
+		it("propagates a matcher construction error", function()
+			local trusted, err = helpers.match_trusted(ips({}), "1.2.3.4", fake.new_err)
+			assert.is_nil(trusted)
+			assert.equals("construction boom", err)
+		end)
+		it("propagates a matcher :match error", function()
+			local trusted, err = helpers.match_trusted(ips({ ipv4 = { "1.2.3.4" } }), "1.2.3.4", fake.new_match_err)
+			assert.is_nil(trusted)
+			assert.equals("match boom", err)
+		end)
+	end)
+end)

@@ -1,8 +1,8 @@
 {
   "id": "virustotal",
   "name": "VirusTotal",
-  "description": "Automatic scan of uploaded files and ips optionally with the VirusTotal API.",
-  "version": "1.10",
+  "description": "Automatic scan of uploaded files and client IPs with the VirusTotal API.",
+  "version": "1.11",
   "stream": "partial",
   "settings": {
     "USE_VIRUSTOTAL": {
@@ -22,6 +22,15 @@
       "label": "API key",
       "regex": "^.*$",
       "type": "password"
+    },
+    "VIRUSTOTAL_API_URL": {
+      "context": "global",
+      "default": "https://www.virustotal.com/api/v3",
+      "help": "Base URL of the VirusTotal API (or a VirusTotal-compatible endpoint).",
+      "id": "virustotal-api-url",
+      "label": "API URL",
+      "regex": "^https?://.*$",
+      "type": "text"
     },
     "VIRUSTOTAL_TIMEOUT": {
       "context": "global",
@@ -44,7 +53,7 @@
     "VIRUSTOTAL_SCAN_IP": {
       "context": "multisite",
       "default": "yes",
-      "help": "Activate automatic scan of uploaded ips with VirusTotal.",
+      "help": "Activate automatic scan of the client IP with VirusTotal.",
       "id": "virustotal-scan-ip",
       "label": "Scan IP addresses",
       "regex": "^(yes|no)$",

@@ -4,6 +4,10 @@ on:
   push:
     branches: [dev, main]
 
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   codeql:
     uses: ./.github/workflows/codeql.yml
@@ -12,40 +16,143 @@ jobs:
       contents: read
       security-events: write
 
-  setup:
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      bw_tag: ${{ steps.tag.outputs.bw_tag }}
+    steps:
+      - name: Resolve latest stable BunkerWeb tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Always test against the latest STABLE BunkerWeb release, resolved at
+          # runtime so it never goes stale. GitHub's releases/latest endpoint
+          # excludes drafts and pre-releases (rc/beta), giving us "stable".
+          # Same tag on every branch (dev and main) — there is no pinned version.
+          # `|| true`: a 404 (no stable release yet) or rate-limit makes gh exit
+          # non-zero, which under `bash -e` would abort the step here with a raw
+          # error. Swallow it so the empty tag falls through to the case below
+          # and reports our own diagnostic.
+          tag="$(gh api repos/bunkerity/bunkerweb/releases/latest --jq .tag_name || true)"
+          tag="${tag#v}" # release tag may be "v1.6.1"; Docker tags have no "v"
+          case "$tag" in
+          "" | *-*)
+            echo "::error::could not resolve a stable BunkerWeb tag (got '${tag:-<empty>}')"
+            exit 1
+            ;;
+          esac
+          echo "Resolved latest stable BunkerWeb tag: $tag"
+          echo "bw_tag=$tag" >> "$GITHUB_OUTPUT"
+
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Get BW tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Install Lua toolchain
+        # The luacheck pre-commit hook is language:lua and needs luarocks on the
+        # runner to bootstrap its environment.
         run: |
-          if [ "$GITHUB_REF" = "refs/heads/main" ] ; then
-            echo "BW_TAG=1.6.1" >> $GITHUB_ENV
-          else
-            echo "BW_TAG=dev" >> $GITHUB_ENV
-          fi
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 liblua5.4-dev luarocks
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install Prettier
+        # The prettier hook is language:system and resolves prettier from the
+        # repo's pinned package-lock.json via npx.
+        run: npm ci
+      - name: Run pre-commit
+        run: pre-commit run --all-files
 
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [go, python, lua]
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # --- Go : coraza API service ---
+      - name: Set up Go
+        if: matrix.lang == 'go'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.25"
+      - name: Run Go unit tests
+        if: matrix.lang == 'go'
+        working-directory: coraza/api
+        run: |
+          # No go.sum is committed (the Dockerfile resolves deps at build time),
+          # so populate it before testing. Build tag must match the binary.
+          go mod tidy
+          go test -tags=coraza.rule.multiphase_evaluation ./...
+
+      # --- Python : ui/actions.py ---
+      - name: Set up Python
+        if: matrix.lang == 'python'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+      - name: Run Python unit tests
+        if: matrix.lang == 'python'
+        run: |
+          pip install pytest
+          pytest tests/ -q
+
+      # --- Lua : busted specs ---
+      - name: Run Lua unit tests
+        if: matrix.lang == 'lua'
+        run: |
+          sudo apt-get update
+          # liblua5.4-dev provides headers for busted's C deps; pin the luarocks
+          # tree to 5.4 so the busted CLI runs against the lua5.4 we installed.
+          sudo apt-get install -y lua5.4 liblua5.4-dev luarocks
+          sudo luarocks --lua-version=5.4 install busted
+          busted
+
+  integration:
+    needs: [tag, lint, unit]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [clamav, cloudflare, coraza, virustotal, authentik, notifier]
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Login to Docker Hub
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
-
       - name: Pull and build BW
-        run: ./.tests/bw.sh "${{ env.BW_TAG }}"
+        run: bash .tests/bw.sh "${{ needs.tag.outputs.bw_tag }}"
+      - name: Run ${{ matrix.plugin }} tests
+        run: bash .tests/${{ matrix.plugin }}.sh
 
-      - name: Run ClamAV tests
-        run: ./.tests/clamav.sh
-
-      - name: Run Coraza tests
-        run: ./.tests/coraza.sh
-
-      - name: Run VirusTotal tests
-        run: ./.tests/virustotal.sh
-        env:
-          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
-
+  build-push:
+    needs: [tag, integration]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
       - name: Build and push APIs
-        if: env.BW_TAG == '1.6.1'
-        run: ./.tests/build-push.sh "${{ env.BW_TAG }}"
+        run: bash .tests/build-push.sh "${{ needs.tag.outputs.bw_tag }}"

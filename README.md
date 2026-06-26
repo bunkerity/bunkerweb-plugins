@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.6-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.11-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=dev&label=CI%2FCD%20dev" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=main&label=CI%2FCD%20main" />
@@ -21,9 +21,12 @@ The installation of external plugins is covered in the [plugins section](https:/
 
 Each plugin is located in a subdirectory of this repository. A README file located in each subdirectory contains documentation about the plugin. Here is the list :
 
+- [Authentik](https://github.com/bunkerity/bunkerweb-plugins/tree/main/authentik)
 - [ClamAV](https://github.com/bunkerity/bunkerweb-plugins/tree/main/clamav)
+- [Cloudflare](https://github.com/bunkerity/bunkerweb-plugins/tree/main/cloudflare)
 - [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 - [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
+- [Matrix](https://github.com/bunkerity/bunkerweb-plugins/tree/main/matrix)
 - [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
 - [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 - [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)

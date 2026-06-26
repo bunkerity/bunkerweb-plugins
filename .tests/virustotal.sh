@@ -13,13 +13,17 @@ do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/virustotal/bw-data/plugins
 do_and_check_cmd cp -r ./virustotal /tmp/bunkerweb-plugins/virustotal/bw-data/plugins
 do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/virustotal/bw-data
 
-# Copy compose
+# Copy compose + mock VT API config
 do_and_check_cmd cp .tests/virustotal/docker-compose.yml /tmp/bunkerweb-plugins/virustotal
+do_and_check_cmd cp .tests/virustotal/vt-mock.conf /tmp/bunkerweb-plugins/virustotal
 
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb-scheduler:.*\$@bunkerweb-scheduler:tests@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
-do_and_check_cmd sed -i "s@%VTKEY%@${VIRUSTOTAL_API_KEY}@g" /tmp/bunkerweb-plugins/virustotal/docker-compose.yml
+
+# The compose points the plugin at a local mock VT API, so no real key is needed.
+# To exercise the real API locally instead, edit docker-compose.yml and set
+# VIRUSTOTAL_API_URL=https://www.virustotal.com/api/v3 + a real VIRUSTOTAL_API_KEY.
 
 # Download EICAR file
 do_and_check_cmd wget -O /tmp/bunkerweb-plugins/virustotal/eicar.com https://secure.eicar.org/eicar.com
@@ -85,6 +89,60 @@ if [ "$success" == "ko" ] ; then
 	echo "❌ Error did not receive 403 code"
 	exit 1
 fi
+
+# Assert the plugin actually queried the mock VT API for the EICAR hash
+# (proves the 403 came from VirusTotal, not some other deny).
+echo "ℹ️ Checking the mock VT API was queried ..."
+if ! docker compose logs mock 2>/dev/null | grep -F "/files/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: plugin never queried the mock VT API for the EICAR hash"
+	exit 1
+fi
+
+# A clean file must NOT be denied (mock returns 404 = not found on VT = clean).
+# The hello upstream only accepts GET, so the clean multipart POST reaches it and
+# comes back 405 (method). Accept any 2xx or non-403 4xx, but fail on 403 (denied)
+# and on 5xx/000 (a crash or fail-closed regression must not hide behind "not 403").
+echo "ℹ️ Testing that a clean file is not blocked ..."
+printf 'just a clean file\n' > /tmp/bunkerweb-plugins/virustotal/clean.txt
+code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/virustotal/clean.txt" http://localhost)"
+case "$code" in
+403) clean_err="should not be denied by VirusTotal" ;;
+000 | 5??) clean_err="caused an upstream error/crash" ;;
+*) clean_err="" ;;
+esac
+if [ -n "$clean_err" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: clean file $clean_err (got $code)"
+	exit 1
+fi
+
+# A malicious IP must be denied (real-ip trusts the X-Forwarded-For we send)
+echo "ℹ️ Testing that a malicious IP is denied ..."
+code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: 1.2.3.4" http://localhost/)"
+if [ "$code" != "403" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: malicious IP should be denied (got $code, expected 403)"
+	exit 1
+fi
+
+# Error paths: a VT API failure must FAIL OPEN — the request is allowed through,
+# never denied (403) and never leaked as a server error (5xx) to the client.
+# 5.5.5.5 -> mock returns 500 ; 6.6.6.6 -> mock returns unparsable JSON.
+for bad_ip in 5.5.5.5 6.6.6.6 ; do
+	echo "ℹ️ Testing fail-open when VT API errors for $bad_ip ..."
+	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: $bad_ip" http://localhost/)"
+	if [ "$code" != "200" ] ; then
+		docker compose logs
+		docker compose down -v
+		echo "❌ Error: VT API failure for $bad_ip should fail open (got $code, expected 200)"
+		exit 1
+	fi
+done
+
 if [ "$1" = "verbose" ] ; then
 	docker compose logs
 fi

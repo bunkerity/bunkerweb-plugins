@@ -1,9 +1,9 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-exclude: (^coraza/api/coreruleset|(^LICENSE.md|.svg)$)
+exclude: (^coraza/api/coreruleset|^package-lock\.json$|(^LICENSE.md|.svg)$)
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: 2c9f875913ee60ca25ce70243dc24d5b6415598c # frozen: v4.6.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -11,21 +11,26 @@ repos:
         args: ["--allow-multiple-documents"]
       - id: check-case-conflict
 
-  - repo: https://github.com/ambv/black
-    rev: 3702ba224ecffbcec30af640c149f231d90aebdb # frozen: 24.4.2
+  - repo: https://github.com/psf/black
+    rev: 87928e6d6761a4a6d22250e1fee5601b3998086e # frozen: 26.5.1
     hooks:
       - id: black
         name: Black Python Formatter
-        language_version: python3.9
+        language_version: python3.11
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: ffb6a759a979008c0e6dff86e39f4745a2d9eac4 # frozen: v3.1.0
+  - repo: local
     hooks:
       - id: prettier
         name: Prettier Code Formatter
+        # Uses the pinned prettier from the repo's package.json / package-lock.json
+        # (installed via `npm ci`); npx resolves the local node_modules/.bin binary.
+        entry: npx prettier --write
+        language: system
+        types: [text]
+        files: \.(js|ts|jsx|tsx|css|less|html|json|markdown|md|yaml|yml)$
 
   - repo: https://github.com/JohnnyMorganz/StyLua
-    rev: 84c370104d6a8d1eef00c80a3ebd42f7033aaaad # frozen: v0.20.0
+    rev: a6433cd8ed974a1dd769d41a46b5008858e58e94 # frozen: v2.5.2
     hooks:
       - id: stylua-github
 
@@ -36,14 +41,22 @@ repos:
         args: ["--std", "min", "--codes", "--ranges", "--no-cache"]
 
   - repo: https://github.com/pycqa/flake8
-    rev: 1978e2b0de6efa0cb2a2b6f3f7986aa6569dd2be # frozen: 7.1.0
+    rev: d93590f5be797aabb60e3b09f2f52dddb02f349f # frozen: 7.3.0
     hooks:
       - id: flake8
         name: Flake8 Python Linter
-        args: ["--max-line-length=250", "--ignore=E266,E402,E722,W503"]
+        args: ["--max-line-length=160", "--ignore=E266,E402,E501,E722,W503"]
+
+  - repo: https://github.com/dosisod/refurb
+    rev: 0dbb127465ca9398b6c89c32a7fd86d78ca755c4 # frozen: v2.3.1
+    hooks:
+      - id: refurb
+        name: Refurb Python Refactoring Tool
+        exclude: ^tests/
+        additional_dependencies: ["mypy<1.20"]
 
   - repo: https://github.com/codespell-project/codespell
-    rev: 193cd7d27cd571f79358af09a8fb8997e54f8fff # frozen: v2.3.0
+    rev: 2ccb47ff45ad361a21071a7eedda4c37e6ae8c5a # frozen: v2.4.2
     hooks:
       - id: codespell
         name: Codespell Spell Checker
@@ -52,11 +65,11 @@ repos:
         types: [text]
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: 77c3c6a34b2577d71083442326c60b8fd58926ec # frozen: v8.18.4
+    rev: 2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce # frozen: v8.30.0
     hooks:
       - id: gitleaks
 
   - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: 2491238703a5d3415bb2b7ff11388bf775372f29 # frozen: v0.10.0
+    rev: 99470f5e12208ff0fb17ab81c3c494f7620a1d8d # frozen: v0.11.0
     hooks:
       - id: shellcheck

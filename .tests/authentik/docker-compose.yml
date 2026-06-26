@@ -1,0 +1,85 @@
+version: "3"
+
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0
+    ports:
+      - 80:8080/tcp
+      - 443:8443/tcp
+      - 443:8443/udp
+    environment:
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+    networks:
+      - bw-universe
+      - bw-services
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0
+    depends_on:
+      - bunkerweb
+    volumes:
+      - ./bw-data/plugins:/data/plugins
+    environment:
+      - BUNKERWEB_INSTANCES=bunkerweb
+      - MULTISITE=yes
+      - SERVER_NAME=app.example.com noheaders.example.com
+      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+      - LOG_LEVEL=info
+      - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
+      - USE_BUNKERNET=no
+      - USE_BLACKLIST=no
+      - USE_GREYLIST=no
+      - USE_WHITELIST=no
+      - USE_MODSECURITY=no
+      - USE_ANTIBOT=no
+      - SERVE_FILES=no
+      - DISABLE_DEFAULT_SERVER=yes
+      - AUTO_LETS_ENCRYPT=no
+      - USE_LETS_ENCRYPT=no
+      - REDIRECT_HTTP_TO_HTTPS=no
+      - AUTO_REDIRECT_HTTP_TO_HTTPS=no
+      # app.example.com : identity forwarding ON
+      - app.example.com_USE_REVERSE_PROXY=yes
+      - app.example.com_REVERSE_PROXY_HOST=http://echo:8080
+      - app.example.com_REVERSE_PROXY_URL=/
+      - app.example.com_USE_AUTHENTIK=yes
+      - app.example.com_AUTHENTIK_URL=http://mock-outpost:9000
+      - app.example.com_AUTHENTIK_SSL_VERIFY=no
+      - app.example.com_AUTHENTIK_PASS_IDENTITY_HEADERS=yes
+      # noheaders.example.com : forwarding OFF + TRAILING SLASH url (rstrip test)
+      - noheaders.example.com_USE_REVERSE_PROXY=yes
+      - noheaders.example.com_REVERSE_PROXY_HOST=http://echo:8080
+      - noheaders.example.com_REVERSE_PROXY_URL=/
+      - noheaders.example.com_USE_AUTHENTIK=yes
+      - noheaders.example.com_AUTHENTIK_URL=http://mock-outpost:9000/
+      - noheaders.example.com_AUTHENTIK_SSL_VERIFY=no
+      - noheaders.example.com_AUTHENTIK_PASS_IDENTITY_HEADERS=no
+    networks:
+      - bw-universe
+
+  # Mock authentik outpost: 200 + X-authentik-* when cookie mock_session=valid, else 401.
+  mock-outpost:
+    image: nginx:alpine
+    volumes:
+      - ./mock-outpost.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - bw-services
+
+  # Echo upstream: reflects request headers as JSON so assertions can inspect them.
+  echo:
+    image: mendhak/http-https-echo:31
+    environment:
+      - HTTP_PORT=8080
+    networks:
+      - bw-services
+
+networks:
+  bw-universe:
+    name: bw-universe
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.30.0/24
+  bw-services:
+    name: bw-services

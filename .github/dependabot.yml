@@ -16,6 +16,21 @@ updates:
       prefix: "deps/gha"
     target-branch: "dev"
 
+  # npm (Prettier tooling)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    assignees:
+      - "TheophileDiot"
+    reviewers:
+      - "TheophileDiot"
+    commit-message:
+      prefix: "deps/npm"
+    target-branch: "dev"
+
   # Coraza
   - package-ecosystem: "docker"
     directory: "/coraza/api"

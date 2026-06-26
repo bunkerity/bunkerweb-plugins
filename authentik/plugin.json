@@ -1,0 +1,90 @@
+{
+  "id": "authentik",
+  "name": "Authentik",
+  "description": "Protect any site (reverse proxy, served files, ...) with Authentik forward authentication (auth_request).",
+  "version": "1.11",
+  "stream": "no",
+  "settings": {
+    "USE_AUTHENTIK": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate Authentik forward authentication for this site.",
+      "id": "use-authentik",
+      "label": "Use Authentik",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "AUTHENTIK_URL": {
+      "context": "multisite",
+      "default": "",
+      "help": "Base URL of the Authentik outpost (e.g. http://authentik:9000 for the embedded outpost or http://outpost:9000 for a standalone one). The plugin calls this base URL followed by /outpost.goauthentik.io/auth/nginx for the auth check and uses the same base for the outpost proxy. Required when USE_AUTHENTIK is yes.",
+      "id": "authentik-url",
+      "label": "Authentik outpost URL",
+      "regex": "^(https?://[^ ]+)?$",
+      "type": "text"
+    },
+    "AUTHENTIK_OUTPOST_PATH": {
+      "context": "multisite",
+      "default": "/outpost.goauthentik.io",
+      "help": "Local URL path under which the Authentik outpost endpoints (auth, start, callback, sign_out, ...) are exposed on this site. Must start with /.",
+      "id": "authentik-outpost-path",
+      "label": "Outpost local path",
+      "regex": "^/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$",
+      "type": "text"
+    },
+    "AUTHENTIK_SSL_VERIFY": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Verify the TLS certificate of the Authentik outpost (used both by the Lua auth subrequest and the outpost proxy_pass).",
+      "id": "authentik-ssl-verify",
+      "label": "Verify Authentik TLS certificate",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "AUTHENTIK_TIMEOUT": {
+      "context": "global",
+      "default": "5000",
+      "help": "Timeout (ms) for the Lua auth subrequest to the Authentik outpost.",
+      "id": "authentik-timeout",
+      "label": "Auth subrequest timeout (ms)",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "AUTHENTIK_PROXY_BUFFER_SIZE": {
+      "context": "multisite",
+      "default": "32k",
+      "help": "Value used for proxy_buffer_size on this server. Authentik sets large response headers that may overflow the default buffer.",
+      "id": "authentik-proxy-buffer-size",
+      "label": "proxy_buffer_size",
+      "regex": "^[0-9]+[kKmM]?$",
+      "type": "text"
+    },
+    "AUTHENTIK_PROXY_BUFFERS": {
+      "context": "multisite",
+      "default": "8 16k",
+      "help": "Value used for proxy_buffers on this server. Authentik sets large response headers that may overflow the default buffers.",
+      "id": "authentik-proxy-buffers",
+      "label": "proxy_buffers",
+      "regex": "^[0-9]+ +[0-9]+[kKmM]?$",
+      "type": "text"
+    },
+    "AUTHENTIK_PASS_IDENTITY_HEADERS": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Forward Authentik's identity headers (X-authentik-username, -groups, -email, ...) from the auth response to the upstream. Every client-supplied X-authentik-* request header is always stripped before the request reaches the upstream, regardless of this setting, so a client can never spoof an identity. Enable only if your backend uses trusted-header authentication.",
+      "id": "authentik-pass-identity-headers",
+      "label": "Forward identity headers to upstream",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "AUTHENTIK_IDENTITY_HEADERS": {
+      "context": "multisite",
+      "default": "X-authentik-username X-authentik-groups X-authentik-entitlements X-authentik-email X-authentik-name X-authentik-uid",
+      "help": "Space/comma-separated list of identity headers to forward from Authentik's auth response when AUTHENTIK_PASS_IDENTITY_HEADERS is yes. Every X-authentik-* request header from the client is always stripped regardless of this list, to prevent spoofing; this list only selects which Authentik response headers are passed to the upstream. Defaults match Authentik's nginx forward-auth header set.",
+      "id": "authentik-identity-headers",
+      "label": "Identity headers to forward",
+      "regex": "^X-authentik-[A-Za-z0-9-]+([ ,]+X-authentik-[A-Za-z0-9-]+)*$",
+      "type": "text"
+    }
+  }
+}

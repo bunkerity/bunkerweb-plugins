@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	InfoLogger    *log.Logger
-	WarningLogger *log.Logger
-	ErrorLogger   *log.Logger
+	InfoLogger    = log.New(os.Stdout, "INFO: ", log.LstdFlags)
+	WarningLogger = log.New(os.Stdout, "WARNING: ", log.LstdFlags)
+	ErrorLogger   = log.New(os.Stdout, "ERROR: ", log.LstdFlags)
 )
 
 type Pong struct {
@@ -42,7 +42,7 @@ func processInterruption(w http.ResponseWriter, tx types.Transaction, it *types.
 
 	for _, rule := range rules {
 		if rule.Message() != "" {
-			WarningLogger.Printf(rule.AuditLog())
+			WarningLogger.Printf("%s", rule.AuditLog())
 		}
 	}
 
@@ -194,9 +194,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
-	InfoLogger = log.New(os.Stdout, "INFO: ", log.LstdFlags)
-	WarningLogger = log.New(os.Stdout, "WARNING: ", log.LstdFlags)
-	ErrorLogger = log.New(os.Stdout, "ERROR: ", log.LstdFlags)
 	var err error
 	waf, err = coraza.NewWAF(
 		coraza.NewWAFConfig().

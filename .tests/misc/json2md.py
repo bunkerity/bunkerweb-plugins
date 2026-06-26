@@ -44,7 +44,7 @@ for core in glob("*/plugin.json"):
         if len(core_plugin["settings"]) > 0:
             core_settings[core_plugin["name"]] = core_plugin
 
-for name, data in dict(sorted(core_settings.items())).items():
+for data in dict(sorted(core_settings.items())).values():
     print(f"### {data['name']}\n", file=doc)
     print(f"{stream_support(data['stream'])}\n", file=doc)
     print(f"{data['description']}\n", file=doc)

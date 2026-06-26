@@ -14,3 +14,8 @@ exclude = '''
   | env
 )/
 '''
+
+[tool.refurb]
+# FURB124 rewrites `a == "yes" and b == "yes"` into a chained `a == "yes" == b`,
+# which reads as "a and b equal each other" and hurts clarity in the CF env-gate logic.
+ignore = ["FURB124"]

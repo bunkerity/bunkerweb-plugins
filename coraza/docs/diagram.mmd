@@ -1,0 +1,40 @@
+flowchart TD
+    accTitle: BunkerWeb Coraza plugin request flow
+    accDescr: A client request first passes BunkerWeb core checks, then coraza.lua forwards the request metadata and body as JSON over HTTP to the Coraza Go sidecar. The sidecar evaluates the OWASP Core Rule Set and returns a verdict. A disrupted verdict denies the request, otherwise it reaches the upstream.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb access phase]
+        direction TB
+        core["1. Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
+        lua["2. coraza.lua:<br/>read body, build X-Coraza-* JSON,<br/>POST CORAZA_API + /request"]
+        core --> lua
+    end
+
+    subgraph sidecar[Coraza Go service - coraza/api]
+        direction TB
+        api[["HTTP API:<br/>/ping (health), /request"]]
+        crs[("OWASP CRS<br/>vendored at build")]
+        api --- crs
+    end
+
+    verdict{"disrupted?"}
+    allow["Allow to upstream"]
+    deny["Deny request<br/>(get_deny_status)"]
+    upstream([Upstream app])
+
+    client -->|request| core
+    lua -.->|"request JSON over HTTP"| api
+    api -.->|verdict| verdict
+    verdict -->|"yes (rule matched)"| deny
+    verdict -->|no| allow
+    allow --> upstream
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef svc fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class allow,upstream ok;
+    class deny deny;
+    class api,crs svc;
+    class client,core,lua app;

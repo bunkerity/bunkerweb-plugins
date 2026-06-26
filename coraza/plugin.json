@@ -1,14 +1,14 @@
 {
   "id": "coraza",
   "name": "Coraza",
-  "description": "Use Coraza as a library to inspect client request.",
-  "version": "1.10",
+  "description": "Inspect and block malicious requests with the Coraza WAF engine running the OWASP Core Rule Set.",
+  "version": "1.11",
   "stream": "no",
   "settings": {
     "USE_CORAZA": {
       "context": "multisite",
       "default": "no",
-      "help": "Activate Coraza library",
+      "help": "Activate the Coraza WAF (OWASP Core Rule Set evaluation) for this site.",
       "id": "use coraza library",
       "label": "Use coraza",
       "regex": "^(no|yes)$",
@@ -17,7 +17,7 @@
     "CORAZA_API": {
       "context": "global",
       "default": "http://bw-coraza:8080",
-      "help": "hostname of the CORAZA API.",
+      "help": "Base URL (scheme + host + port) of the Coraza WAF sidecar, e.g. http://bw-coraza:8080.",
       "id": "coraza-api",
       "label": "Coraza Api",
       "regex": "^.*$",

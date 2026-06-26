@@ -1,0 +1,333 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-GB"
+tone_instructions: "Be direct, technical, and actionable. Cite exact lines. Prefer concrete guidance over vague suggestions. Use British English."
+early_access: false
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: false
+  code_guidelines:
+    enabled: true
+
+code_generation:
+  docstrings:
+    language: "en-GB"
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  high_level_summary_instructions: |
+    Summarise the PR by plugin (`clamav`, `coraza`, `discord`, `slack`, `virustotal`, `webhook`) and by shared area (`.tests`, `.github`, `misc`, repo root).
+    For Coraza, distinguish changes to `coraza.lua` (the OpenResty client) from changes to `coraza/api/**` (the standalone Go HTTP service shipped as `bunkerity/bunkerweb-coraza`).
+    Always call out: security impact, user-visible behaviour changes, `plugin.json` schema changes, `COMPATIBILITY.json` updates, plugin version bumps, packaging or deployment impact, and whether documentation/tests were updated.
+    Flag any drift between the per-plugin version in `plugin.json` and the collection version tracked in `COMPATIBILITY.json` / the README badge.
+    Keep the summary terse, technical, and suitable for maintainers reviewing external plugins for a security-critical WAF project.
+  review_status: true
+  review_details: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: false
+  suggested_reviewers: false
+  enable_prompt_for_ai_agents: true
+  # Fun features — keep CodeRabbit cheerful
+  poem: true
+  in_progress_fortune: true
+  commit_status: true
+  fail_commit_status: false
+  abort_on_close: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 8
+    base_branches:
+      - "dev"
+      - "main"
+    ignore_title_keywords:
+      - "WIP"
+      - "[WIP]"
+      - "RFC"
+      - "DO NOT REVIEW"
+    ignore_usernames:
+      - "dependabot[bot]"
+
+  slop_detection:
+    enabled: true
+    label: "needs-review"
+
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: |
+        Use Conventional Commits or the "<component> - description" format already used in bunkerweb-plugins history.
+        Examples: "feat: add configurable timeout for VirusTotal API requests", "fix: update plugin versions from 1.9 to 1.10", "refactor: remove CrowdSec configurations", "ci/cd - fix BW version".
+        Keep titles under ~70 characters; put detail in the description.
+    description:
+      mode: "warning"
+    issue_assessment:
+      mode: "off"
+    docstrings:
+      mode: "off"
+
+  finishing_touches:
+    # Auto-generated tests risk false confidence on a WAF; contributors write them.
+    unit_tests:
+      enabled: false
+
+  path_filters:
+    - "**"
+    - "!LICENSE.md"
+    # Vendored OWASP Core Rule Set — pulled in at build time by coraza/api/crs.sh
+    - "!coraza/api/coreruleset/**"
+    # Plugin architecture diagrams (Mermaid, embedded inline in each README)
+    - "!**/docs/diagram.mmd"
+    # Release artefacts that occasionally sit at the repo root
+    - "!**/*.zip"
+    - "!**/node_modules/**"
+    - "!**/.venv/**"
+    - "!**/venv/**"
+    - "!**/.pytest_cache/**"
+    - "!**/__pycache__/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/*.min.js"
+    - "!**/*.log.txt"
+    - "!**/*.patch*"
+    - "!.claude/**"
+    - "!.gemini/**"
+    # Documentation assets — exclude images and PDFs to avoid review noise
+    - "!**/docs/**/*.png"
+    - "!**/docs/**/*.jpg"
+    - "!**/docs/**/*.jpeg"
+    - "!**/docs/**/*.gif"
+    - "!**/docs/**/*.pdf"
+    - "!**/images/**"
+
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        Follow BunkerWeb's Python standards and security posture:
+          - Use snake_case for functions and variables, PascalCase for classes, and provide concise, accurate docstrings for public classes, functions, and methods.
+          - Respect Black formatting with a 160-character line limit (`pyproject.toml`) and flake8 with `--max-line-length=250 --ignore=E266,E402,E722,W503` from `.pre-commit-config.yaml`.
+          - Catch specific exceptions; never use bare `except:`. Catching `BaseException` / `Exception` is acceptable only at explicit process boundaries (for example UI `pre_render` hooks that must degrade gracefully) when the code logs enough context and either re-raises, returns an error status, or terminates safely. `ui/actions.py` uses `BaseException` deliberately — do not regress that to a bare `except:`.
+          - Never invoke the shell from Python via `os.system(...)`, `subprocess` with `shell=True`, `eval`, or `exec`. Pass subprocess arguments as a list and prefer explicit binary paths for privileged operations.
+          - Do not use unsafe binary deserialisation libraries for untrusted data. Use `yaml.safe_load()` rather than unsafe YAML loading.
+          - Open files with an explicit encoding (normally `utf-8`) and use `with` statements for files, sockets, and temporary resources.
+          - For HTTP clients (`requests`, `httpx`): always set an explicit timeout, validate destination URLs to block RFC1918/loopback/link-local ranges (SSRF), disable automatic redirects to internal hosts, and be careful with proxy settings.
+          - Scrub secrets, tokens, cookies, database URIs, webhook URLs, and `Authorization` headers from logs. Use the logging framework rather than `print()`.
+          - Secrets, API keys, and credentials must never be hard-coded; read them from plugin settings or environment variables.
+
+    - path: "*/ui/actions.py"
+      instructions: |
+        Per-plugin `ui/actions.py` modules hook into the BunkerWeb web UI:
+          - `pre_render(**kwargs)` must return a dict of card data and must never raise out to the caller. The existing pattern wraps the body in `try/except BaseException` and logs via `getLogger("UI")` + `format_exc()`; preserve that posture.
+          - The top-level function named after the plugin (e.g. `discord(**kwargs)`) is the main-page entry point; keep it side-effect free unless the plugin genuinely needs server-side state.
+          - `kwargs["bw_instances_utils"]` exposes BW helpers such as `get_ping(service)`; do not assume other keys exist without checking.
+          - Never expose secrets, webhook URLs, API keys, or tokens in the returned card payload — they are rendered into the UI.
+          - Keep the module importable with only the BunkerWeb UI runtime; do not add heavy third-party dependencies without justification.
+
+    - path: "**/*.lua"
+      instructions: |
+        Lua code runs on OpenResty inside the BunkerWeb nginx container and sits on the request hot path:
+          - Every plugin subclasses `bunkerweb.plugin` via `middleclass`: `local <name> = class("<name>", plugin)` and `plugin.initialize(self, "<id>", ctx)` in `initialize`. Hook methods (`init_worker`, `access`, `log`, `preread`, ...) must return `self:ret(ok_bool, msg, [http_status])`. To deny a request, return `self:ret(true, "reason", utils.get_deny_status())`.
+          - Gate expensive work at `init_worker` with `utils.has_variable("USE_<PLUGIN>", "yes")` and skip when `self.is_loading` is true, matching the pattern used across `clamav.lua`, `coraza.lua`, and `virustotal.lua`.
+          - Use local variables and local module tables; avoid globals. Cache `ngx.var.*` and `ngx.req.*` values in locals instead of re-reading them repeatedly.
+          - Precompile regular expressions in module-level locals; never compile inside request loops. For `ngx.re.match`/`find`/`gmatch`/`sub`, pass the option string `"jo"` (`j` enables PCRE JIT, `o` compiles the pattern once and caches it), anchor patterns with `^...$` when a full match is intended, and cap input length before matching to prevent ReDoS.
+          - Validate and sanitise all request-derived input. Never evaluate request-derived code via `load`, `loadstring`, or similar mechanisms.
+          - Use `ngx.socket` for raw TCP (see the ClamAV INSTREAM pattern in `clamav.lua`) and `resty.http` for HTTP upstreams (see `virustotal.lua` and `coraza.lua`). Prefer `resty.upload` for streaming request bodies — `clamav.lua` is the reference.
+          - Cache upstream scan results by a strong digest of the body (SHA-512 in `virustotal.lua`) rather than by filename or weaker hashes; mind cache key length.
+          - Shared-dictionary read-modify-write sequences are race-prone; prefer atomic operations such as `incr` or explicit locking where correctness matters.
+          - Never log request bodies, cookies, bearer tokens, webhook secrets, or API keys.
+          - Use `pcall` or explicit error handling at safe boundaries so a malformed request or upstream failure does not crash worker processes.
+          - Use `cjson` safely for JSON encode/decode and do not build JSON by string concatenation.
+          - Respect the stylua config in `stylua.toml` and the luacheck config in `.luacheckrc` (`--std min --codes --ranges --no-cache`).
+
+    - path: "**/plugin.json"
+      instructions: |
+        `plugin.json` files define the settings schema that BunkerWeb reads to register settings and render the UI:
+          - The top-level fields `id`, `name`, `version`, and `stream` (`yes`/`no`/`partial`) must stay consistent with the plugin directory name and its Lua module.
+          - Ensure setting IDs remain stable unless there is an intentional breaking change documented in the PR.
+          - Each setting must declare `context` (`global` or `multisite`), `default`, `help`, `id`, `label`, `regex`, and `type`. Regex validators must be anchored where appropriate, compile cleanly, and avoid catastrophic backtracking. Default values must satisfy their own validators.
+          - `USE_<PLUGIN>` toggles are the standard gate for `init_worker` short-circuiting; keep them in sync with the Lua implementation.
+          - Bump the per-plugin `version` field through `./misc/update_version.sh <new_version>` so every `plugin.json` and the README badge move together. Do not edit the version in a single `plugin.json` by hand.
+          - If a PR changes a setting ID, type, context, accepted value shape, or compatibility behaviour, require migration notes and confirm that the README settings table is regenerated via `.tests/misc/json2md.py`.
+
+    - path: "COMPATIBILITY.json"
+      instructions: |
+        `COMPATIBILITY.json` maps a plugins-collection version to the BunkerWeb versions it supports. This is a different version stream from the per-plugin `plugin.json` version:
+          - New entries must use ascending collection versions and reference real, released BunkerWeb tags.
+          - Do not collapse, reorder, or drop historical mappings — older BunkerWeb deployments rely on them.
+          - When a new collection version is introduced, ensure the README badge and, where relevant, the hardcoded BW tag in `.github/workflows/tests.yml` move together.
+
+    - path: "coraza/api/**/*.go"
+      instructions: |
+        `coraza/api/` is a standalone Go HTTP service that wraps `github.com/corazawaf/coraza/v3` and is called over HTTP by `coraza.lua`. The image is published as `bunkerity/bunkerweb-coraza`:
+          - Use `gofmt`/`go vet` conventions; exported identifiers need doc comments.
+          - Do not block the HTTP handler goroutines on long-running work; honour request context cancellation and set read/write/idle timeouts on `http.Server`.
+          - Validate request bodies strictly, cap body size, and return precise HTTP status codes. Never echo request data unsanitised into responses or logs.
+          - Use `io.ReadAll` (stdlib) rather than the deprecated `io/ioutil`. Close every `io.ReadCloser` you open.
+          - `coraza.WAF` and `types.Transaction` lifecycles matter: create transactions per request, always call `ProcessLogging` / `Close` on the defer path, and surface interruptions through a consistent JSON shape (`Resp{Deny, Msg}`).
+          - Be careful with rule loading at startup: fail fast with a clear error if the CRS or custom rules cannot be parsed, rather than serving requests with a degraded WAF.
+          - Never log request bodies, cookies, bearer tokens, or secrets. Redact any user-supplied header before logging.
+          - Keep third-party dependencies minimal and pinned in `go.mod` / `go.sum`.
+
+    - path: "coraza/api/coraza.conf"
+      instructions: |
+        `coraza.conf` and `bunkerweb.conf` configure the WAF engine at startup:
+          - Preserve `SecRuleEngine`, request-body inspection limits, and audit-log defaults unless the PR explains why a weaker setting is safe.
+          - Any rule exclusions or paranoia-level adjustments must be documented with a concrete reason.
+          - Do not weaken CRS wiring or broaden allowlists without a strong, specific justification.
+
+    - path: "coraza/api/crs.sh"
+      instructions: |
+        `crs.sh` vendors the OWASP Core Rule Set into the Docker image at build time:
+          - The CRS commit/ref must stay pinned; floating `main` or `master` checkouts are not acceptable.
+          - The script must strip `.git` (and any other build-time cruft) from the vendored tree so the published image stays reproducible.
+          - Prefer `git_secure_clone` style helpers or verified downloads; never pipe a remote script straight into a shell.
+
+    - path: ".tests/*.sh"
+      instructions: |
+        Integration test scripts under `.tests/` drive end-to-end tests against real BunkerWeb containers:
+          - Source `.tests/utils.sh` and use `do_and_check_cmd` for any command whose failure should abort the test run; do not silently ignore non-zero exits.
+          - Scripts must start with a clean `/tmp/bunkerweb-plugins/` workspace and chown the plugin tree to `101:101` (BunkerWeb's uid) before `docker compose up`.
+          - Rewrite image references to `bunkerweb:tests` / `bunkerweb-scheduler:tests` via `sed` exactly as the existing scripts do, so the pinned tags from `./.tests/bw.sh` are picked up.
+          - Keep the BunkerWeb tag selection (`main` → pinned release, `dev` → `dev`) consistent with `.github/workflows/tests.yml`.
+          - On failure, dump `docker compose logs` before `docker compose down -v` so CI output is debuggable.
+          - Accept a `verbose` first argument to dump logs on success; do not remove that affordance.
+          - Never hard-code secrets. `VIRUSTOTAL_API_KEY` and any similar values must come from the environment.
+
+    - path: ".tests/**/docker-compose.yml"
+      instructions: |
+        Test Compose files must stay compatible with the `sed`-based image retagging in the test scripts:
+          - Use `bunkerity/bunkerweb:<tag>` and `bunkerity/bunkerweb-scheduler:<tag>` image references so the rewrite to `:tests` works without changes.
+          - Pin all other service images (ClamAV, upstream apps, ...) to explicit versions.
+          - Prefer `read_only`, `no-new-privileges`, dropped capabilities, and minimal mounts where compatible with the scenario under test.
+          - Volumes that hold plugin code must mount the path the test script prepared under `/tmp/bunkerweb-plugins/<plugin>/bw-data/plugins`.
+
+    - path: ".tests/misc/json2md.py"
+      instructions: |
+        `json2md.py` regenerates the README settings tables from each `plugin.json`:
+          - The script is run manually when settings change; keep it idempotent and deterministic.
+          - Any change to the output format must be reflected in every plugin README in the same PR.
+          - Do not introduce dependencies beyond `pytablewriter` without a very good reason.
+
+    - path: "misc/update_version.sh"
+      instructions: |
+        `update_version.sh` is the canonical way to bump the per-plugin `plugin.json` version across the repo:
+          - The script must rewrite every `plugin.json` version and the README badge in a single pass; do not split the responsibilities.
+          - Do not touch `COMPATIBILITY.json` from this script — the plugins-collection version stream is managed separately.
+          - Prefer `sed -i` with anchored expressions over fragile regexes that could match unrelated fields.
+
+    - path: "**/*.sh"
+      instructions: |
+        Shell scripts must match BunkerWeb's portability expectations:
+          - If the script is POSIX shell, prefer `set -eu`; if it explicitly requires Bash, use `set -euo pipefail`.
+          - Quote variables and command substitutions consistently and prefer `${var}` when concatenating.
+          - Do not use Bash-only features in `/bin/sh` scripts.
+          - Handle failures explicitly, use `trap` for cleanup where temporary files are created, and use `mktemp` safely.
+          - Never pipe a remote download straight into a shell interpreter; verify downloads by checksum or signature and avoid `-k` / `--insecure`.
+          - Do not rely on inherited `PATH` in privileged contexts; set it explicitly where needed.
+          - Avoid `eval` and unsafe command construction from untrusted data.
+
+    - path: ".github/workflows/**/*.yml"
+      instructions: &github_actions_instructions |
+        GitHub Actions workflows must be reproducible and safe:
+          - Pin third-party actions by commit SHA, not floating tags — match the style already used in `tests.yml` and `codeql.yml`.
+          - Declare an explicit top-level `permissions:` block and keep it minimal by default.
+          - Be extremely careful with `pull_request_target`: do not combine untrusted PR code with repository secrets.
+          - Do not interpolate `${{ github.event.* }}` values directly inside `run:` scripts; assign them via `env:` first to reduce script-injection risk.
+          - Use `concurrency` intentionally: cancel superseded PR jobs, but avoid cancelling release or deployment jobs that should run to completion.
+          - The hardcoded BunkerWeb tag in `tests.yml` (for example `1.6.1`) is not read from `COMPATIBILITY.json`; any bump must update both places in the same PR.
+
+    - path: ".github/workflows/**/*.yaml"
+      instructions: *github_actions_instructions
+
+    - path: ".pre-commit-config.yaml"
+      instructions: |
+        Keep the pre-commit stack aligned with repository reality:
+          - Hook revisions must stay pinned by frozen SHA, matching the existing style.
+          - The `exclude` pattern must keep `coraza/api/coreruleset` and `LICENSE.md` out of the hook run; do not silently broaden or drop those exclusions.
+          - New hooks must not silently reformat or reject large swathes of historical code without an agreed migration plan.
+          - Python hook versions must stay compatible with `language_version: python3.9`, which matches the `black` configuration.
+
+    - path: "**/*.yaml"
+      instructions: &yaml_instructions |
+        YAML files (CI, Compose, app config) must be structured and reproducible:
+          - Use consistent indentation, stable key ordering where the project already has one, and avoid duplicate keys.
+          - Pin container images, dependency versions, and GitHub Actions rather than using `latest`.
+          - Never commit secrets in plaintext; use secret managers, encrypted values, or template/example files.
+          - Docker Compose changes should prefer `read_only`, `no-new-privileges`, dropped capabilities, and minimal mounts where compatible.
+
+    - path: "**/*.yml"
+      instructions: *yaml_instructions
+
+    - path: "**/Dockerfile*"
+      instructions: |
+        Dockerfiles (notably `coraza/api/Dockerfile`) must be hardened and reproducible:
+          - Do not use `latest`; pin base images precisely, ideally by digest.
+          - Prefer multi-stage builds and keep the runtime image small — the Coraza API image is shipped to end users as `bunkerity/bunkerweb-coraza`.
+          - Install packages in a single `RUN` layer and clean the package cache in that same layer (Alpine: `apk add --no-cache`; Debian/Ubuntu: `apt-get update && apt-get install -y --no-install-recommends ... && apt-get clean && rm -rf /var/lib/apt/lists/*`).
+          - Prefer `COPY` over `ADD`, avoid passing secrets via `ARG`, and use BuildKit secrets for sensitive material.
+          - The final runtime stage should run as a non-root user and include a `HEALTHCHECK` where a healthcheck script (for example `coraza/api/healthcheck.sh`) exists.
+
+    - path: "**/*.md"
+      instructions: |
+        Documentation should be concise, accurate, and written in British English:
+          - Keep the structure clear with a sensible heading hierarchy.
+          - Each plugin README contains a settings table generated from `plugin.json` via `.tests/misc/json2md.py`; regenerate it whenever settings change rather than hand-editing the table.
+          - The repository README shows a compatibility badge tied to the plugins-collection version in `COMPATIBILITY.json` — keep it in sync with any version bump.
+          - Prefer concrete instructions, accurate examples, and explicit prerequisites (Docker, `sudo`, required env vars like `VIRUSTOTAL_API_KEY`).
+          - When a PR changes behaviour, defaults, packaging, or security posture, ask for the corresponding documentation update.
+
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 120000
+    languagetool:
+      enabled: true
+      level: "default"
+    gitleaks:
+      enabled: true
+    luacheck:
+      enabled: true
+    shellcheck:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    checkov:
+      enabled: true
+    osvScanner:
+      enabled: true
+    dotenvLint:
+      enabled: true
+    flake8:
+      enabled: false
+    ruff:
+      enabled: false
+    eslint:
+      enabled: false
+    stylelint:
+      enabled: false
+    semgrep:
+      enabled: false
+    biome:
+      enabled: false
+    htmlhint:
+      enabled: false
+
+chat:
+  auto_reply: true

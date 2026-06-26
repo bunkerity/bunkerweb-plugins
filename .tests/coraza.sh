@@ -84,6 +84,27 @@ if [ "$success" == "ko" ] ; then
 	exit 1
 fi
 
+# Scanner User-Agent (CRS 913xxx, request-headers phase): a different rule family
+# than the LFI args above, widening coverage to header inspection.
+echo "ℹ️ Testing with a scanner User-Agent ..."
+ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "User-Agent: sqlmap/1.4.7" http://localhost/)"
+if [ "$ret" != "403" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: scanner User-Agent should be blocked (got $ret, expected 403)"
+	exit 1
+fi
+
+# A benign request with a normal query arg must pass (no false positive -> 200).
+echo "ℹ️ Testing that a benign request passes ..."
+ret="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" "http://localhost/?q=hello-world")"
+if [ "$ret" != "200" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: benign request should pass (got $ret, expected 200)"
+	exit 1
+fi
+
 # We're done
 if [ "$1" = "verbose" ] ; then
 	docker compose logs

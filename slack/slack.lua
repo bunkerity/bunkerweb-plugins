@@ -2,6 +2,7 @@ local cjson = require("cjson")
 local class = require("middleclass")
 local http = require("resty.http")
 local plugin = require("bunkerweb.plugin")
+local slack_helpers = require("slack.slack_helpers")
 local utils = require("bunkerweb.utils")
 
 local slack = class("slack", plugin)
@@ -21,6 +22,7 @@ local get_variable = utils.get_variable
 local get_reason = utils.get_reason
 local tostring = tostring
 local encode = cjson.encode
+local redact_header = slack_helpers.redact_header
 
 function slack:initialize(ctx)
 	-- Call parent initialize
@@ -55,7 +57,7 @@ function slack:log(bypass_use_slack)
 		data.text = data.text .. "error while getting headers : " .. err
 	else
 		for header, value in pairs(headers) do
-			data.text = data.text .. header .. ": " .. value .. "\n"
+			data.text = data.text .. header .. ": " .. redact_header(header, value) .. "\n"
 		end
 	end
 	data.text = data.text .. "```"
@@ -73,6 +75,7 @@ function slack.send(premature, self, data)
 	local httpc, err = http_new()
 	if not httpc then
 		self.logger:log(ERR, "can't instantiate http object : " .. err)
+		return
 	end
 	local res, err_http = httpc:request_uri(self.variables["SLACK_WEBHOOK_URL"], {
 		method = "POST",
@@ -84,6 +87,7 @@ function slack.send(premature, self, data)
 	httpc:close()
 	if not res then
 		self.logger:log(ERR, "error while sending request : " .. err_http)
+		return
 	end
 	if self.variables["SLACK_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
 		self.logger:log(WARN, "slack API is rate-limiting us, retrying in " .. res.headers["Retry-After"] .. "s")
@@ -143,6 +147,7 @@ function slack:api()
 		httpc, err = http_new()
 		if not httpc then
 			self.logger:log(ERR, "can't instantiate http object : " .. err)
+			return self:ret(true, "can't instantiate http object", HTTP_INTERNAL_SERVER_ERROR)
 		end
 		local res, err_http = httpc:request_uri(self.variables["SLACK_WEBHOOK_URL"], {
 			method = "POST",
@@ -153,7 +158,7 @@ function slack:api()
 		})
 		httpc:close()
 		if not res then
-			self.logger:log(ERR, "error while sending request : " .. err_http)
+			return self:ret(true, "error while sending request : " .. err_http, HTTP_INTERNAL_SERVER_ERROR)
 		end
 		if self.variables["SLACK_RETRY_IF_LIMITED"] == "yes" and res.status == 429 and res.headers["Retry-After"] then
 			return self:ret(
