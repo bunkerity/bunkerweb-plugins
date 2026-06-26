@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLUGINS = ["clamav", "cloudflare", "coraza", "discord", "matrix", "slack", "virustotal", "webhook"]
+PLUGINS = ["clamav", "cloudflare", "coraza", "discord", "matrix", "sentinelone", "slack", "virustotal", "webhook"]
 
 
 def load_actions(plugin):

@@ -1,0 +1,72 @@
+{
+  "id": "sentinelone",
+  "name": "SentinelOne",
+  "description": "Automatic scan of uploaded files (hash reputation) and client IPs (threat-intelligence IOCs) with the SentinelOne API.",
+  "version": "1.11",
+  "stream": "partial",
+  "settings": {
+    "USE_SENTINELONE": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate SentinelOne integration.",
+      "id": "use-sentinelone",
+      "label": "Use SentinelOne",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "SENTINELONE_API_TOKEN": {
+      "context": "global",
+      "default": "",
+      "help": "API token to authenticate with the SentinelOne console (sent as 'Authorization: ApiToken').",
+      "id": "sentinelone-api-token",
+      "label": "API token",
+      "regex": "^.*$",
+      "type": "password"
+    },
+    "SENTINELONE_API_URL": {
+      "context": "global",
+      "default": "",
+      "help": "Base URL of your SentinelOne console API, e.g. https://your-console.sentinelone.net/web/api/v2.1.",
+      "id": "sentinelone-api-url",
+      "label": "API URL",
+      "regex": "^(https?://.+)?$",
+      "type": "text"
+    },
+    "SENTINELONE_TIMEOUT": {
+      "context": "global",
+      "default": "1000",
+      "help": "Timeout in milliseconds for SentinelOne API requests.",
+      "id": "sentinelone-timeout",
+      "label": "API timeout (ms)",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "SENTINELONE_SCAN_FILE": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Activate hash-reputation scan of uploaded files (SHA1 lookup).",
+      "id": "sentinelone-scan-file",
+      "label": "Scan files",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "SENTINELONE_SCAN_IP": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Activate threat-intelligence IOC lookup of the client IP.",
+      "id": "sentinelone-scan-ip",
+      "label": "Scan IP addresses",
+      "regex": "^(yes|no)$",
+      "type": "check"
+    },
+    "SENTINELONE_FILE_RANK": {
+      "context": "global",
+      "default": "7",
+      "help": "Deny an uploaded file when its SentinelOne reputation rank is greater than or equal to this value (1-10, higher = more malicious).",
+      "id": "sentinelone-file-rank",
+      "label": "File rank threshold",
+      "regex": "^([0-9]|10)$",
+      "type": "text"
+    }
+  }
+}
