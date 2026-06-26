@@ -1,8 +1,43 @@
 # ClamAV plugin
 
-<p align="center">
-	<img alt="BunkerWeb ClamAV diagram" src="https://github.com/bunkerity/bunkerweb-plugins/raw/main/clamav/docs/diagram.svg" />
-</p>
+```mermaid
+flowchart TD
+    accTitle: BunkerWeb ClamAV plugin request flow
+    accDescr: A multipart upload first passes BunkerWeb core checks, then clamav.lua streams each file part to the clamd daemon over the binary INSTREAM TCP protocol. A SHA-512 cache short-circuits files already scanned. A clean verdict reaches the upstream while a detection denies the request.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb access phase]
+        direction TB
+        core["1. Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
+        lua["2. clamav.lua:<br/>parse multipart parts that have a filename<br/>(resty.upload streaming)"]
+        cache{{"SHA-512 cache hit?"}}
+        core --> lua --> cache
+    end
+
+    clamd[["clamd daemon:<br/>INSTREAM scan"]]
+    verdict{"Scan verdict"}
+    allow["Allow to upstream"]
+    deny["Deny request<br/>(get_deny_status)"]
+    upstream([Upstream app])
+
+    client -->|"file upload (multipart)"| core
+    cache -.->|miss| clamd
+    clamd -.->|"chunks framed by a 4-byte<br/>big-endian length, zero-frame end"| verdict
+    cache -->|hit| verdict
+    verdict -->|clean| allow
+    verdict -->|virus found| deny
+    allow --> upstream
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef svc fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class allow,upstream ok;
+    class deny deny;
+    class clamd svc;
+    class client,core,lua,cache app;
+```
 
 This [BunkerWeb](https://www.bunkerweb.io/?utm_campaign=self&utm_source=github) plugin will automatically check if any uploaded file is detected by the ClamAV antivirus engine and deny the request if that's the case.
 

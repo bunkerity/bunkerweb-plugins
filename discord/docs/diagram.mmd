@@ -1,0 +1,30 @@
+flowchart TD
+    accTitle: BunkerWeb Discord plugin notification flow
+    accDescr: The plugin does not block traffic. When BunkerWeb denies a request, discord.lua runs on the log phase, builds a JSON embed, and schedules an async ngx.timer so the HTTP POST to the Discord webhook happens after the response, leaving request latency unaffected. A 429 rate-limit response is retried after its Retry-After delay.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb]
+        direction TB
+        decision{"Request denied?"}
+        log["discord.lua (log phase):<br/>build JSON embed<br/>(request, reason, headers)"]
+        timer["ngx.timer.at(0):<br/>async, after response"]
+        decision -->|yes| log --> timer
+    end
+
+    discord[["Discord webhook<br/>DISCORD_WEBHOOK_URL"]]
+    served([Response already returned to client])
+
+    client -->|request| decision
+    decision -->|no| served
+    timer -.->|"HTTP POST (async)"| discord
+    discord -.->|"429 -> retry after Retry-After"| timer
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef svc fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class served ok;
+    class log,timer deny;
+    class discord svc;
+    class client,decision app;

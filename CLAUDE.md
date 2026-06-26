@@ -14,7 +14,7 @@ Every plugin follows the same BunkerWeb-imposed layout:
 - `<plugin>.lua` — main logic; requires `bunkerweb.plugin` and subclasses it via `middleclass`. Hook methods (`init_worker`, `access`, `log`, `preread`, etc.) return via `self:ret(ok, msg, [status])`. Runs inside OpenResty in the BunkerWeb nginx container.
 - `ui/actions.py` — optional Python hooks for the BunkerWeb web UI. `pre_render(**kwargs)` returns card data; a function named after the plugin is called for the main page. `kwargs["bw_instances_utils"]` exposes BW helpers like `get_ping(service)`.
 - `README.md` — user-facing docs; the settings table is generated from `plugin.json` via `.tests/misc/json2md.py` (run manually when settings change).
-- `docs/diagram.drawio` + `docs/diagram.svg` — architecture diagram shipped with each plugin.
+- `docs/diagram.mmd` — Mermaid architecture diagram shipped with each plugin and embedded inline as a ```mermaid block in its `README.md`(GitHub renders it natively). authentik is the reference style (subgraph + verdict diamond +`classDef ok/deny/svc/app`colors +`accTitle`/`accDescr`).
 
 Coraza is special: it also ships `coraza/api/` — a standalone Go HTTP service (`main.go`, built by `coraza/api/Dockerfile`) that wraps `corazawaf/coraza/v3` and is called over HTTP by `coraza.lua`. Image is published as `bunkerity/bunkerweb-coraza`. CRS rules are vendored at build time by `crs.sh` (pinned to a commit hash, `.git` stripped).
 

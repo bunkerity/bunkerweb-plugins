@@ -87,11 +87,8 @@ reviews:
     - "!LICENSE.md"
     # Vendored OWASP Core Rule Set — pulled in at build time by coraza/api/crs.sh
     - "!coraza/api/coreruleset/**"
-    # Plugin architecture diagrams are binary/SVG exports of drawio files
-    - "!**/docs/diagram.svg"
-    - "!**/docs/diagram.drawio"
-    - "!**/*.drawio"
-    - "!**/*.svg"
+    # Plugin architecture diagrams (Mermaid, embedded inline in each README)
+    - "!**/docs/diagram.mmd"
     # Release artefacts that occasionally sit at the repo root
     - "!**/*.zip"
     - "!**/node_modules/**"

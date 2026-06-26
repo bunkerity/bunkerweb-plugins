@@ -125,12 +125,8 @@ create_docs() {
 
     mkdir -p "$plugin_dir/docs"
 
-    if [ -f "template_diagram.drawio" ]; then
-        cp "template_diagram.drawio" "$plugin_dir/docs/"
-    fi
-
-    if [ -f "template_diagram.svg" ]; then
-        cp "template_diagram.svg" "$plugin_dir/docs/"
+    if [ -f "template_diagram.mmd" ]; then
+        cp "template_diagram.mmd" "$plugin_dir/docs/diagram.mmd"
     fi
 }
 
@@ -981,6 +977,10 @@ generate_readme() {
 # $plugin_name Plugin for BunkerWeb
 
 $DESCRIPTION
+
+\`\`\`mermaid
+$(cat "$plugin_dir/docs/diagram.mmd")
+\`\`\`
 
 ## Features
 

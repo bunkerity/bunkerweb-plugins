@@ -108,8 +108,7 @@ plugin-name/
 ├── plugin-name.lua            # Main Lua execution file
 ├── README.md                  # Comprehensive documentation
 └── docs/                      # Documentation assets
-    ├── template_diagram.drawio
-    └── template_diagram.svg
+    └── diagram.mmd             # Mermaid architecture diagram (also embedded inline in README)
 ```
 
 ### With UI Components (`--with-ui`)

@@ -1,0 +1,29 @@
+flowchart TD
+    accTitle: BunkerWeb Matrix plugin notification flow
+    accDescr: The plugin does not block traffic. When BunkerWeb denies a request, matrix.lua runs on the log phase, builds an HTML and plain-text message with a unique transaction id, and schedules an async ngx.timer so the HTTP PUT to the Matrix room happens after the response, leaving request latency unaffected. The transaction id makes the send idempotent across retries.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb]
+        direction TB
+        decision{"Request denied?"}
+        log["matrix.lua (log phase):<br/>build HTML + plain body,<br/>unique txn_id"]
+        timer["ngx.timer.at(0):<br/>async, after response"]
+        decision -->|yes| log --> timer
+    end
+
+    matrix[["Matrix homeserver:<br/>PUT /_matrix/client/r0/rooms/<br/>{room}/send/m.room.message/{txn_id}<br/>(Bearer token)"]]
+    served([Response already returned to client])
+
+    client -->|request| decision
+    decision -->|no| served
+    timer -.->|"HTTP PUT (async)"| matrix
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef svc fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class served ok;
+    class log,timer deny;
+    class matrix svc;
+    class client,decision app;
