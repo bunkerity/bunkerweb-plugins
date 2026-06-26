@@ -5,7 +5,7 @@ services:
     # containers (bunkerweb:8080 / :8443), so publishing 80/443 only risks an
     # "address already in use" clash on the host / CI runner.
     environment:
-      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24 10.20.40.0/24
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     networks:
       - bw-universe
       - bw-services
@@ -21,7 +21,7 @@ services:
     environment:
       - BUNKERWEB_INSTANCES=bunkerweb
       - SERVER_NAME=www.example.com
-      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24 10.20.40.0/24
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
       - LOG_LEVEL=info
       # --- cloudflare: trusted IPs + deny (mock IP-list endpoints) ---
       - USE_CLOUDFLARE=yes
@@ -101,16 +101,16 @@ services:
         ipv4_address: 192.0.2.10
 
 networks:
+  # The BunkerWeb internal API/service networks don't need fixed addressing, so
+  # let Docker allocate their subnets from its default pool. Hardcoding them (e.g.
+  # 10.20.30.0/24) risks "Address already in use" at bring-up when the CI runner's
+  # host happens to have an interface in that range. API_WHITELIST_IP above is
+  # widened to cover Docker's default bridge pool (172.16/12, 192.168/16).
   bw-universe:
-    ipam:
-      driver: default
-      config:
-        - subnet: 10.20.30.0/24
   bw-services:
-    ipam:
-      driver: default
-      config:
-        - subnet: 10.20.40.0/24
+  # cf-net and evil-net MUST stay pinned: cf-client's source IP has to fall inside
+  # a real Cloudflare range to be "trusted", and evil-client outside it. Both use
+  # public / TEST-NET-1 space that never overlaps the runner's private host IPs.
   cf-net:
     ipam:
       driver: default
