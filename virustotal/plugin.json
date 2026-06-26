@@ -1,7 +1,7 @@
 {
   "id": "virustotal",
   "name": "VirusTotal",
-  "description": "Automatic scan of uploaded files and ips optionally with the VirusTotal API.",
+  "description": "Automatic scan of uploaded files and client IPs with the VirusTotal API.",
   "version": "1.11",
   "stream": "partial",
   "settings": {
@@ -53,7 +53,7 @@
     "VIRUSTOTAL_SCAN_IP": {
       "context": "multisite",
       "default": "yes",
-      "help": "Activate automatic scan of uploaded ips with VirusTotal.",
+      "help": "Activate automatic scan of the client IP with VirusTotal.",
       "id": "virustotal-scan-ip",
       "label": "Scan IP addresses",
       "regex": "^(yes|no)$",

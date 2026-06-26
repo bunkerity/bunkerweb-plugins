@@ -175,7 +175,7 @@
     "USE_CLOUDFLARE_EDGE_BAN_SYNC": {
       "context": "global",
       "default": "no",
-      "help": "Push BunkerWeb's active bans to a Cloudflare account IP List so offenders are blocked at the edge. Requires USE_REDIS=yes and an account-scoped API token (Account Filter Lists:Edit).",
+      "help": "Push BunkerWeb's active bans to a Cloudflare account IP List. Reference that list from a Cloudflare WAF custom rule to block the offenders at the edge (the plugin syncs the list, it does not create the rule). Requires USE_REDIS=yes and an account-scoped API token (Account Filter Lists:Edit).",
       "id": "use-cloudflare-edge-ban-sync",
       "label": "Sync bans to Cloudflare edge",
       "regex": "^(yes|no)$",
@@ -202,7 +202,7 @@
     "CLOUDFLARE_EDGE_BAN_API_TOKEN": {
       "context": "global",
       "default": "",
-      "help": "Account-scoped API token (Account Filter Lists:Edit, optionally Account WAF:Edit) for edge ban sync. Falls back to CLOUDFLARE_API_TOKEN if empty.",
+      "help": "Account-scoped API token (Account Filter Lists:Edit) for edge ban sync. Falls back to CLOUDFLARE_API_TOKEN if empty.",
       "id": "cloudflare-edge-ban-api-token",
       "label": "Edge ban API token",
       "regex": "^.*$",

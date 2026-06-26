@@ -1,5 +1,7 @@
 # Authentik plugin
 
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.11-blue)
+
 ```mermaid
 flowchart TD
     accTitle: BunkerWeb Authentik plugin request flow
@@ -108,7 +110,7 @@ nowhere.
 services:
 
   bunkerweb:
-    image: bunkerity/bunkerweb:1.6.0
+    image: bunkerity/bunkerweb:1.6.11
     ...
     networks:
       - bw-services
@@ -116,7 +118,7 @@ services:
     ...
 
   bw-scheduler:
-    image: bunkerity/bunkerweb-scheduler:1.6.0
+    image: bunkerity/bunkerweb-scheduler:1.6.11
     ...
     environment:
       SERVER_NAME: "app.example.com"
