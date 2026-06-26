@@ -89,9 +89,14 @@ For a request to `https://app.example.com/...`:
    the handler does a `GET` against `/ip_addresses/<ip>`. Private, loopback and
    other non-global addresses are skipped.
 4. **File scan** (when `VIRUSTOTAL_SCAN_FILE=yes` _and_ the request is
-   `multipart/form-data`): each part that carries a filename is streamed and
-   hashed with SHA-256, then looked up with a `GET` against
-   `/files/<sha256>`. Parts without a filename (plain form fields) are ignored.
+   `multipart/form-data`): each part that carries a filename is hashed with
+   SHA-256, then looked up with a `GET` against `/files/<sha256>`. Parts without
+   a filename (plain form fields) are ignored. Over **HTTP/1.x** the body is
+   streamed with `resty.upload`; over **HTTP/2 / HTTP/3** - where the raw request
+   socket `resty.upload` relies on is unavailable - the body is buffered (in
+   memory, or nginx's temp file for large uploads) and its multipart parts are
+   parsed before hashing. The IP scan never reads the body and works on every
+   protocol.
 5. Both paths first consult the 24-hour cache (IP keyed by address, file keyed
    by SHA-256). On a cache miss the VirusTotal API is queried and the result is
    stored for 24 hours.
@@ -225,6 +230,14 @@ API`.** `VIRUSTOTAL_API_KEY` is missing or invalid. The key is required as
   with the ClamAV plugin if you need uploads to be scanned for unknown content.
 - **IPs are scanned only when global.** Private, loopback and link-local client
   addresses are skipped by design.
+- **HTTP/2 / HTTP/3 file scanning buffers the body.** On HTTP/1.x the upload is
+  streamed via `resty.upload`; on HTTP/2 / HTTP/3 the request body is buffered
+  (in memory, or nginx's client-body temp file once it exceeds
+  `client_body_buffer_size`) and parsed before hashing, since `resty.upload`
+  cannot read the raw request socket on those protocols. Buffered uploads are
+  bounded by `MAX_CLIENT_SIZE`. If the request body genuinely cannot be read (a
+  rare read error), the upload is allowed through without a file lookup (and
+  logged); IP scanning is unaffected.
 - **No startup health check.** Because VirusTotal exposes no usable ping
   endpoint, there is no `init_worker` pre-connect — an unreachable API or a bad
   key is only detected on the first request that triggers a lookup.

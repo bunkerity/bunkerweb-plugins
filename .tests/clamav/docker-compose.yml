@@ -26,6 +26,12 @@ services:
       - USE_CLAMAV=yes
       - CLAMAV_HOST=clamav
       - LOG_LEVEL=info
+      # Serve TLS with a self-signed cert and explicitly enable HTTP/2+HTTP/3 so the
+      # h2/h3 e2e cases can negotiate them regardless of any future upstream default
+      # change. The self-signed CN defaults to www.example.com.
+      - GENERATE_SELF_SIGNED_SSL=yes
+      - HTTP2=yes
+      - HTTP3=yes
       - USE_BAD_BEHAVIOR=no
       - USE_LIMIT_REQ=no
       - USE_BUNKERNET=no

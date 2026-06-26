@@ -11,7 +11,9 @@ local virustotal_helpers = require("virustotal.virustotal_helpers")
 local virustotal = class("virustotal", plugin)
 
 local ngx = ngx
+local ngx_req = ngx.req
 local ERR = ngx.ERR
+local WARN = ngx.WARN
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
@@ -21,6 +23,7 @@ local get_deny_status = utils.get_deny_status
 local tostring = tostring
 local decode = cjson.decode
 local encode = cjson.encode
+local open = io.open
 
 local read_all = function(form)
 	while true do
@@ -32,6 +35,36 @@ local read_all = function(form)
 			return
 		end
 	end
+end
+
+-- Read the full request body for the HTTP/2 / HTTP/3 buffered path in a way that
+-- never crashes the worker. Returns (body, nil) on success or (nil, reason) when
+-- the body can't be read - the caller then allows the upload through unscanned and
+-- logged, the same best-effort stance as other un-scannable uploads. Mirrors
+-- BunkerWeb core's crowdsec bouncer get_body(): ngx.req.read_body() reads the body
+-- on every HTTP version (it does not require Content-Length), but it can raise a
+-- Lua error on a read failure, so it is pcall'd rather than guarded - that both
+-- maximizes what we can scan (e.g. streamed HTTP/2 uploads) and prevents a 500.
+-- When the body spilled to a temp file (larger than client_body_buffer_size)
+-- get_body_data() returns nil and we read the file (blocking, but it is already on
+-- local disk).
+local read_request_body = function()
+	local ok, err = pcall(ngx_req.read_body)
+	if not ok then
+		return nil, "read_body() failed : " .. tostring(err)
+	end
+	local body = ngx_req.get_body_data()
+	if not body then
+		local path = ngx_req.get_body_file()
+		if path then
+			local handle = open(path, "rb")
+			if handle then
+				body = handle:read("*a")
+				handle:close()
+			end
+		end
+	end
+	return body
 end
 
 function virustotal:initialize(ctx)
@@ -136,11 +169,25 @@ function virustotal:check_ip()
 end
 
 function virustotal:check_file()
-	-- Loop on files
-	local form, err = upload:new(4096, 512, true)
-	if not form then
-		return false, err
+	-- resty.upload reads the raw request socket, which is unavailable on HTTP/2 /
+	-- HTTP/3 (ngx.req.socket() raises "http v2 not supported yet"). Use the
+	-- buffered fallback there so the upload is still scanned instead of 500ing.
+	if virustotal_helpers.is_http2_plus(self.ctx.bw.http_version, ngx.var.server_protocol) then
+		return self:check_file_buffered()
 	end
+	-- Loop on files
+	local ok_new, form, new_err = pcall(upload.new, upload, 4096, 512, true)
+	if not ok_new then
+		-- Belt-and-suspenders: any unexpected raw-socket error still degrades to
+		-- the buffered path rather than bubbling up as a 500 (form holds the raised message).
+		self.logger:log(WARN, "resty.upload raised an error (" .. tostring(form) .. "); falling back to buffered scan")
+		return self:check_file_buffered()
+	end
+	if not form then
+		self.logger:log(WARN, "resty.upload unavailable (" .. tostring(new_err) .. "); falling back to buffered scan")
+		return self:check_file_buffered()
+	end
+	local err
 	local sha = sha256:new()
 	local processing = nil
 	while true do
@@ -154,7 +201,12 @@ function virustotal:check_file()
 		if typ == "header" then
 			local found = false
 			for _, header in ipairs(res) do
-				if header:find('^.*filename="(.*)".*$') then
+				-- Match the filename parameter in any RFC 7578 / 2183 form: quoted
+				-- (filename="x"), unquoted (filename=x) and RFC 5987 extended
+				-- (filename*=...). %f[%a] anchors on a parameter boundary so form
+				-- fields like name="myfilename" don't match. Same matcher as the
+				-- buffered path (virustotal_helpers.parse_multipart) and ClamAV.
+				if header:find("%f[%a]filename%*?%s*=") then
 					found = true
 					break
 				end
@@ -165,44 +217,21 @@ function virustotal:check_file()
 			-- Body case : update checksum
 		elseif typ == "body" and processing then
 			sha:update(res)
-			-- Part end case : get final checksum and clamav result
+			-- Part end case : get final checksum and VT result
 		elseif typ == "part_end" and processing then
 			processing = nil
 			-- Compute checksum
 			local checksum = to_hex(sha:final())
 			sha:reset()
-			-- Check if file is in cache
-			local ok, cached = self:is_in_cache("file_" .. checksum)
+			local ok, verdict = self:check_checksum(checksum)
 			if not ok then
-				self.logger:log(ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
-			elseif cached then
-				if cached ~= "clean" then
-					read_all(form)
-					return true, cached, checksum
-				end
-			else
-				-- Check if file is already present on VT
-				local found, response
-				ok, found, response = self:request("/files/" .. checksum)
-				if not ok then
-					read_all(form)
-					return false, found
-				end
-				local result = "clean"
-				if found then
-					result = self:get_result(response, "FILE")
-				end
-				-- Add to cache
-				ok, err = self:add_to_cache("file_" .. checksum, result)
-				if not ok then
-					read_all(form)
-					return false, err
-				end
-				-- Stop here if one file is detected
-				if result ~= "clean" then
-					read_all(form)
-					return true, result, checksum
-				end
+				read_all(form)
+				return false, verdict
+			end
+			-- Stop here if one file is detected
+			if verdict ~= "clean" then
+				read_all(form)
+				return true, verdict, checksum
 			end
 			-- End of body case : no file detected
 		elseif typ == "eof" then
@@ -211,6 +240,69 @@ function virustotal:check_file()
 	end
 	-- luacheck: ignore 511
 	return false, "malformed content"
+end
+
+-- Resolve a file checksum to a verdict ("clean" or a detection summary). Shared by
+-- the streaming and buffered paths. Returns (ok, verdict|error).
+function virustotal:check_checksum(checksum)
+	local ok, cached = self:is_in_cache("file_" .. checksum)
+	if not ok then
+		-- Fail-open on a cache-backend error, mirroring the streaming path.
+		self.logger:log(ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
+		return true, "clean"
+	end
+	if cached then
+		return true, cached
+	end
+	-- Check if the file is already known to VirusTotal.
+	local found, response
+	ok, found, response = self:request("/files/" .. checksum)
+	if not ok then
+		return false, found
+	end
+	local result = "clean"
+	if found then
+		result = self:get_result(response, "FILE")
+	end
+	local err
+	ok, err = self:add_to_cache("file_" .. checksum, result)
+	if not ok then
+		return false, err
+	end
+	return true, result
+end
+
+-- HTTP/2 / HTTP/3 fallback for check_file(): buffer the body (memory or the nginx
+-- temp file for large uploads) and parse the multipart parts ourselves, since
+-- resty.upload cannot read the raw request socket on these protocols.
+function virustotal:check_file_buffered()
+	local body, err = read_request_body()
+	if not body then
+		-- Can't read the body (e.g. chunked HTTP/2 upload) -> nothing we can scan;
+		-- allow it through, best-effort.
+		if err then
+			self.logger:log(WARN, "can't read request body to scan upload (" .. err .. "); upload not scanned")
+		end
+		return true
+	end
+	local boundary = virustotal_helpers.get_boundary(self.ctx.bw.http_content_type)
+	if not boundary then
+		return true
+	end
+	local parts = virustotal_helpers.parse_multipart(body, boundary)
+	for _, part in ipairs(parts) do
+		local sha = sha256:new()
+		sha:update(part.content)
+		local checksum = to_hex(sha:final())
+		local ok, verdict = self:check_checksum(checksum)
+		if not ok then
+			return false, verdict
+		end
+		if verdict ~= "clean" then
+			return true, verdict, checksum
+		end
+	end
+	return true
 end
 
 function virustotal:get_result(response, type)

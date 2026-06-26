@@ -9,8 +9,10 @@ local utils = require("bunkerweb.utils")
 local clamav = class("clamav", plugin)
 
 local ngx = ngx
+local ngx_req = ngx.req
 local NOTICE = ngx.NOTICE
 local ERR = ngx.ERR
+local WARN = ngx.WARN
 local socket = ngx.socket
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
@@ -18,6 +20,8 @@ local to_hex = str.to_hex
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local tonumber = tonumber
+local tostring = tostring
+local open = io.open
 -- The big-endian INSTREAM length prefix lives in clamav/clamav_helpers.lua so it
 -- can be unit-tested with busted outside OpenResty (see spec/clamav_helpers_spec.lua).
 local stream_size = clamav_helpers.stream_size
@@ -32,6 +36,36 @@ local read_all = function(form)
 			return
 		end
 	end
+end
+
+-- Read the full request body for the HTTP/2 / HTTP/3 buffered path in a way that
+-- never crashes the worker. Returns (body, nil) on success or (nil, reason) when
+-- the body can't be read - the caller then allows the upload through unscanned and
+-- logged, the same best-effort stance as other un-scannable uploads. Mirrors
+-- BunkerWeb core's crowdsec bouncer get_body(): ngx.req.read_body() reads the body
+-- on every HTTP version (it does not require Content-Length), but it can raise a
+-- Lua error on a read failure, so it is pcall'd rather than guarded - that both
+-- maximizes what we can scan (e.g. streamed HTTP/2 uploads) and prevents a 500.
+-- When the body spilled to a temp file (larger than client_body_buffer_size)
+-- get_body_data() returns nil and we read the file (blocking, but it is already on
+-- local disk).
+local read_request_body = function()
+	local ok, err = pcall(ngx_req.read_body)
+	if not ok then
+		return nil, "read_body() failed : " .. tostring(err)
+	end
+	local body = ngx_req.get_body_data()
+	if not body then
+		local path = ngx_req.get_body_file()
+		if path then
+			local handle = open(path, "rb")
+			if handle then
+				body = handle:read("*a")
+				handle:close()
+			end
+		end
+	end
+	return body
 end
 
 function clamav:initialize(ctx)
@@ -141,10 +175,23 @@ function clamav:socket()
 end
 
 function clamav:scan()
+	-- resty.upload reads the raw request socket, which is unavailable on HTTP/2 /
+	-- HTTP/3 (ngx.req.socket() raises "http v2 not supported yet"). Use the
+	-- buffered fallback there so the upload is still scanned instead of 500ing.
+	if clamav_helpers.is_http2_plus(self.ctx.bw.http_version, ngx.var.server_protocol) then
+		return self:scan_buffered()
+	end
 	-- Loop on files
-	local form = upload:new(4096, 512, true)
+	local ok_new, form, new_err = pcall(upload.new, upload, 4096, 512, true)
+	if not ok_new then
+		-- Belt-and-suspenders: any unexpected raw-socket error still degrades to
+		-- the buffered path rather than bubbling up as a 500 (form holds the raised message).
+		self.logger:log(WARN, "resty.upload raised an error (" .. tostring(form) .. "); falling back to buffered scan")
+		return self:scan_buffered()
+	end
 	if not form then
-		return false, "failed to create upload form"
+		self.logger:log(WARN, "resty.upload unavailable (" .. tostring(new_err) .. "); falling back to buffered scan")
+		return self:scan_buffered()
 	end
 	local sha = sha512:new()
 	local scan_socket = nil
@@ -233,7 +280,8 @@ function clamav:scan()
 				end
 				scan_socket:close()
 				scan_socket = nil
-				if data:match("^.*INSTREAM size limit exceeded.*$") then
+				local detected, unscannable = clamav_helpers.parse_instream_result(data)
+				if unscannable then
 					self.logger:log(
 						ERR,
 						"can't scan file with checksum "
@@ -241,13 +289,6 @@ function clamav:scan()
 							.. " because size exceeded StreamMaxLength in clamd.conf"
 					)
 				else
-					-- luacheck: ignore iend
-					local istart, iend
-					istart, iend, data = data:find("^stream: (.*) FOUND$")
-					local detected = "clean"
-					if istart then
-						detected = data
-					end
 					ok, err = self:add_to_cache(checksum, detected)
 					if not ok then
 						self.logger:log(ERR, "can't cache result : " .. err)
@@ -268,6 +309,103 @@ function clamav:scan()
 	end
 	-- luacheck: ignore 511
 	return false, "malformed content"
+end
+
+-- HTTP/2 / HTTP/3 fallback for scan(): the raw request socket is unavailable so
+-- resty.upload can't stream. Buffer the whole body (in memory, or the nginx temp
+-- file for large uploads), parse the multipart parts ourselves and scan each file
+-- with the same INSTREAM logic as the streaming path.
+function clamav:scan_buffered()
+	local body, err = read_request_body()
+	if not body then
+		-- Can't read the body (e.g. chunked HTTP/2 upload) -> nothing we can scan;
+		-- allow it through, best-effort, like the existing un-scannable-file behavior.
+		if err then
+			self.logger:log(WARN, "can't read request body to scan upload (" .. err .. "); upload not scanned")
+		end
+		return true
+	end
+	local boundary = clamav_helpers.get_boundary(self.ctx.bw.http_content_type)
+	if not boundary then
+		return true
+	end
+	local parts = clamav_helpers.parse_multipart(body, boundary)
+	for _, part in ipairs(parts) do
+		local ok, detected, checksum = self:scan_buffer(part.content)
+		if not ok then
+			return false, detected
+		end
+		if detected and detected ~= "clean" then
+			return true, detected, checksum
+		end
+	end
+	return true
+end
+
+-- Scan a single in-memory file body with ClamAV INSTREAM. Shared per-file unit of
+-- the buffered path; mirrors the streaming loop's hashing, caching and verdict
+-- handling (fail-open on a cache-backend error, skip on StreamMaxLength).
+function clamav:scan_buffer(content)
+	local sha = sha512:new()
+	sha:update(content)
+	local checksum = to_hex(sha:final())
+	-- Check the cache first (fail-open on cache error, like the streaming path).
+	local ok, cached = self:is_in_cache(checksum)
+	if not ok then
+		self.logger:log(ERR, "can't check if file with checksum " .. checksum .. " is in cache : " .. cached)
+		return true, "clean", checksum
+	end
+	if cached then
+		return true, cached, checksum
+	end
+	-- Stream the buffered file to ClamAV.
+	local scan_socket, err = self:socket()
+	if not scan_socket then
+		return false, "socket failed : " .. err
+	end
+	local bytes
+	bytes, err = scan_socket:send("nINSTREAM\n")
+	if not bytes then
+		scan_socket:close()
+		return false, "socket:send() failed : " .. err
+	end
+	local len = #content
+	local i = 1
+	while i <= len do
+		local chunk = content:sub(i, i + 4095)
+		bytes, err = scan_socket:send(stream_size(#chunk) .. chunk)
+		if not bytes then
+			scan_socket:close()
+			return false, "socket:send() failed : " .. err
+		end
+		i = i + 4096
+	end
+	-- End the INSTREAM and read the verdict.
+	bytes, err = scan_socket:send(stream_size(0))
+	if not bytes then
+		scan_socket:close()
+		return false, "socket:send() failed : " .. err
+	end
+	local data
+	data, err = scan_socket:receive("*l")
+	if not data then
+		scan_socket:close()
+		return false, err
+	end
+	scan_socket:close()
+	local detected, unscannable = clamav_helpers.parse_instream_result(data)
+	if unscannable then
+		self.logger:log(
+			ERR,
+			"can't scan file with checksum " .. checksum .. " because size exceeded StreamMaxLength in clamd.conf"
+		)
+		return true, "clean", checksum
+	end
+	ok, err = self:add_to_cache(checksum, detected)
+	if not ok then
+		self.logger:log(ERR, "can't cache result : " .. err)
+	end
+	return true, detected, checksum
 end
 
 function clamav:is_in_cache(checksum)

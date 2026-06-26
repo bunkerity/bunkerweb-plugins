@@ -26,6 +26,12 @@ services:
       - VIRUSTOTAL_API_KEY=dummy
       - VIRUSTOTAL_API_URL=http://mock:8080
       - LOG_LEVEL=info
+      # Serve TLS with a self-signed cert and explicitly enable HTTP/2+HTTP/3 so the
+      # h2/h3 e2e cases can negotiate them regardless of any future upstream default
+      # change. The self-signed CN defaults to www.example.com.
+      - GENERATE_SELF_SIGNED_SSL=yes
+      - HTTP2=yes
+      - HTTP3=yes
       # Trust X-Forwarded-For from the test client so the IP-deny case can
       # present a global IP (the real docker client IP is private and would
       # skip the IP scan via ip_is_global). File-scan cases send no XFF, so they

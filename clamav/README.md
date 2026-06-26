@@ -5,14 +5,14 @@
 ```mermaid
 flowchart TD
     accTitle: BunkerWeb ClamAV plugin request flow
-    accDescr: A multipart upload first passes BunkerWeb core checks, then clamav.lua streams each file part to the clamd daemon over the binary INSTREAM TCP protocol. A SHA-512 cache short-circuits files already scanned. A clean verdict reaches the upstream while a detection denies the request.
+    accDescr: A multipart upload first passes BunkerWeb core checks, then clamav.lua streams (HTTP/1.x) or buffers and parses (HTTP/2 and HTTP/3) each file part and sends it to the clamd daemon over the binary INSTREAM TCP protocol. A SHA-512 cache short-circuits files already scanned. A clean verdict reaches the upstream while a detection denies the request.
 
     client([Client / Browser])
 
     subgraph bw[BunkerWeb access phase]
         direction TB
         core["1. Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
-        lua["2. clamav.lua:<br/>parse multipart parts that have a filename<br/>(resty.upload streaming)"]
+        lua["2. clamav.lua:<br/>parse multipart parts that have a filename<br/>(stream on HTTP/1.x, buffer on HTTP/2+)"]
         cache{{"SHA-512 cache hit?"}}
         core --> lua --> cache
     end
@@ -78,14 +78,18 @@ For a `multipart/form-data` upload to a protected site:
 2. `clamav.lua` runs. It only acts on `multipart/form-data` requests with a
    boundary; any other request (plain `POST`, JSON, GET, ...) is passed
    through untouched.
-3. The handler streams the request body with `resty.upload` and inspects each
-   part. It scans **only** the parts that carry a real filename in their
-   `Content-Disposition` header - quoted (`filename="x"`), unquoted
-   (`filename=x`) and RFC 5987 extended (`filename*=...`) forms are all
-   recognized. Form fields without a filename are skipped.
-4. As each scanned file streams in, its bytes are forwarded to the `clamd`
-   daemon over the binary INSTREAM protocol on a TCP socket (each chunk framed
-   by a 4-byte big-endian length prefix) while a SHA-512 checksum is computed.
+3. The handler reads the request body and inspects each part, scanning **only**
+   the parts that carry a real filename in their `Content-Disposition` header -
+   quoted (`filename="x"`), unquoted (`filename=x`) and RFC 5987 extended
+   (`filename*=...`) forms are all recognized. Form fields without a filename are
+   skipped. Over **HTTP/1.x** the body is streamed part-by-part with
+   `resty.upload`; over **HTTP/2 / HTTP/3** - where the raw request socket
+   `resty.upload` relies on is unavailable - the body is buffered (in memory, or
+   nginx's temp file for large uploads) and its multipart parts are parsed before
+   scanning. The same files reach `clamd` either way.
+4. As each scanned file is read, its bytes are forwarded to the `clamd` daemon
+   over the binary INSTREAM protocol on a TCP socket (each chunk framed by a
+   4-byte big-endian length prefix) while a SHA-512 checksum is computed.
 5. When the part ends, the checksum is looked up in BunkerWeb's shared cache. On
    a **hit** the socket is closed without finalizing the scan and the cached
    verdict is reused. On a **miss** a zero-length frame terminates the stream,
@@ -276,6 +280,14 @@ StreamMaxLength in clamd.conf` and **skips** that file - it does not deny it.
   one larger than `StreamMaxLength` - is logged and allowed through. Scanning
   is best-effort for the parts `clamd` can read; it is not a hard gate on
   un-scannable uploads.
+- **HTTP/1.x, HTTP/2 and HTTP/3 uploads are all scanned.** On HTTP/1.x files are
+  streamed to `clamd` chunk-by-chunk via `resty.upload`; on HTTP/2 / HTTP/3 the
+  request body is buffered (in memory, or nginx's client-body temp file once it
+  exceeds `client_body_buffer_size`) and parsed before scanning, because
+  `resty.upload` cannot read the raw request socket on those protocols. Buffered
+  uploads are bounded by `MAX_CLIENT_SIZE`. If the request body genuinely cannot be
+  read (a rare read error), the upload is allowed through unscanned and logged - the
+  same best-effort stance as other un-scannable files.
 - **Clustered / replicated `clamd` is not yet validated.** Pointing
   `CLAMAV_HOST` at a load-balanced pool of `clamd` nodes should work, since the
   INSTREAM protocol is self-contained per connection, but this topology is not
