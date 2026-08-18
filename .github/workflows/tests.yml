@@ -108,7 +108,10 @@ jobs:
       - name: Run Python unit tests
         if: matrix.lang == 'python'
         run: |
-          pip install pytest
+          # requests and urllib3 are needed by tests/test_syswarden_client.py: it loads
+          # syswarden/jobs/syswarden_client.py, the one job module that deliberately owns
+          # the HTTP dependencies so the helper modules stay importable with the stdlib alone.
+          pip install pytest requests urllib3
           pytest tests/ -q
 
       # --- Lua : busted specs ---
