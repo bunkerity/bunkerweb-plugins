@@ -236,41 +236,77 @@ class TestDiffPush:
         assert to_add == ["1.1.1.1", "9.9.9.9"]
 
 
-class TestNextOwned:
-    def test_currently_banned_ips_stay_ours(self):
-        assert helpers.next_owned(banned={"1.1.1.1"}, owned=set(), deleted_everywhere=set()) == ["1.1.1.1"]
+class TestNextRegistry:
+    GRACE = helpers.SYSWARDEN_LEGACY_GRACE
 
-    def test_a_fully_deleted_ip_is_released(self):
-        assert helpers.next_owned(banned=set(), owned={"1.1.1.1"}, deleted_everywhere={"1.1.1.1"}) == []
+    def test_a_successful_push_claims_the_address_with_no_clock(self):
+        assert helpers.next_registry(pushed_ok={"1.1.1.1"}, owned={}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True) == {"1.1.1.1": None}
 
-    def test_a_partially_deleted_ip_stays_ours_for_the_retry(self):
-        # DELETE succeeded on one peer and failed on another: keep ownership so the
-        # next pass retries instead of orphaning the entry.
-        assert helpers.next_owned(banned=set(), owned={"1.1.1.1"}, deleted_everywhere=set()) == ["1.1.1.1"]
+    def test_an_address_a_peer_still_holds_has_no_clock(self):
+        registry = helpers.next_registry(pushed_ok=set(), owned={"1.1.1.1": None}, seen_remote={"1.1.1.1"}, still_banned=set(), now=1000.0, complete=True)
+        assert registry == {"1.1.1.1": None}
 
+    def test_an_address_absent_everywhere_starts_the_clock_but_is_kept(self):
+        registry = helpers.next_registry(pushed_ok=set(), owned={"1.1.1.1": None}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True)
+        assert registry == {"1.1.1.1": 1000.0}
 
-class TestReleasable:
-    def test_an_entry_no_peer_holds_any_more_is_released(self):
-        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote=set(), still_banned=set()) == ["1.1.1.1"]
+    def test_the_address_is_released_once_the_grace_window_elapsed(self):
+        registry = helpers.next_registry(
+            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned=set(), now=1000.0 + self.GRACE, complete=True
+        )
+        assert registry == {}
 
-    def test_an_entry_a_peer_still_holds_stays_ours(self):
-        # The cluster-wide cleanup barrier: SysWarden's own ha-sync can push an entry back
-        # from another peer between two of our requests. Keeping ownership is what lets the
-        # next pass see the resurrection and delete it again.
-        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote={"1.1.1.1"}, still_banned=set()) == []
+    def test_one_second_short_of_the_window_still_keeps_the_claim(self):
+        registry = helpers.next_registry(
+            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned=set(), now=1000.0 + self.GRACE - 1, complete=True
+        )
+        assert registry == {"1.1.1.1": 1000.0}
 
-    def test_a_still_banned_entry_is_never_released(self):
-        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote=set(), still_banned={"1.1.1.1"}) == []
+    def test_a_reappearance_resets_the_clock(self):
+        # SysWarden's native ha-sync pushed the entry back from another peer. Restarting
+        # the window is what stops a resurrection from slipping through the tail of it.
+        registry = helpers.next_registry(
+            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote={"1.1.1.1"}, still_banned=set(), now=1000.0 + self.GRACE, complete=True
+        )
+        assert registry == {"1.1.1.1": None}
 
-    def test_deleting_an_entry_this_pass_does_not_release_it_yet(self):
-        # It was read from the peer before the DELETE, so it is still in seen_remote and
-        # survives one more pass. Releasing on the delete receipt is the bug this guards.
-        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote={"1.1.1.1"}, still_banned=set()) == []
-        # Next pass the peer no longer reports it, and it is finally dropped.
-        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote=set(), still_banned=set()) == ["1.1.1.1"]
+    def test_a_still_banned_address_never_runs_the_clock(self):
+        registry = helpers.next_registry(
+            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned={"1.1.1.1"}, now=1000.0 + self.GRACE, complete=True
+        )
+        assert registry == {"1.1.1.1": None}
+
+    def test_an_incomplete_pass_neither_starts_the_clock_nor_releases(self):
+        # A peer that did not answer must not look like a peer that no longer holds the
+        # address, so a partial union is not allowed to decide anything.
+        registry = helpers.next_registry(
+            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned=set(), now=1000.0 + self.GRACE, complete=False
+        )
+        assert registry == {"1.1.1.1": None}
+
+    def test_a_legacy_list_cache_loads_as_claims_with_no_clock(self):
+        # What the previous version of the job wrote, once mapped by the loader.
+        registry = helpers.next_registry(pushed_ok=set(), owned={"1.1.1.1": None}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True)
+        assert registry == {"1.1.1.1": 1000.0}
 
     def test_output_is_sorted(self):
-        assert helpers.releasable(owned={"9.9.9.9", "1.1.1.1"}, seen_remote=set(), still_banned=set()) == ["1.1.1.1", "9.9.9.9"]
+        registry = helpers.next_registry(pushed_ok={"9.9.9.9", "1.1.1.1"}, owned={}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True)
+        assert list(registry) == ["1.1.1.1", "9.9.9.9"]
+
+
+class TestResurrected:
+    def test_an_entry_whose_clock_was_running_and_is_back_is_reported(self):
+        assert helpers.resurrected(owned={"1.1.1.1": 1000.0}, seen_remote={"1.1.1.1"}) == ["1.1.1.1"]
+
+    def test_an_entry_never_seen_clean_is_not_a_resurrection(self):
+        assert helpers.resurrected(owned={"1.1.1.1": None}, seen_remote={"1.1.1.1"}) == []
+
+    def test_an_entry_no_peer_reports_is_not_a_resurrection(self):
+        assert helpers.resurrected(owned={"1.1.1.1": 1000.0}, seen_remote=set()) == []
+
+    def test_output_is_sorted(self):
+        owned = {"9.9.9.9": 1000.0, "1.1.1.1": 1000.0}
+        assert helpers.resurrected(owned=owned, seen_remote={"9.9.9.9", "1.1.1.1"}) == ["1.1.1.1", "9.9.9.9"]
 
 
 class TestChunked:

@@ -5,6 +5,7 @@ from json import dumps, loads
 from os import getenv, sep
 from os.path import dirname, join
 from sys import exit as sys_exit, path as sys_path
+from time import time
 
 # BunkerWeb deps + this job's own directory (for syswarden_helpers / syswarden_client).
 sys_path.insert(0, dirname(__file__))
@@ -27,11 +28,11 @@ from syswarden_helpers import (  # type: ignore
     canonical_set,
     cap_items,
     chunked,
-    next_owned,
+    next_registry,
     parse_ban_key,
     plan_peer,
     provenance_ips,
-    releasable,
+    resurrected,
     sanitize_source,
     select_bans,
 )
@@ -138,13 +139,17 @@ try:
         LOGGER.warning(f"More than {max_items} bans to push, {dropped} of them were dropped for this pass")
     LOGGER.info(f"{len(banned)} banned IP(s) to synchronize with {len(peers)} SysWarden peer(s)")
 
-    owned = []
+    # {address: moment it was first seen absent from every peer, or None}. Older versions
+    # of this job wrote a plain list; those entries load with no clock started.
+    owned = {}
     cached_owned = JOB.get_cache("pushed.json")
     if cached_owned:
         with suppress(BaseException):
             loaded = loads(cached_owned.decode("utf-8", "replace") if isinstance(cached_owned, bytes) else cached_owned)
             if isinstance(loaded, list):
-                owned = [entry for entry in loaded if isinstance(entry, str)]
+                owned = {entry: None for entry in loaded if isinstance(entry, str)}
+            elif isinstance(loaded, dict):
+                owned = {ip: since for ip, since in loaded.items() if isinstance(ip, str) and (since is None or isinstance(since, (int, float)))}
 
     session = make_session(LOGGER, methods=("GET", "POST", "DELETE"))
 
@@ -232,12 +237,13 @@ try:
             LOGGER.info(f"➖ Removed {len(batch)} entry(ies) this plugin had pushed to {peer} before it supported ban provenance")
 
     if not audit:
-        # Ownership is only released when every peer answered *and* none of them still
-        # reports the address: a DELETE receipt is not enough, because SysWarden peers
-        # replicate the static blocklist between themselves and can push an entry back
-        # between two of our requests. Releasing early would strand it in that kernel.
-        deleted_everywhere = set() if peer_failed else releasable(owned, seen_remote, still_banned)
-        new_owned = next_owned(pushed_ok, owned, deleted_everywhere)
+        # A peer handing back an entry this plugin had already deleted is SysWarden's own
+        # ha-sync, or an operator, writing it again. Say so rather than deleting in silence.
+        back = resurrected(owned, seen_remote)
+        if back:
+            LOGGER.warning(f"{len(back)} entry(ies) this plugin had removed are on a peer again, its claim is kept: {' '.join(back)}")
+
+        new_owned = next_registry(pushed_ok, owned, seen_remote, still_banned, time(), not peer_failed)
         if new_owned != owned:
             cached, err = JOB.cache_file("pushed.json", dumps(new_owned).encode())
             if not cached:

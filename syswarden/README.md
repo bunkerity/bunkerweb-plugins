@@ -143,14 +143,33 @@ dialect. So when a peer starts reporting provenance, the plugin keeps reconcilin
 entries it wrote before, and removes them with the legacy payload once BunkerWeb stops
 banning them. Without that they would stay blocked in the kernel forever.
 
-**Clusters that replicate between themselves.** SysWarden peers can sync their static
-blocklist to each other with their own ha-sync, so an entry the plugin deletes on one peer
-can be pushed back by another between two requests of the same pass. The plugin therefore
-releases ownership of an address only after a full pass in which no peer reports it any
-more and BunkerWeb no longer bans it, never on the delete receipt alone. A resurrected
-entry is seen again on the next pass and deleted again. This only closes if
-`SYSWARDEN_PEERS` lists **every** peer of the cluster: a peer the plugin cannot see keeps
-re-seeding entries it will never be asked to drop.
+**Clusters that replicate between themselves.** SysWarden peers sync their static blocklist
+to each other on their own cron, and that run can also be started by hand or already be in
+flight. An entry the plugin deletes on one peer can therefore be written back by another.
+SysWarden never propagates a `DELETE {"ips"}` for you: the static store carries no
+provenance, so an automatic propagation could remove an entry owned by an operator, by the
+WAAP, or by another producer. Cleanup is explicit and peer by peer.
+
+Closing that migration is a cluster-wide decision, and the work is split three ways. The
+operator supplies the exhaustive, frozen inventory of every node able to hold or republish
+an entry, and lists all of them in `SYSWARDEN_PEERS`. SysWarden supplies a verifiable local
+fence covering its cron, its manual runs, and syncs already sent with an older snapshot,
+planned as a gate of its v4.03.0. The plugin keeps the durable registry, cleans up on each
+peer, and holds its claim until the cluster-wide condition is met.
+
+Concretely, the plugin drops its claim on an address only after it has been absent from
+every peer for an hour, and only if BunkerWeb no longer bans it. A peer reporting the
+address again restarts that window and is logged as such. A peer that did not answer keeps
+the window open for everything, since a partial view cannot tell an entry that is gone from
+an entry the plugin simply could not see. An address BunkerWeb still bans is never cleaned
+up in the legacy dialect at all, because `GET /ha/sync` returns the union of both stores and
+cannot by itself prove the static entry is gone.
+
+**No finite window here is a proof.** Until a peer can attest to that fence, an hour is
+convergence and nothing more. If the inventory is incomplete, if a peer is unavailable, or
+if a fence is unverified, the migration stays open and the registry is not released. A peer
+leaves the perimeter only on an operator decision attesting it is isolated, decommissioned,
+and unable to republish.
 
 In every case, if a `DELETE` fails on one peer the entry stays in the registry so the next
 pass retries it, rather than orphaning it in that peer's blocklist. And an address the

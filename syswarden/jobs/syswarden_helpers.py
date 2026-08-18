@@ -27,6 +27,13 @@ SYSWARDEN_MAX_REASON_BYTES = 512
 SYSWARDEN_MAX_SOURCE_BYTES = 64
 SYSWARDEN_MAX_BANS_PER_REQUEST = 500
 SYSWARDEN_MAX_IPS_PER_REQUEST = 1024
+# How long an address must stay absent from every peer before the plugin drops its claim.
+# SysWarden replicates the static blocklist between peers on its own cron, roughly every
+# 30 minutes, and that run can also be triggered by hand or already be in flight. A single
+# clean pass is convergence, not proof, so the claim is held well past one such period.
+# SysWarden plans a verifiable local fence for v4.03.0; until a peer can attest to it, no
+# finite window here is a proof that the migration is over.
+SYSWARDEN_LEGACY_GRACE = 3600
 
 # Provenance tag written on every ban this plugin pushes. SysWarden keys its ledger on
 # (ip, source, peer_scope) and only ever deletes records matching all three, so this value
@@ -341,32 +348,57 @@ def diff_push(banned: Iterable[str], remote: Iterable[str], owned: Iterable[str]
     return sorted(to_add), sorted(to_remove)
 
 
-def next_owned(banned: Iterable[str], owned: Iterable[str], deleted_everywhere: Iterable[str]) -> List[str]:
+def next_registry(
+    pushed_ok: Iterable[str],
+    owned: Dict[str, Optional[float]],
+    seen_remote: Iterable[str],
+    still_banned: Iterable[str],
+    now: float,
+    complete: bool,
+) -> Dict[str, Optional[float]]:
     """The ownership registry to persist after a pass.
 
-    ``banned ∪ (owned − deleted_everywhere)``: an IP whose DELETE failed on one peer
-    stays ours, so the next pass retries it instead of orphaning it in that peer's
-    blocklist forever.
+    ``owned`` maps an address to the moment it was first seen absent from every peer, or
+    to ``None`` while some peer still holds it, BunkerWeb still bans it, or the pass could
+    not see the whole cluster. An entry is dropped only once that clock has run for
+    ``SYSWARDEN_LEGACY_GRACE``.
+
+    Releasing on the DELETE receipt instead would be wrong, and permanently so: SysWarden
+    peers replicate the static blocklist between themselves, so an entry deleted on one
+    peer can be pushed back by another. Once released, the address leaves the registry,
+    ``plan_peer`` never lists it again, and it stays in that peer's kernel forever.
+
+    ``complete`` is false when any peer failed this pass. ``seen_remote`` is partial then,
+    so the clock neither starts nor advances and nothing is released: a peer that did not
+    answer must never look like a peer that no longer holds the address.
     """
-    return sorted(set(banned) | (set(owned) - set(deleted_everywhere)))
+    seen_remote, still_banned = set(seen_remote), set(still_banned)
+    # Ownership is a receipt: only a successful push claims an address, and it is held by
+    # a peer right now, so its clock is not running.
+    registry: Dict[str, Optional[float]] = {ip: None for ip in pushed_ok}
+    for ip, since in owned.items():
+        if ip in registry:
+            continue
+        if not complete or ip in seen_remote or ip in still_banned:
+            registry[ip] = None
+            continue
+        started = now if since is None else since
+        if now - started < SYSWARDEN_LEGACY_GRACE:
+            registry[ip] = started
+    return dict(sorted(registry.items()))
 
 
-def releasable(owned: Iterable[str], seen_remote: Iterable[str], still_banned: Iterable[str]) -> List[str]:
-    """The ownership entries this pass may drop, i.e. the cluster-wide cleanup barrier.
+def resurrected(owned: Dict[str, Optional[float]], seen_remote: Iterable[str]) -> List[str]:
+    """Addresses whose release clock was running and that a peer reports again.
 
-    An address is released only once no peer reports it any more *and* BunkerWeb no longer
-    bans it — never merely because this pass deleted it. SysWarden peers replicate their
-    static blocklist to each other with their own ha-sync, so an entry deleted on one peer
-    can be pushed back by another between two of this job's requests. Releasing on the
-    delete receipt would make that resurrection permanent: the address would leave the
-    registry, ``plan_peer`` would never list it again, and it would stay in that peer's
-    kernel forever. Holding it one more pass costs a minute and converges instead.
-
-    ``seen_remote`` must be the union of every peer's blocklist as read this pass, and the
-    caller must not use this when a peer failed: the union is partial then, and a peer that
-    did not answer would look like a peer that no longer holds the address.
+    Each one is a native ha-sync, or an operator, writing back an entry this plugin had
+    deleted. It is worth a warning rather than a silent retry: once SysWarden ships the
+    local fence planned for v4.03.0, a reappearance stops being attributable to HA
+    replication and becomes ambiguous, which is an operator decision and not another
+    automatic delete.
     """
-    return sorted((set(owned) - set(seen_remote)) - set(still_banned))
+    seen_remote = set(seen_remote)
+    return sorted(ip for ip, since in owned.items() if since is not None and ip in seen_remote)
 
 
 def chunked(items: Sequence[str], size: int) -> List[List[str]]:
