@@ -11,12 +11,12 @@ authorization SysWarden enforces:
                                      reason, source}, ...]} (expiring, with provenance)
   DELETE /ha/sync                 -> {"ips": [...]} or {"bans": [{ip, source}, ...]}, the
                                      second only removing records of that source
-  GET    /ha/status               -> {hostname, os, version, status}
+  GET    /ha/status               -> {hostname, os, version, status, capabilities}
   GET    /ha/telemetry            -> the dashboard payload, whitelist included
 
-`SW_MOCK_LEGACY=yes` drops the provenance half: the query string is ignored and the ban
-payloads are refused, which is how a pre-provenance SysWarden behaves. That is what makes
-the plugin's per-peer capability detection testable.
+`SW_MOCK_LEGACY=yes` drops the provenance half: no capabilities are advertised, the query
+string is ignored and the ban payloads are refused, which is how the only published
+SysWarden release behaves. That is what makes the plugin's per-peer detection testable.
 
 Every request is logged to stdout, with the decoded payload, so the test can assert what
 the plugin actually sent rather than just what it claims to have done.
@@ -50,8 +50,9 @@ WHITELIST_IPS = [entry for entry in getenv("SW_MOCK_WHITELIST_IPS", "").split() 
 _ledger = {}
 # (ip, source) -> the reason that came with the ban, echoed back in the provenance view.
 _reasons = {}
-# Permanent entries pushed through the legacy {"ips": [...]} payload.
-_permanent = set()
+# SysWarden's historical body and operator commands share one provenance-free static
+# store. Keeping one set here makes a stray legacy DELETE observably destructive.
+_static = OPERATOR_IPS | SEEDED_IPS
 _lock = Lock()
 
 _SOURCE_RE = re.compile(r"^[A-Za-z0-9._:/-]{1,64}$")
@@ -65,7 +66,7 @@ def active_ledger(now):
 
 
 def blocklist(now):
-    ips = OPERATOR_IPS | SEEDED_IPS | _permanent
+    ips = set(_static)
     ips.update(ip for ip, _ in active_ledger(now))
     return sorted(ips)
 
@@ -144,14 +145,14 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/ha/status":
             if LEGACY:
                 # A peer that predates capability reporting: no api_version, no
-                # capabilities. This is the field the plugin keys its dialect on.
+                # capabilities. This is what the plugin keys its dialect on.
                 return self._send(200, {"hostname": "sw-mock-legacy", "os": "linux", "version": "v4.02.8", "status": "online"})
             return self._send(
                 200,
                 {
                     "hostname": "sw-mock",
                     "os": "linux",
-                    "version": "v4.02.14",
+                    "version": "v4.03.0",
                     "status": "online",
                     "api_version": "2",
                     "capabilities": ["auth_all_routes", "peer_cidr", "sync_ttl", "sync_provenance", "tls_verified_client"],
@@ -166,8 +167,8 @@ class Handler(BaseHTTPRequestHandler):
         with _lock:
             payload: dict = {"ips": blocklist(now) or None}
             if not parsed.query or LEGACY:
-                # A legacy peer ignores the query string entirely, which is exactly what
-                # makes an empty ledger indistinguishable from it without the probe.
+                # A legacy peer ignores the query string entirely, so its answer carries no
+                # `bans` key at all — which is why capabilities, not the body, decide.
                 return self._send(200, payload)
             query = parse_qs(parsed.query, keep_blank_values=True)
             if set(query) - {"details", "limit", "cursor"} or query.get("details") != ["true"]:
@@ -194,9 +195,9 @@ class Handler(BaseHTTPRequestHandler):
     def _telemetry(self):
         now = time()
         with _lock:
-            banned = len(active_ledger(now)) + len(_permanent)
+            banned = len(active_ledger(now)) + len(_static)
         return {
-            "github_release": "v4.02.14",
+            "github_release": "v4.03.0",
             "system": {"hostname": "sw-mock", "os": "linux", "services": [], "ports": []},
             "layer3": {"global_blocked": 42, "geoip_blocked": 7, "asn_blocked": 3, "l7_banned": banned},
             "waf": {"total_banned": banned, "total_detected": 12, "active_signatures": 99, "top_attackers": [], "targeted_ports": []},
@@ -251,7 +252,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(ips, list) or any(not isinstance(entry, str) for entry in ips):
             return self._error(400, "Invalid JSON")
         with _lock:
-            _permanent.update(ips)
+            _static.update(ips)
         return self._send(200, {"status": "ok"})
 
     def do_DELETE(self):
@@ -281,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(ips, list) or any(not isinstance(entry, str) for entry in ips):
             return self._error(400, "Invalid JSON")
         with _lock:
-            _permanent.difference_update(ips)
+            _static.difference_update(ips)
         return self._send(200, {"status": "ok"})
 
 

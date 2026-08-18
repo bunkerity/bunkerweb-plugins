@@ -85,18 +85,16 @@ wait_for() {
 }
 
 mock_logs() {
-	docker compose logs sw-mock 2>/dev/null
+	docker compose logs "${1:-sw-mock}" 2>/dev/null
+}
+legacy_logs() {
+	mock_logs sw-mock-legacy
 }
 
 mock_saw() {
 	mock_logs | grep -F "$1" >/dev/null
 }
-
-legacy_logs() {
-	docker compose logs sw-mock-legacy 2>/dev/null
-}
-
-legacy_saw() {
+mock_saw_legacy() {
 	legacy_logs | grep -F "$1" >/dev/null
 }
 
@@ -155,20 +153,22 @@ pushed="$(mock_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '192.0.2.10' |
 [ -n "$pushed" ] || fail "no POST /ha/sync body carrying the banned address"
 entry="$(entry_for "$pushed" 192.0.2.10)"
 [ -n "$entry" ] || fail "no ban entry for the banned address in: $pushed"
-echo "$entry" | grep -F '"source": "bunkerweb"' >/dev/null || fail "the pushed ban carries no provenance tag: $entry"
+echo "$entry" | grep -F '"source": "e2e-cluster"' >/dev/null || fail "the pushed ban carries no explicit cluster provenance tag: $entry"
 echo "$entry" | grep -F '"ttl":' >/dev/null || fail "the pushed ban carries no lifetime: $entry"
 echo "$entry" | grep -F '"reason":' >/dev/null || fail "the pushed ban carries no reason: $entry"
-echo "✅ The ban was pushed with a lifetime, a reason and the bunkerweb provenance tag"
+echo "✅ The ban was pushed with a lifetime, a reason and the explicit cluster provenance tag"
 
-# Capability detection: the same job, same pass, must fall back to the legacy payload on
-# the peer that does not know provenance — and that peer must never have refused anything.
-# Waited for, not read once: peers are processed in order, so the second one is always
-# behind the first by a status call, a blocklist read and a fresh TLS handshake.
-wait_for 120 "the push to reach the legacy peer" legacy_saw 'MOCK BODY POST /ha/sync'
-legacy="$(legacy_logs | grep -F 'MOCK BODY POST /ha/sync' | tail -n 1)"
-echo "$legacy" | grep -F '"ips":' >/dev/null || fail "the legacy peer did not get the legacy payload: $legacy"
-legacy_saw "MOCK REFUSED" \
-	&& fail "the legacy peer refused a request, so the capability detection got it wrong"
+# The other half of the contract: capabilities decide per peer, not a global switch. The
+# only published SysWarden generation understands nothing but {"ips"}, so a pass that
+# speaks provenance to everyone would leave it unprotected. This is the assertion a
+# v4.03-only plugin cannot pass.
+wait_for 180 "the ban push to reach the older peer" mock_saw_legacy '192.0.2.10'
+legacy_pushed="$(legacy_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '192.0.2.10' | tail -n 1)"
+[ -n "$legacy_pushed" ] || fail "the older peer never received the ban"
+echo "$legacy_pushed" | grep -F '"ips"' >/dev/null \
+	|| fail "the older peer did not get the legacy payload: $legacy_pushed"
+echo "$legacy_pushed" | grep -F '"bans"' >/dev/null \
+	&& fail "the older peer got a provenance payload it cannot parse: $legacy_pushed"
 echo "✅ The same pass spoke the legacy payload to the older peer"
 
 # --- Unban ---------------------------------------------------------------------------
@@ -181,37 +181,34 @@ unban_output="$(docker compose exec -T bw-scheduler bwcli unban 192.0.2.10 2>&1)
 wait_for 60 "BunkerWeb to serve evil-client again" answers evil-client 200
 echo "✅ evil-client is unbanned in BunkerWeb (200)"
 
-echo "ℹ️ Waiting for the removal to reach both peers ..."
+echo "ℹ️ Waiting for the removal to reach the peer ..."
 wait_for 180 "the unban to reach the current peer" mock_saw 'MOCK BODY DELETE /ha/sync'
 removed="$(mock_logs | grep -F 'MOCK BODY DELETE /ha/sync' | tail -n 1)"
 entry="$(entry_for "$removed" 192.0.2.10)"
 [ -n "$entry" ] || fail "the delete does not carry the lifted ban: $removed"
-echo "$entry" | grep -F '"source": "bunkerweb"' >/dev/null || fail "the delete carries no provenance tag: $entry"
+echo "$entry" | grep -F '"source": "e2e-cluster"' >/dev/null || fail "the delete carries no explicit cluster provenance tag: $entry"
 echo "$entry" | grep -F '"ttl"' >/dev/null && fail "a delete must carry only ip and source: $entry"
 echo "✅ The current peer got a provenance-keyed delete (ip and source only)"
 
-# The older peer has no expiry of its own, so the compensating DELETE is the only thing
-# that ever removes the entry there — and it must use the legacy payload.
-wait_for 180 "the unban to reach the legacy peer" legacy_saw 'MOCK BODY DELETE /ha/sync'
-legacy_removed="$(legacy_logs | grep -F 'MOCK BODY DELETE /ha/sync' | tail -n 1)"
-echo "$legacy_removed" | grep -F '"ips":' >/dev/null || fail "the legacy peer got a non-legacy delete: $legacy_removed"
-echo "$legacy_removed" | grep -F '192.0.2.10' >/dev/null || fail "the legacy delete does not carry the lifted ban: $legacy_removed"
+# The older peer has no ledger, so its own removal must ride the legacy dialect, keyed on
+# the durable registry rather than on anything the peer reports.
+wait_for 180 "the unban to reach the older peer" mock_saw_legacy 'MOCK BODY DELETE /ha/sync'
+legacy_removed="$(legacy_logs | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '192.0.2.10' | tail -n 1)"
+[ -n "$legacy_removed" ] || fail "the older peer never got the compensating delete"
+echo "$legacy_removed" | grep -F '"ips"' >/dev/null \
+	|| fail "the older peer got a non-legacy delete: $legacy_removed"
 echo "✅ The older peer got the legacy compensating delete"
 
 # --- Ownership -----------------------------------------------------------------------
-# Checked here, after the reconciliation has actually deleted something, so the assertion
-# can fail. The operator entry sits on BOTH peers on purpose: the legacy dialect is the one
-# that can reach a static entry, so that is where "never delete what we did not push" has
-# to hold. The end state is asserted too, not just the absence of a request.
-mock_logs | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '198.51.100.77' >/dev/null \
-	&& fail "the plugin tried to delete the operator entry on the current peer"
-legacy_logs | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '198.51.100.77' >/dev/null \
-	&& fail "the plugin tried to delete the operator entry on the legacy peer"
-for peer in sw-mock sw-mock-legacy ; do
-	docker compose logs "$peer" 2>/dev/null | grep -F "MOCK REFUSED" >/dev/null \
-		&& fail "$peer refused a request the plugin sent"
-	# Read from the scheduler: it is the container the peers' IP allowlist accepts, so
-	# this doubles as a check that the allowlist did not lock the plugin out.
+# Provenance-only mutation must never send the shared-static-store body at all.
+mock_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '"ips"' >/dev/null \
+	&& fail "the provenance peer got a legacy push; per-peer capability detection is broken"
+for peer in sw-mock sw-mock-legacy; do
+	mock_logs "$peer" | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '198.51.100.77' >/dev/null \
+		&& fail "the plugin tried to delete the operator entry on $peer"
+	# Read from the scheduler: it is the container the peers' IP allowlist accepts, so this
+	# doubles as a check that the allowlist did not lock the plugin out. stderr is kept, so a
+	# TLS or name-resolution failure cannot read as "the operator entry was deleted".
 	still_there="$(docker compose exec -T bw-scheduler python3 -c '
 import json, ssl, sys, urllib.request
 # The mock certificate carries both peer names as SANs, so this verifies for real.
@@ -220,9 +217,9 @@ request = urllib.request.Request(f"https://{sys.argv[1]}:62026/ha/sync")
 request.add_header("Authorization", "Bearer e2e-syswarden-token")
 with urllib.request.urlopen(request, timeout=10, context=context) as answer:
     print(json.dumps(json.load(answer).get("ips") or []))
-' "$peer" 2>/dev/null)"
+' "$peer" 2>&1)"
 	echo "$still_there" | grep -F '198.51.100.77' >/dev/null \
-		|| fail "the operator entry is gone from $peer's blocklist: $still_there"
+		|| fail "the operator entry is no longer readable in $peer's blocklist: $still_there"
 done
 echo "✅ The operator entry is untouched and still enforced on both peers"
 
@@ -234,8 +231,10 @@ echo "✅ The telemetry job polled status and telemetry"
 # --- Nothing broke -------------------------------------------------------------------
 docker compose logs bw-scheduler 2>/dev/null | grep -F "Exception while running syswarden" >/dev/null \
 	&& fail "a syswarden job raised an exception"
-mock_logs | grep -F "MOCK REFUSED" >/dev/null \
-	&& fail "the current peer refused a request the plugin sent"
+for peer in sw-mock sw-mock-legacy; do
+	mock_logs "$peer" | grep -F "MOCK REFUSED" >/dev/null \
+		&& fail "$peer refused a request the plugin sent"
+done
 echo "✅ No job raised, and no peer refused a payload"
 
 if [ "$1" = "verbose" ] ; then

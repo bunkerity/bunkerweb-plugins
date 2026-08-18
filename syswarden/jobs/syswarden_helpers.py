@@ -8,11 +8,12 @@ to themselves.
 """
 
 from contextlib import suppress
+from hashlib import sha256
 from ipaddress import ip_address, ip_network
 from itertools import islice
 from os import getenv
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 # Default port of SysWarden's HA API (`[integrations.ha] peer_port`).
 SYSWARDEN_DEFAULT_PORT = 62026
@@ -27,18 +28,14 @@ SYSWARDEN_MAX_REASON_BYTES = 512
 SYSWARDEN_MAX_SOURCE_BYTES = 64
 SYSWARDEN_MAX_BANS_PER_REQUEST = 500
 SYSWARDEN_MAX_IPS_PER_REQUEST = 1024
+
 # How long an address must stay absent from every peer before the plugin drops its claim.
 # SysWarden replicates the static blocklist between peers on its own cron, roughly every
-# 30 minutes, and that run can also be triggered by hand or already be in flight. A single
+# 30 minutes, and that run can also be started by hand or already be in flight. A single
 # clean pass is convergence, not proof, so the claim is held well past one such period.
-# SysWarden plans a verifiable local fence for v4.03.0; until a peer can attest to it, no
-# finite window here is a proof that the migration is over.
+# Upstream plans a verifiable local fence (`native_sync_fence_v1`) for v4.03.0; until a peer
+# can attest to it, no finite window here proves the migration is over.
 SYSWARDEN_LEGACY_GRACE = 3600
-
-# Provenance tag written on every ban this plugin pushes. SysWarden keys its ledger on
-# (ip, source, peer_scope) and only ever deletes records matching all three, so this value
-# is what tells our own entries apart from an operator's `syswarden block`.
-SYSWARDEN_BAN_SOURCE = "bunkerweb"
 
 # The charset SysWarden accepts for `source` (validHASource in ha_api.go).
 _SOURCE_ALLOWED = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/-")
@@ -225,12 +222,29 @@ def select_bans(records: Iterable[Dict], scope_filter: Sequence[str] = (), min_t
     return bans
 
 
+def extract_instance_bans(responses: Any, expected: int) -> Optional[List[Dict]]:
+    """Return a complete BunkerWeb instance inventory, or ``None`` when partial."""
+    if not isinstance(responses, dict) or len(responses) != expected:
+        return None
+    records: List[Dict] = []
+    for response in responses.values():
+        if not isinstance(response, dict):
+            return None
+        instance_bans = response.get("msg")
+        if not isinstance(instance_bans, list):
+            instance_bans = response.get("data")
+        if not isinstance(instance_bans, list) or any(not isinstance(entry, dict) for entry in instance_bans):
+            return None
+        records.extend(instance_bans)
+    return records
+
+
 def clamp_ttl(ttl: Optional[int], minimum: int = SYSWARDEN_MIN_TTL, maximum: int = SYSWARDEN_MAX_TTL) -> int:
     """Fit a BunkerWeb ban lifetime into the window SysWarden accepts.
 
-    A permanent ban (``ttl is None``) becomes ``maximum``: SysWarden has no permanent
-    temporary-ban state, and the push job re-sends every still-banned IP each minute, so
-    the ceiling is refreshed long before it is reached.
+    A permanent ban (``ttl is None``) becomes ``maximum`` because SysWarden has no
+    permanent provenance-aware ban state. Once that entry expires, the next pass adds it
+    again if BunkerWeb still holds the ban.
     """
     if ttl is None or ttl > maximum:
         return maximum
@@ -251,26 +265,27 @@ def sanitize_reason(reason: Optional[str], default: str = "BunkerWeb ban") -> st
     return encoded.decode("utf-8", "ignore").strip() or default
 
 
-def sanitize_source(source: Optional[str], default: str = SYSWARDEN_BAN_SOURCE) -> str:
-    """Make a provenance tag acceptable to SysWarden's ``validHASource``."""
-    text = "".join(character for character in (source or "") if character in _SOURCE_ALLOWED)[:SYSWARDEN_MAX_SOURCE_BYTES]
-    return text or default
+def valid_source(source: Optional[str]) -> bool:
+    """Whether an explicit provenance tag satisfies SysWarden's ``validHASource``."""
+    return isinstance(source, str) and 1 <= len(source) <= SYSWARDEN_MAX_SOURCE_BYTES and all(character in _SOURCE_ALLOWED for character in source)
 
 
-def build_ban_batch(bans: Dict[str, Dict], source: str = SYSWARDEN_BAN_SOURCE) -> List[Dict]:
+def build_ban_batch(bans: Dict[str, Dict], source: str) -> List[Dict]:
     """Turn ``{ip: {"ttl", "reason"}}`` into the ``bans`` array of a temporary POST.
 
     Every entry carries exactly the four fields SysWarden requires — it rejects an object
     holding anything else — with the TTL clamped and the reason sanitized.
     """
-    tag = sanitize_source(source)
-    return [{"ip": ip, "ttl": clamp_ttl(bans[ip].get("ttl")), "reason": sanitize_reason(bans[ip].get("reason", "")), "source": tag} for ip in sorted(bans)]
+    if not valid_source(source):
+        raise ValueError("invalid SysWarden ban source")
+    return [{"ip": ip, "ttl": clamp_ttl(bans[ip].get("ttl")), "reason": sanitize_reason(bans[ip].get("reason", "")), "source": source} for ip in sorted(bans)]
 
 
-def build_unban_batch(ips: Iterable[str], source: str = SYSWARDEN_BAN_SOURCE) -> List[Dict]:
+def build_unban_batch(ips: Iterable[str], source: str) -> List[Dict]:
     """Turn IPs into the ``bans`` array of a temporary DELETE (``ip`` and ``source`` only)."""
-    tag = sanitize_source(source)
-    return [{"ip": ip, "source": tag} for ip in sorted(ips)]
+    if not valid_source(source):
+        raise ValueError("invalid SysWarden ban source")
+    return [{"ip": ip, "source": source} for ip in sorted(ips)]
 
 
 def canonical_set(values: Iterable[str]) -> Set[str]:
@@ -284,40 +299,47 @@ def canonical_set(values: Iterable[str]) -> Set[str]:
     return {canonical for canonical in (canonical_address(value) for value in values) if canonical}
 
 
-def provenance_ips(bans: Iterable, source: str = SYSWARDEN_BAN_SOURCE) -> Set[str]:
+def provenance_ips(bans: Iterable, source: str) -> Set[str]:
     """The addresses a peer reports as banned under our own provenance tag.
 
-    This replaces the ``pushed.json`` registry wherever the peer supports provenance: the
-    peer is then the one holding the ownership, and its answer survives a lost job cache.
+    The v4.03+ peer holds ownership, so the plugin needs no local deletion registry.
     """
-    tag = sanitize_source(source)
-    return canonical_set(str(ban.get("ip") or "") for ban in bans if isinstance(ban, dict) and ban.get("source") == tag)
+    return canonical_set(str(ban.get("ip") or "") for ban in bans if isinstance(ban, dict) and ban.get("source") == source)
+
+
+def supports_ban_sync(capabilities: Iterable[str]) -> bool:
+    """A mutation peer must advertise both halves of the v4.03 BunkerWeb contract."""
+    available = set(capabilities)
+    return {"sync_ttl", "sync_provenance"} <= available
 
 
 def plan_peer(
-    banned: Iterable[str], still_banned: Iterable[str], remote: Iterable[str], ours: Iterable[str], owned: Iterable[str], provenance: bool
+    banned: Iterable[str], remote: Iterable[str], ours: Iterable[str], owned: Iterable[str], provenance: bool
 ) -> Tuple[List[str], List[str], List[str]]:
     """Decide what to send one peer: ``(to_add, to_remove, stale_legacy)``.
 
-    This is the whole consequential computation of a pass, kept here rather than in the
-    job script so it can be tested without Docker.
+    On a v4.03+ peer the ledger filtered on our own ``source`` is the ownership, so the
+    diff is against ``ours``. On a peer that predates provenance there is no ledger, so the
+    reference is its static blocklist crossed with our durable registry: ``/ha/sync`` writes
+    into a blocklist shared with operator entries and real HA peers, and deleting anything
+    we did not write would wipe them.
 
-    ``still_banned`` is every address BunkerWeb bans, the ``SYSWARDEN_BAN_MAX_ITEMS`` cap
-    ignored, while ``banned`` is what this pass may push. Removals are computed against
-    the former: being over the cap delays a ban, it must never remove one.
-
-    ``stale_legacy`` only exists for a peer that reports provenance. Expiring bans and the
-    peer's static blocklist are disjoint stores on the SysWarden side, and a legacy push
-    wrote the static one — reachable only through the legacy dialect. Without this, an
-    address pushed before the peer was upgraded stays blocked in its kernel forever. It is
-    also the one decision that still depends on ``pushed.json``: a lost cache orphans those
-    entries, which is the tradeoff for not being able to ask the peer who wrote them.
+    ``stale_legacy`` only exists for a provenance peer. Expiring bans and the static
+    blocklist are disjoint stores upstream, and a legacy push wrote the second one, which is
+    reachable only through the legacy dialect. Upstream confirmed on 2026-08-18 that a
+    provenance DELETE will never clear it, because that store carries no provenance at all,
+    so this separate `DELETE {"ips"}` is the sanctioned cleanup and not a workaround.
     """
-    banned, still, remote, ours, owned = set(banned), set(still_banned), set(remote), set(ours), set(owned)
-    held = ours if provenance else remote
-    to_add, to_remove = diff_push(banned, held, ours if provenance else owned)
-    stale_legacy = sorted(((owned & remote) - ours) - still) if provenance else []
-    return to_add, sorted(set(to_remove) - still), stale_legacy
+    banned, remote, ours, owned = set(banned), set(remote), set(ours), set(owned)
+    if provenance:
+        to_add, to_remove = banned - ours, ours - banned
+        # What we pushed before this peer understood provenance: still in its static store,
+        # absent from its ledger, and no longer banned here.
+        stale_legacy = sorted(((owned & remote) - ours) - banned)
+    else:
+        to_add, to_remove = banned - remote, (remote & owned) - banned
+        stale_legacy = []
+    return sorted(to_add), sorted(to_remove), stale_legacy
 
 
 def cap_items(ips: Iterable[str], max_items: int) -> Tuple[List[str], int]:
@@ -333,19 +355,15 @@ def cap_items(ips: Iterable[str], max_items: int) -> Tuple[List[str], int]:
     return ordered[:max_items], len(ordered) - max_items
 
 
-def diff_push(banned: Iterable[str], remote: Iterable[str], owned: Iterable[str]) -> Tuple[List[str], List[str]]:
-    """Compute what to POST and what to DELETE on one peer.
+def membership_digest(peers: Iterable[str]) -> str:
+    """A stable digest of the peer perimeter the registry was built against.
 
-    ``to_add`` is what we ban and the peer does not have yet. ``to_remove`` is the
-    intersection of the peer's list with *our own registry*, minus what is still
-    banned — never ``remote - banned``. ``/ha/sync`` writes into a shared blocklist
-    holding operator entries (``syswarden block``) and real HA-peer entries; deleting
-    blindly would wipe them.
+    Upstream requires the continuous-absence clock to restart whenever the cluster view
+    changes, membership included. Epoch, fence state and server identity are the other three
+    triggers; none of them is observable until `native_sync_fence_v1` ships, so this is the
+    only one the plugin can enforce today.
     """
-    banned_set, remote_set, owned_set = set(banned), set(remote), set(owned)
-    to_add = banned_set - remote_set
-    to_remove = (remote_set & owned_set) - banned_set
-    return sorted(to_add), sorted(to_remove)
+    return sha256("\n".join(sorted(set(peers))).encode()).hexdigest()
 
 
 def next_registry(
@@ -358,23 +376,23 @@ def next_registry(
 ) -> Dict[str, Optional[float]]:
     """The ownership registry to persist after a pass.
 
-    ``owned`` maps an address to the moment it was first seen absent from every peer, or
-    to ``None`` while some peer still holds it, BunkerWeb still bans it, or the pass could
-    not see the whole cluster. An entry is dropped only once that clock has run for
-    ``SYSWARDEN_LEGACY_GRACE``.
+    ``owned`` maps an address to the moment it was first seen absent from every peer, or to
+    ``None`` when the clock is not running. An entry is dropped only once that clock has run
+    for ``SYSWARDEN_LEGACY_GRACE`` uninterrupted.
 
     Releasing on the DELETE receipt instead would be wrong, and permanently so: SysWarden
-    peers replicate the static blocklist between themselves, so an entry deleted on one
-    peer can be pushed back by another. Once released, the address leaves the registry,
+    peers replicate the static blocklist between themselves, so an entry deleted on one peer
+    can be pushed back by another. Once released, the address leaves the registry,
     ``plan_peer`` never lists it again, and it stays in that peer's kernel forever.
 
-    ``complete`` is false when any peer failed this pass. ``seen_remote`` is partial then,
-    so the clock neither starts nor advances and nothing is released: a peer that did not
-    answer must never look like a peer that no longer holds the address.
+    ``complete`` is false when the pass could not see the whole cluster. The clock is then
+    **reset**, not paused: an hour of continuous absence must never span a period during
+    which the view was partial. Callers must therefore still persist the result of a failed
+    pass, or a stale start time would survive and mature into a wrongful release.
     """
     seen_remote, still_banned = set(seen_remote), set(still_banned)
-    # Ownership is a receipt: only a successful push claims an address, and it is held by
-    # a peer right now, so its clock is not running.
+    # Ownership is a receipt: only a successful push claims an address, and a just-pushed
+    # address is held by a peer right now, so its clock is not running.
     registry: Dict[str, Optional[float]] = {ip: None for ip in pushed_ok}
     for ip, since in owned.items():
         if ip in registry:
@@ -391,14 +409,32 @@ def next_registry(
 def resurrected(owned: Dict[str, Optional[float]], seen_remote: Iterable[str]) -> List[str]:
     """Addresses whose release clock was running and that a peer reports again.
 
-    Each one is a native ha-sync, or an operator, writing back an entry this plugin had
-    deleted. It is worth a warning rather than a silent retry: once SysWarden ships the
-    local fence planned for v4.03.0, a reappearance stops being attributable to HA
-    replication and becomes ambiguous, which is an operator decision and not another
-    automatic delete.
+    Each one is SysWarden's own ha-sync, or an operator, writing back an entry this plugin
+    had deleted. Worth a bounded warning rather than a silent retry: once the local fence
+    ships, a reappearance while every peer proves it is fenced stops being attributable to
+    HA replication and becomes an operator decision instead of another automatic delete.
     """
     seen_remote = set(seen_remote)
     return sorted(ip for ip, since in owned.items() if since is not None and ip in seen_remote)
+
+
+def load_registry(raw: Any) -> Tuple[Dict[str, Optional[float]], str]:
+    """Read ``pushed.json`` into ``(claims, membership)``, tolerating older layouts.
+
+    A bare list is what the first versions wrote, and a flat mapping is what the grace
+    window introduced; both load with no membership recorded, which forces one reset.
+    """
+    if isinstance(raw, list):
+        return {entry: None for entry in raw if isinstance(entry, str)}, ""
+    if not isinstance(raw, dict):
+        return {}, ""
+    claims, membership = raw.get("claims"), raw.get("membership")
+    if not isinstance(claims, dict):
+        claims, membership = raw, ""
+    return (
+        {ip: since for ip, since in claims.items() if isinstance(ip, str) and (since is None or isinstance(since, (int, float)))},
+        membership if isinstance(membership, str) else "",
+    )
 
 
 def chunked(items: Sequence[str], size: int) -> List[List[str]]:
@@ -419,6 +455,34 @@ def check_line(line: bytes) -> Tuple[bool, bytes]:
         ip_address(line.decode())
         return True, line
     return False, b""
+
+
+def serialize_addresses(entries: Iterable[str]) -> Tuple[bytes, int, int]:
+    """Validate and serialize one authoritative peer list in linear time."""
+    valid: List[bytes] = []
+    invalid = 0
+    for entry in sorted(set(entries)):
+        ok, data = check_line(entry.encode())
+        if ok:
+            valid.append(data)
+        else:
+            invalid += 1
+    return (b"\n".join(valid) + (b"\n" if valid else b""), len(valid), invalid)
+
+
+def extract_whitelist_ips(payload: Any) -> Optional[List[str]]:
+    """Read the authoritative whitelist contract, distinguishing empty from malformed."""
+    if not isinstance(payload, dict):
+        return None
+    whitelist = payload.get("whitelist")
+    if not isinstance(whitelist, dict) or "ips" not in whitelist:
+        return None
+    ips = whitelist.get("ips")
+    if ips is None:
+        return []
+    if not isinstance(ips, list) or any(not isinstance(entry, str) for entry in ips):
+        return None
+    return [entry.strip() for entry in ips if entry.strip()]
 
 
 def normalize_fingerprint(value: Optional[str]) -> str:

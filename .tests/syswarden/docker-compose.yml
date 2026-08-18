@@ -38,10 +38,11 @@ services:
       - SYSWARDEN_SSL_FINGERPRINT=${SYSWARDEN_SSL_FINGERPRINT}
       - USE_SYSWARDEN_BAN_PUSH=yes
       - SYSWARDEN_ENFORCEMENT=enforcing
+      - SYSWARDEN_BAN_SOURCE=e2e-cluster
       - USE_SYSWARDEN_BLOCKLIST=yes
       - USE_SYSWARDEN_WHITELIST=yes
       # Not excluding our own pushes keeps the pull assertions independent from the push
-      # ones: the downloaded blocklist is then exactly what the mock serves.
+      # ones: the downloaded blocklist is then exactly what the mocks serve.
       - SYSWARDEN_BLOCKLIST_EXCLUDE_OWN=no
       # --- bad behavior: the ban source under test, tuned to fire and expire fast ---
       - USE_BAD_BEHAVIOR=yes
@@ -120,8 +121,8 @@ services:
     networks:
       - bw-services
 
-  # A SysWarden that predates provenance: it ignores the query string and refuses the ban
-  # payloads, which is what the plugin's per-peer detection has to notice.
+  # The only published SysWarden generation: it ignores the query string and refuses the
+  # ban payloads, which is what the plugin's per-peer detection has to notice.
   sw-mock-legacy:
     image: sw-mock:tests
     depends_on:
@@ -132,9 +133,9 @@ services:
       - SW_MOCK_TOKEN=e2e-syswarden-token
       - SW_MOCK_LEGACY=yes
       - SW_MOCK_PEERS=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
-      # The operator entry lives on this peer too. The legacy dialect is the one that can
-      # actually delete a static entry, so this is where "never touch what we did not
-      # push" has to be proven.
+      # The operator entry lives on this peer too, in the same provenance-free static store
+      # the legacy dialect writes. This is where "never delete what we did not push" has to
+      # be proven, because here a stray DELETE {"ips"} would actually destroy it.
       - SW_MOCK_OPERATOR_IPS=198.51.100.77
     networks:
       - bw-services

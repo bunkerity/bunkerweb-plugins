@@ -192,6 +192,20 @@ class TestSelectBans:
         assert helpers.select_bans(records)["1.1.1.1"]["ttl"] is None
 
 
+class TestExtractInstanceBans:
+    def test_every_configured_instance_must_return_a_ban_list(self):
+        responses = {"one": {"status": "success", "msg": [{"ip": "1.1.1.1"}]}}
+        assert helpers.extract_instance_bans(responses, expected=1) == [{"ip": "1.1.1.1"}]
+        assert helpers.extract_instance_bans(responses, expected=2) is None
+
+    @pytest.mark.parametrize("response", ({"status": "success"}, {"msg": "not-a-list"}, "not-an-object"))
+    def test_a_malformed_instance_response_is_incomplete(self, response):
+        assert helpers.extract_instance_bans({"one": response}, expected=1) is None
+
+    def test_the_older_data_field_is_still_accepted(self):
+        assert helpers.extract_instance_bans({"one": {"data": [{"ip": "1.1.1.1"}]}}, expected=1) == [{"ip": "1.1.1.1"}]
+
+
 class TestCapItems:
     def test_under_the_cap_is_sorted_and_untouched(self):
         kept, dropped = helpers.cap_items({"2.2.2.2", "1.1.1.1"}, 10)
@@ -210,103 +224,129 @@ class TestCapItems:
         assert dropped == 0
 
 
-class TestDiffPush:
-    def test_adds_what_the_peer_is_missing(self):
-        to_add, to_remove = helpers.diff_push(banned={"1.1.1.1", "2.2.2.2"}, remote={"1.1.1.1"}, owned={"1.1.1.1"})
-        assert to_add == ["2.2.2.2"]
-        assert to_remove == []
+class TestSupportsBanSync:
+    def test_both_v403_capabilities_are_required(self):
+        assert helpers.supports_ban_sync({"sync_ttl", "sync_provenance"})
+        assert not helpers.supports_ban_sync({"sync_ttl"})
+        assert not helpers.supports_ban_sync({"sync_provenance"})
+        assert not helpers.supports_ban_sync(set())
 
-    def test_removes_only_our_own_stale_entries(self):
-        _, to_remove = helpers.diff_push(banned=set(), remote={"1.1.1.1"}, owned={"1.1.1.1"})
-        assert to_remove == ["1.1.1.1"]
 
-    def test_operator_entries_survive(self):
-        # The single most important guarantee: an entry we never pushed is never
-        # deleted, even though it is on the peer and not banned by BunkerWeb.
-        to_add, to_remove = helpers.diff_push(banned=set(), remote={"9.9.9.9"}, owned=set())
-        assert to_add == []
-        assert to_remove == []
+class TestPlanPeer:
+    def test_a_provenance_peer_is_diffed_against_its_own_ledger(self):
+        assert helpers.plan_peer({"1.1.1.1", "2.2.2.2"}, set(), {"1.1.1.1", "9.9.9.9"}, set(), True) == (["2.2.2.2"], ["9.9.9.9"], [])
 
-    def test_a_still_banned_ip_is_never_removed(self):
-        _, to_remove = helpers.diff_push(banned={"1.1.1.1"}, remote={"1.1.1.1"}, owned={"1.1.1.1"})
-        assert to_remove == []
+    def test_a_provenance_peer_never_touches_an_entry_it_does_not_own(self):
+        # An operator's `syswarden block` sits in the static store, not in our ledger, and
+        # our registry never claimed it. It must survive every pass untouched.
+        assert helpers.plan_peer(set(), {"8.8.8.8"}, set(), set(), True) == ([], [], [])
 
-    def test_output_is_sorted(self):
-        to_add, _ = helpers.diff_push(banned={"9.9.9.9", "1.1.1.1"}, remote=set(), owned=set())
-        assert to_add == ["1.1.1.1", "9.9.9.9"]
+    def test_a_provenance_peer_cleans_what_the_legacy_dialect_left_behind(self):
+        # Pushed with {"ips"} before the peer understood provenance: still in its static
+        # store, absent from its ledger, no longer banned. Only DELETE {"ips"} clears it.
+        assert helpers.plan_peer(set(), {"1.1.1.1", "8.8.8.8"}, set(), {"1.1.1.1"}, True) == ([], [], ["1.1.1.1"])
+
+    def test_a_still_banned_address_is_never_cleaned_as_stale(self):
+        # GET /ha/sync returns the union of both stores, so a banned address appearing there
+        # proves nothing about the static one. Cleanup waits until the ban is lifted.
+        assert helpers.plan_peer({"1.1.1.1"}, {"1.1.1.1"}, {"1.1.1.1"}, {"1.1.1.1"}, True) == ([], [], [])
+
+    def test_a_legacy_peer_is_diffed_against_its_static_blocklist(self):
+        assert helpers.plan_peer({"1.1.1.1", "2.2.2.2"}, {"1.1.1.1", "9.9.9.9"}, set(), {"9.9.9.9"}, False) == (["2.2.2.2"], ["9.9.9.9"], [])
+
+    def test_a_legacy_peer_only_removes_what_the_registry_claims(self):
+        # 9.9.9.9 is on the peer but was never pushed by us: operator or real HA peer.
+        assert helpers.plan_peer(set(), {"9.9.9.9"}, set(), set(), False) == ([], [], [])
+
+    def test_a_legacy_peer_never_gets_a_stale_legacy_list(self):
+        # It has no ledger, so its static store is the only store and to_remove covers it.
+        _, _, stale = helpers.plan_peer(set(), {"1.1.1.1"}, set(), {"1.1.1.1"}, False)
+        assert stale == []
+
+    def test_the_addition_cap_drains_a_backlog_after_diffing(self):
+        banned = {"1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"}
+        to_add, to_remove, _ = helpers.plan_peer(banned, set(), {"1.1.1.1"}, set(), True)
+        first, dropped = helpers.cap_items(to_add, 2)
+        assert (first, dropped, to_remove) == (["2.2.2.2", "3.3.3.3"], 1, [])
+        assert helpers.plan_peer(banned, set(), {"1.1.1.1", *first}, set(), True)[:2] == (["4.4.4.4"], [])
 
 
 class TestNextRegistry:
     GRACE = helpers.SYSWARDEN_LEGACY_GRACE
 
-    def test_a_successful_push_claims_the_address_with_no_clock(self):
-        assert helpers.next_registry(pushed_ok={"1.1.1.1"}, owned={}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True) == {"1.1.1.1": None}
+    def call(self, owned, seen_remote=(), still_banned=(), now=1000.0, complete=True, pushed_ok=()):
+        return helpers.next_registry(pushed_ok, owned, seen_remote, still_banned, now, complete)
+
+    def test_a_successful_legacy_push_claims_the_address_with_no_clock(self):
+        assert self.call({}, pushed_ok={"1.1.1.1"}) == {"1.1.1.1": None}
 
     def test_an_address_a_peer_still_holds_has_no_clock(self):
-        registry = helpers.next_registry(pushed_ok=set(), owned={"1.1.1.1": None}, seen_remote={"1.1.1.1"}, still_banned=set(), now=1000.0, complete=True)
-        assert registry == {"1.1.1.1": None}
+        assert self.call({"1.1.1.1": None}, seen_remote={"1.1.1.1"}) == {"1.1.1.1": None}
 
     def test_an_address_absent_everywhere_starts_the_clock_but_is_kept(self):
-        registry = helpers.next_registry(pushed_ok=set(), owned={"1.1.1.1": None}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True)
-        assert registry == {"1.1.1.1": 1000.0}
+        assert self.call({"1.1.1.1": None}) == {"1.1.1.1": 1000.0}
 
-    def test_the_address_is_released_once_the_grace_window_elapsed(self):
-        registry = helpers.next_registry(
-            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned=set(), now=1000.0 + self.GRACE, complete=True
-        )
-        assert registry == {}
+    def test_the_claim_is_released_once_the_grace_window_elapsed(self):
+        assert self.call({"1.1.1.1": 1000.0}, now=1000.0 + self.GRACE) == {}
 
-    def test_one_second_short_of_the_window_still_keeps_the_claim(self):
-        registry = helpers.next_registry(
-            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned=set(), now=1000.0 + self.GRACE - 1, complete=True
-        )
-        assert registry == {"1.1.1.1": 1000.0}
+    def test_one_second_short_of_the_window_keeps_the_claim(self):
+        assert self.call({"1.1.1.1": 1000.0}, now=1000.0 + self.GRACE - 1) == {"1.1.1.1": 1000.0}
 
-    def test_a_reappearance_resets_the_clock(self):
-        # SysWarden's native ha-sync pushed the entry back from another peer. Restarting
-        # the window is what stops a resurrection from slipping through the tail of it.
-        registry = helpers.next_registry(
-            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote={"1.1.1.1"}, still_banned=set(), now=1000.0 + self.GRACE, complete=True
-        )
-        assert registry == {"1.1.1.1": None}
+    def test_a_reappearance_restarts_the_window(self):
+        # SysWarden's own ha-sync pushed the entry back from another peer.
+        assert self.call({"1.1.1.1": 1000.0}, seen_remote={"1.1.1.1"}, now=1000.0 + self.GRACE) == {"1.1.1.1": None}
 
     def test_a_still_banned_address_never_runs_the_clock(self):
-        registry = helpers.next_registry(
-            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned={"1.1.1.1"}, now=1000.0 + self.GRACE, complete=True
-        )
-        assert registry == {"1.1.1.1": None}
+        assert self.call({"1.1.1.1": 1000.0}, still_banned={"1.1.1.1"}, now=1000.0 + self.GRACE) == {"1.1.1.1": None}
 
-    def test_an_incomplete_pass_neither_starts_the_clock_nor_releases(self):
-        # A peer that did not answer must not look like a peer that no longer holds the
-        # address, so a partial union is not allowed to decide anything.
-        registry = helpers.next_registry(
-            pushed_ok=set(), owned={"1.1.1.1": 1000.0}, seen_remote=set(), still_banned=set(), now=1000.0 + self.GRACE, complete=False
-        )
-        assert registry == {"1.1.1.1": None}
+    def test_a_partial_view_resets_the_clock_rather_than_pausing_it(self):
+        # Upstream is explicit: an hour of continuous absence must not span a period during
+        # which the cluster view was incomplete. Pausing would let a stale start mature.
+        assert self.call({"1.1.1.1": 1000.0}, now=1000.0 + self.GRACE, complete=False) == {"1.1.1.1": None}
 
-    def test_a_legacy_list_cache_loads_as_claims_with_no_clock(self):
-        # What the previous version of the job wrote, once mapped by the loader.
-        registry = helpers.next_registry(pushed_ok=set(), owned={"1.1.1.1": None}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True)
-        assert registry == {"1.1.1.1": 1000.0}
+    def test_a_partial_view_releases_nothing(self):
+        assert self.call({"1.1.1.1": 1000.0}, now=1e9, complete=False) == {"1.1.1.1": None}
 
     def test_output_is_sorted(self):
-        registry = helpers.next_registry(pushed_ok={"9.9.9.9", "1.1.1.1"}, owned={}, seen_remote=set(), still_banned=set(), now=1000.0, complete=True)
-        assert list(registry) == ["1.1.1.1", "9.9.9.9"]
+        assert list(self.call({}, pushed_ok={"9.9.9.9", "1.1.1.1"})) == ["1.1.1.1", "9.9.9.9"]
 
 
 class TestResurrected:
     def test_an_entry_whose_clock_was_running_and_is_back_is_reported(self):
-        assert helpers.resurrected(owned={"1.1.1.1": 1000.0}, seen_remote={"1.1.1.1"}) == ["1.1.1.1"]
+        assert helpers.resurrected({"1.1.1.1": 1000.0}, {"1.1.1.1"}) == ["1.1.1.1"]
 
     def test_an_entry_never_seen_clean_is_not_a_resurrection(self):
-        assert helpers.resurrected(owned={"1.1.1.1": None}, seen_remote={"1.1.1.1"}) == []
+        assert helpers.resurrected({"1.1.1.1": None}, {"1.1.1.1"}) == []
 
     def test_an_entry_no_peer_reports_is_not_a_resurrection(self):
-        assert helpers.resurrected(owned={"1.1.1.1": 1000.0}, seen_remote=set()) == []
+        assert helpers.resurrected({"1.1.1.1": 1000.0}, set()) == []
 
-    def test_output_is_sorted(self):
-        owned = {"9.9.9.9": 1000.0, "1.1.1.1": 1000.0}
-        assert helpers.resurrected(owned=owned, seen_remote={"9.9.9.9", "1.1.1.1"}) == ["1.1.1.1", "9.9.9.9"]
+
+class TestLoadRegistry:
+    def test_the_current_layout_round_trips(self):
+        assert helpers.load_registry({"membership": "abc", "claims": {"1.1.1.1": 12.0}}) == ({"1.1.1.1": 12.0}, "abc")
+
+    def test_a_bare_list_from_the_first_versions_loads_with_no_clock(self):
+        assert helpers.load_registry(["1.1.1.1", 7]) == ({"1.1.1.1": None}, "")
+
+    def test_a_flat_mapping_from_the_grace_window_version_loads(self):
+        # No membership recorded, which forces exactly one reset on the next pass.
+        assert helpers.load_registry({"1.1.1.1": 12.0}) == ({"1.1.1.1": 12.0}, "")
+
+    def test_garbage_is_dropped_rather_than_raising(self):
+        assert helpers.load_registry({"claims": {"1.1.1.1": "soon", 7: 1.0, "2.2.2.2": None}, "membership": 9}) == ({"2.2.2.2": None}, "")
+
+    def test_a_non_mapping_yields_an_empty_registry(self):
+        assert helpers.load_registry("nope") == ({}, "")
+
+
+class TestMembershipDigest:
+    def test_order_and_duplicates_do_not_change_the_digest(self):
+        assert helpers.membership_digest(["b", "a", "b"]) == helpers.membership_digest(["a", "b"])
+
+    def test_adding_a_peer_changes_the_digest(self):
+        # Which is what restarts every release window, as upstream requires.
+        assert helpers.membership_digest(["a"]) != helpers.membership_digest(["a", "b"])
 
 
 class TestChunked:
@@ -331,6 +371,27 @@ class TestCheckLine:
     @pytest.mark.parametrize("line", (b"", b"not-an-ip", b"1.2.3.4/33", b"999.1.1.1", b"<html>"))
     def test_rejects_anything_else(self, line):
         assert helpers.check_line(line) == (False, b"")
+
+
+class TestSerializeAddresses:
+    def test_output_is_sorted_unique_and_newline_terminated(self):
+        assert helpers.serialize_addresses(["2.2.2.2", "1.1.1.1", "2.2.2.2"]) == (b"1.1.1.1\n2.2.2.2\n", 2, 0)
+
+    def test_an_authoritative_empty_list_is_valid(self):
+        assert helpers.serialize_addresses([]) == (b"", 0, 0)
+
+    def test_invalid_entries_are_counted_without_entering_the_output(self):
+        assert helpers.serialize_addresses(["1.1.1.1", "not-an-ip"]) == (b"1.1.1.1\n", 1, 1)
+
+
+class TestExtractWhitelistIPs:
+    def test_valid_empty_whitelist_is_distinct_from_a_missing_contract(self):
+        assert helpers.extract_whitelist_ips({"whitelist": {"ips": None}}) == []
+        assert helpers.extract_whitelist_ips({"whitelist": {"ips": []}}) == []
+        assert helpers.extract_whitelist_ips({}) is None
+
+    def test_malformed_entries_reject_the_snapshot(self):
+        assert helpers.extract_whitelist_ips({"whitelist": {"ips": ["1.1.1.1", 42]}}) is None
 
 
 class TestNormalizeFingerprint:
@@ -386,8 +447,8 @@ class TestParseTelemetry:
 
 class TestClampTTL:
     def test_a_permanent_ban_takes_the_ceiling(self):
-        # SysWarden has no permanent temporary ban, and the push job refreshes every
-        # minute, so the ceiling is renewed long before it is reached.
+        # SysWarden has no permanent provenance-aware ban; the next pass adds it again
+        # after this bounded entry expires if BunkerWeb still holds the ban.
         assert helpers.clamp_ttl(None) == helpers.SYSWARDEN_MAX_TTL
 
     def test_a_long_ban_is_capped(self):
@@ -418,37 +479,41 @@ class TestSanitizeReason:
         assert sanitized == "€" * 170
 
 
-class TestSanitizeSource:
-    def test_the_default_is_kept_as_is(self):
-        assert helpers.sanitize_source(helpers.SYSWARDEN_BAN_SOURCE) == "bunkerweb"
+class TestValidSource:
+    @pytest.mark.parametrize("source", ("cluster-a", "bunkerweb/site_1", "a" * 64))
+    def test_valid_cluster_unique_source_is_accepted(self, source):
+        assert helpers.valid_source(source)
 
-    def test_characters_outside_the_accepted_set_are_dropped(self):
-        assert helpers.sanitize_source("bunker web!ç") == "bunkerweb"
-
-    def test_an_unusable_source_falls_back(self):
-        assert helpers.sanitize_source("!!!") == "bunkerweb"
-
-    def test_the_tag_is_truncated(self):
-        assert len(helpers.sanitize_source("a" * 200)) == helpers.SYSWARDEN_MAX_SOURCE_BYTES
+    @pytest.mark.parametrize("source", ("", "bunker web", "!!!", "a" * 65, None))
+    def test_empty_invalid_or_oversized_source_is_rejected(self, source):
+        assert not helpers.valid_source(source)
 
 
 class TestBuildBanBatch:
     def test_entries_carry_exactly_the_four_required_fields(self):
-        batch = helpers.build_ban_batch({"1.1.1.1": {"ttl": 900, "reason": "bad behavior"}})
-        assert batch == [{"ip": "1.1.1.1", "ttl": 900, "reason": "bad behavior", "source": "bunkerweb"}]
+        batch = helpers.build_ban_batch({"1.1.1.1": {"ttl": 900, "reason": "bad behavior"}}, "cluster-a")
+        assert batch == [{"ip": "1.1.1.1", "ttl": 900, "reason": "bad behavior", "source": "cluster-a"}]
 
     def test_output_is_sorted_and_reasons_are_defaulted(self):
-        batch = helpers.build_ban_batch({"9.9.9.9": {"ttl": None, "reason": ""}, "1.1.1.1": {"ttl": 60, "reason": "x"}})
+        batch = helpers.build_ban_batch({"9.9.9.9": {"ttl": None, "reason": ""}, "1.1.1.1": {"ttl": 60, "reason": "x"}}, "cluster-a")
         assert [entry["ip"] for entry in batch] == ["1.1.1.1", "9.9.9.9"]
-        assert batch[1] == {"ip": "9.9.9.9", "ttl": helpers.SYSWARDEN_MAX_TTL, "reason": "BunkerWeb ban", "source": "bunkerweb"}
+        assert batch[1] == {"ip": "9.9.9.9", "ttl": helpers.SYSWARDEN_MAX_TTL, "reason": "BunkerWeb ban", "source": "cluster-a"}
+
+    def test_an_implicit_source_is_refused(self):
+        with pytest.raises(ValueError):
+            helpers.build_ban_batch({"1.1.1.1": {"ttl": 60}}, "")
 
 
 class TestBuildUnbanBatch:
     def test_a_delete_entry_carries_only_ip_and_source(self):
-        assert helpers.build_unban_batch(["2.2.2.2", "1.1.1.1"]) == [
-            {"ip": "1.1.1.1", "source": "bunkerweb"},
-            {"ip": "2.2.2.2", "source": "bunkerweb"},
+        assert helpers.build_unban_batch(["2.2.2.2", "1.1.1.1"], "cluster-a") == [
+            {"ip": "1.1.1.1", "source": "cluster-a"},
+            {"ip": "2.2.2.2", "source": "cluster-a"},
         ]
+
+    def test_an_implicit_source_is_refused(self):
+        with pytest.raises(ValueError):
+            helpers.build_unban_batch(["1.1.1.1"], "")
 
 
 class TestProvenanceIPs:
@@ -457,13 +522,13 @@ class TestProvenanceIPs:
             {"ip": "1.1.1.1", "source": "bunkerweb", "peer_scope": "10.0.0.2/32"},
             {"ip": "2.2.2.2", "source": "crowdsec", "peer_scope": "10.0.0.3/32"},
         ]
-        assert helpers.provenance_ips(bans) == {"1.1.1.1"}
+        assert helpers.provenance_ips(bans, "bunkerweb") == {"1.1.1.1"}
 
     def test_malformed_entries_are_ignored(self):
-        assert helpers.provenance_ips(["nope", {"source": "bunkerweb"}, {"ip": "  ", "source": "bunkerweb"}]) == set()
+        assert helpers.provenance_ips(["nope", {"source": "bunkerweb"}, {"ip": "  ", "source": "bunkerweb"}], "bunkerweb") == set()
 
     def test_an_empty_ledger_claims_nothing(self):
-        assert helpers.provenance_ips([]) == set()
+        assert helpers.provenance_ips([], "bunkerweb") == set()
 
 
 class TestCanonicalAddress:
@@ -520,8 +585,7 @@ class TestWireConstants:
             helpers.SYSWARDEN_MAX_REASON_BYTES,  # maxHAReasonBytes
             helpers.SYSWARDEN_MAX_SOURCE_BYTES,  # maxHASourceBytes
             helpers.SYSWARDEN_MAX_BANS_PER_REQUEST,  # maxHABansPerRequest
-            helpers.SYSWARDEN_MAX_IPS_PER_REQUEST,  # maxHAIPsPerRequest
-        ) == (62026, 1, 2592000, 512, 64, 500, 1024)
+        ) == (62026, 1, 2592000, 512, 64, 500)
 
 
 class TestCanonicalSet:
@@ -535,50 +599,8 @@ class TestCanonicalSet:
 
 class TestProvenanceCanonicalization:
     def test_a_ledger_entry_matches_the_key_select_bans_produced(self):
-        ours = helpers.provenance_ips([{"ip": "2001:DB8::1", "source": "bunkerweb"}])
+        ours = helpers.provenance_ips([{"ip": "2001:DB8::1", "source": "cluster-a"}], "cluster-a")
         banned = set(helpers.select_bans([{"ip": "2001:db8::1"}]))
         # Same address, two spellings. If these differ, every pass pushes and deletes it.
         assert ours == banned
-        assert helpers.plan_peer(banned, banned, ours, ours, [], provenance=True) == ([], [], [])
-
-
-class TestPlanPeer:
-    def test_a_provenance_peer_is_diffed_against_its_own_ledger(self):
-        to_add, to_remove, stale = helpers.plan_peer(
-            banned={"1.1.1.1"}, still_banned={"1.1.1.1"}, remote={"1.1.1.1", "9.9.9.9"}, ours=set(), owned=[], provenance=True
-        )
-        # 9.9.9.9 is on the peer but not ours and not banned: it must be left alone.
-        assert (to_add, to_remove, stale) == (["1.1.1.1"], [], [])
-
-    def test_an_entry_left_over_from_the_legacy_dialect_is_reclaimed(self):
-        # Pushed before the peer was upgraded: it lives in the peer's static blocklist,
-        # not in its ledger, and only the legacy dialect can remove it.
-        _, to_remove, stale = helpers.plan_peer(banned=set(), still_banned=set(), remote={"1.1.1.1"}, ours=set(), owned=["1.1.1.1"], provenance=True)
-        assert (to_remove, stale) == ([], ["1.1.1.1"])
-
-    def test_a_legacy_leftover_that_is_still_banned_is_kept(self):
-        _, _, stale = helpers.plan_peer(banned={"1.1.1.1"}, still_banned={"1.1.1.1"}, remote={"1.1.1.1"}, ours=set(), owned=["1.1.1.1"], provenance=True)
-        assert stale == []
-
-    def test_a_lost_registry_orphans_legacy_leftovers(self):
-        # Documented tradeoff, not an oversight: without pushed.json there is no way to
-        # tell our own legacy entries from an operator's, so nothing is removed.
-        _, _, stale = helpers.plan_peer(banned=set(), still_banned=set(), remote={"1.1.1.1"}, ours=set(), owned=[], provenance=True)
-        assert stale == []
-
-    def test_an_address_held_back_by_the_cap_is_never_removed(self):
-        # It is over SYSWARDEN_BAN_MAX_ITEMS, so it is not in `banned` this pass — but it
-        # is still banned, and delaying a ban must not look like lifting one.
-        _, to_remove, _ = helpers.plan_peer(banned=set(), still_banned={"1.1.1.1"}, remote={"1.1.1.1"}, ours={"1.1.1.1"}, owned=[], provenance=True)
-        assert to_remove == []
-
-    def test_a_legacy_peer_never_gets_a_stale_legacy_list(self):
-        to_add, to_remove, stale = helpers.plan_peer(
-            banned={"1.1.1.1"}, still_banned={"1.1.1.1"}, remote={"2.2.2.2"}, ours=set(), owned=["2.2.2.2"], provenance=False
-        )
-        assert (to_add, to_remove, stale) == (["1.1.1.1"], ["2.2.2.2"], [])
-
-    def test_a_legacy_peer_only_removes_what_the_registry_claims(self):
-        # 9.9.9.9 is on the peer and unbanned, but was never ours: an operator put it there.
-        _, to_remove, _ = helpers.plan_peer(banned=set(), still_banned=set(), remote={"9.9.9.9"}, ours=set(), owned=[], provenance=False)
-        assert to_remove == []
+        assert helpers.plan_peer(banned, set(), ours, set(), True) == ([], [], [])

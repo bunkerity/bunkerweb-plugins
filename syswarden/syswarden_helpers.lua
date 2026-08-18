@@ -4,50 +4,31 @@
 
 local _M = {}
 
--- Build the per-server cache key. The separator between server_name and the element
--- keeps "example.com" .. "1.2.3.4" from colliding with "example.com1" .. ".2.3.4".
-function _M.cache_key(server_name, ele)
-	return "plugin_syswarden_" .. tostring(server_name) .. "_" .. tostring(ele)
+function _M.request_enabled(master, blocklist, whitelist)
+	return master == "yes" and (blocklist == "yes" or whitelist == "yes")
 end
 
--- Map a cached verdict to an action. The cache stores the *string* verdict
--- ("whitelisted"/"blocked"/"no-match"), so a boolean here would silently turn a
--- cached "blocked" into an allow — the exact bug that once disabled the equivalent
--- Cloudflare feature.
-function _M.classify_cache(cached)
-	if cached == nil then
-		return "miss"
-	end
-	if cached == "blocked" then
-		return "deny"
-	end
-	return "allow"
-end
-
--- True when neither list holds an entry. The deny path must fail OPEN in this state:
--- an empty blocklist means the download job has not run yet (or the peer is down),
--- not "deny nobody's traffic is known good". It also avoids caching a verdict built
--- from a list that is not loaded.
-function _M.lists_empty(lists)
-	if not lists then
+-- True until init_worker has retained at least one compiled matcher.
+function _M.matchers_empty(matchers)
+	if not matchers then
 		return true
 	end
 	for _, kind in ipairs({ "blocklist", "whitelist" }) do
-		local list = lists[kind]
-		if list and #list > 0 then
+		if matchers[kind] then
 			return false
 		end
 	end
 	return true
 end
 
--- Match addr against one list. Returns (true), (false) or (nil, err) when the matcher
--- can't be built or errors. new_matcher is injected (resty.ipmatcher.new in
--- production, a fake in tests).
-function _M.match_any(list, addr, new_matcher)
-	local matcher, err = new_matcher(list or {})
+-- Match through an object compiled once in init_worker. A construction error is retained
+-- beside it so requests fail open without rebuilding the full list.
+function _M.match_any(matcher, addr, construction_error)
+	if construction_error then
+		return nil, construction_error
+	end
 	if not matcher then
-		return nil, err
+		return false
 	end
 	local matched, merr = matcher:match(addr)
 	if merr then
@@ -62,16 +43,17 @@ end
 --
 -- Returns "whitelisted", "blocked" or "no-match", or (nil, err) so the caller can fail
 -- open on an internal error instead of denying.
-function _M.decide(lists, addr, new_matcher)
-	lists = lists or {}
-	local matched, err = _M.match_any(lists.whitelist, addr, new_matcher)
+function _M.decide(matchers, errors, addr)
+	matchers = matchers or {}
+	errors = errors or {}
+	local matched, err = _M.match_any(matchers.whitelist, addr, errors.whitelist)
 	if matched == nil then
 		return nil, err
 	end
 	if matched then
 		return "whitelisted"
 	end
-	matched, err = _M.match_any(lists.blocklist, addr, new_matcher)
+	matched, err = _M.match_any(matchers.blocklist, addr, errors.blocklist)
 	if matched == nil then
 		return nil, err
 	end

@@ -64,9 +64,17 @@ class FakeSession:
     def __init__(self, *responses):
         self._responses = list(responses)
         self.queries = []
+        self.requests = []
 
-    def get(self, url, params=None, timeout=None):
-        self.queries.append(params)
+    def get(self, url, params=None, timeout=None, allow_redirects=True):
+        self.queries.append({"params": params, "allow_redirects": allow_redirects})
+        answer = self._responses.pop(0)
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    def request(self, method, url, json=None, timeout=None, allow_redirects=True):
+        self.requests.append({"method": method, "payload": json, "allow_redirects": allow_redirects})
         answer = self._responses.pop(0)
         if isinstance(answer, BaseException):
             raise answer
@@ -81,8 +89,8 @@ class TestFetchCapabilities:
         assert "sync_provenance" in capabilities
 
     def test_a_peer_without_the_field_reports_nothing(self):
-        # A version that predates capability reporting. It must come back reachable with
-        # an empty set, so the caller speaks the legacy dialect rather than skipping it.
+        # A version that predates capability reporting is reachable but unsupported for
+        # mutation; the ban-push preflight decides that from the empty capability set.
         body = {"hostname": "sw", "os": "linux", "version": "v4.02.8", "status": "online"}
         assert client.fetch_capabilities(FakeSession(FakeResponse(200, body)), "https://peer:62026") == (True, set())
 
@@ -92,12 +100,21 @@ class TestFetchCapabilities:
         assert reachable
         assert "sync_provenance" not in capabilities
 
+    def test_a_malformed_capability_field_is_not_a_usable_peer(self):
+        assert client.fetch_capabilities(FakeSession(FakeResponse(200, {"capabilities": "sync_provenance"})), "https://peer:62026") == (False, set())
+
     @pytest.mark.parametrize("answer", (OSError("connection refused"), FakeResponse(500), FakeResponse(403), FakeResponse(200)))
     def test_an_unreachable_peer_is_never_reported_as_capability_less(self, answer):
-        # Confusing the two would make the caller delete entries on a shared blocklist
-        # from a stale local registry. FakeResponse(200) with no body is the unreadable
-        # answer case.
+        # Both states block the cluster-wide mutation preflight. FakeResponse(200) with
+        # no body is the unreadable-answer case.
         assert client.fetch_capabilities(FakeSession(answer), "https://peer:62026") == (False, set())
+
+
+class TestCall:
+    def test_mutations_never_follow_redirects(self):
+        session = FakeSession(FakeResponse(200, {"status": "ok"}))
+        assert client.call(session, "https://peer:62026", "POST", "/ha/sync", payload={"bans": []}) == (True, {"status": "ok"})
+        assert session.requests == [{"method": "POST", "payload": {"bans": []}, "allow_redirects": False}]
 
 
 class TestFetchSync:
@@ -106,7 +123,7 @@ class TestFetchSync:
         ok, snapshot = client.fetch_sync(session, "https://peer:62026")
         assert ok
         assert snapshot == {"ips": ["1.1.1.1"], "bans": []}
-        assert session.queries == [None]
+        assert session.queries == [{"params": None, "allow_redirects": False}]
 
     def test_the_detailed_read_returns_both_halves(self):
         bans = [{"ip": "1.1.1.1", "source": "bunkerweb", "expires_at": "2026-08-17T12:00:00Z"}]
@@ -114,7 +131,7 @@ class TestFetchSync:
         ok, snapshot = client.fetch_sync(session, "https://peer:62026", details=True)
         assert ok
         assert snapshot == {"ips": ["1.1.1.1", "9.9.9.9"], "bans": bans}
-        assert session.queries[0]["details"] == "true"
+        assert session.queries[0]["params"]["details"] == "true"
 
     def test_pagination_follows_the_cursor_and_keeps_the_first_page_blocklist(self):
         first = {"ips": ["1.1.1.1"], "bans": [{"ip": "1.1.1.1"}], "next_cursor": "MTAw"}
@@ -123,7 +140,7 @@ class TestFetchSync:
         assert ok
         assert snapshot["bans"] == [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2"}]
         assert snapshot["ips"] == ["1.1.1.1"]
-        assert session.queries[1]["cursor"] == "MTAw"
+        assert session.queries[1]["params"]["cursor"] == "MTAw"
 
     def test_an_empty_ledger_is_not_an_error(self):
         # `bans` is omitted from the answer when the ledger is empty. That is "nothing
@@ -144,6 +161,16 @@ class TestFetchSync:
         ok, _ = client.fetch_sync(session, "https://peer:62026", details=True)
         assert ok is False
 
+    @pytest.mark.parametrize("payload", ({"ips": [], "bans": "not-a-list"}, {"ips": [], "bans": [], "next_cursor": 42}))
+    def test_a_malformed_provenance_page_is_incomplete(self, payload):
+        ok, _ = client.fetch_sync(FakeSession(FakeResponse(200, payload)), "https://peer:62026", details=True)
+        assert ok is False
+
+    def test_a_snapshot_that_exceeds_the_page_bound_is_incomplete(self):
+        pages = [FakeResponse(200, {"ips": [], "bans": [], "next_cursor": str(index)}) for index in range(64)]
+        ok, _ = client.fetch_sync(FakeSession(*pages), "https://peer:62026", details=True)
+        assert ok is False
+
 
 class TestExtractIPs:
     def test_the_empty_blocklist_contract_is_tolerated(self):
@@ -151,10 +178,14 @@ class TestExtractIPs:
         assert client.extract_ips({"ips": None}) == []
 
     def test_entries_are_stripped_and_filtered(self):
-        assert client.extract_ips({"ips": [" 1.1.1.1 ", "", 42, None]}) == ["1.1.1.1"]
+        assert client.extract_ips({"ips": [" 1.1.1.1 ", ""]}) == ["1.1.1.1"]
 
     def test_a_bare_list_is_accepted(self):
         assert client.extract_ips(["1.1.1.1"]) == ["1.1.1.1"]
+
+    @pytest.mark.parametrize("payload", ({}, {"ips": "1.1.1.1"}, {"ips": ["1.1.1.1", 42]}, "nope"))
+    def test_a_missing_or_malformed_contract_is_not_an_empty_blocklist(self, payload):
+        assert client.extract_ips(payload) is None
 
 
 class TestTLSSettings:
@@ -233,6 +264,16 @@ class TestMakeSession:
         session = client.make_session(FakeLogger())
         assert session.headers["Authorization"] == "Bearer s3cr3t"
 
+    def test_environment_proxies_are_disabled_and_retries_are_bounded(self, monkeypatch):
+        monkeypatch.delenv("SYSWARDEN_API_TOKEN_FILE", raising=False)
+        monkeypatch.setenv("SYSWARDEN_API_TOKEN", "s3cr3t")
+        monkeypatch.setenv("SYSWARDEN_SSL_INSECURE", "yes")
+        session = client.make_session(FakeLogger())
+        retry = session.get_adapter("https://").max_retries
+        assert session.trust_env is False
+        assert retry.total == 1
+        assert retry.respect_retry_after_header is False
+
 
 class TestGetPeers:
     def test_no_usable_peer_refuses_to_run(self, monkeypatch):
@@ -251,8 +292,13 @@ class TestGetPeers:
 class TestGetTimeout:
     def test_garbage_falls_back_to_the_default(self, monkeypatch):
         monkeypatch.setenv("SYSWARDEN_TIMEOUT", "not-a-number")
-        assert client.get_timeout() == 10
+        assert client.get_timeout() == 5
 
     def test_a_configured_value_wins(self, monkeypatch):
         monkeypatch.setenv("SYSWARDEN_TIMEOUT", "3")
         assert client.get_timeout() == 3
+
+    @pytest.mark.parametrize("value", ("0", "31", "-1"))
+    def test_zero_negative_or_excessive_timeout_falls_back(self, value, monkeypatch):
+        monkeypatch.setenv("SYSWARDEN_TIMEOUT", value)
+        assert client.get_timeout() == 5

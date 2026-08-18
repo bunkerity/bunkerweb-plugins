@@ -16,7 +16,7 @@ from logger import setup_logger  # type: ignore
 from common_utils import bytes_hash  # type: ignore
 from jobs import Job  # type: ignore
 
-from syswarden_helpers import check_line, parse_telemetry  # type: ignore
+from syswarden_helpers import extract_whitelist_ips, load_registry, serialize_addresses  # type: ignore
 from syswarden_client import call, extract_ips, get_peers, get_timeout, make_session  # type: ignore
 
 LOGGER = setup_logger("SYSWARDEN.BLOCKLIST-DOWNLOAD", getenv("LOG_LEVEL", "INFO"))
@@ -57,55 +57,60 @@ try:
 
     blocklist = set()
     whitelist = set()
+    complete = True
 
     for peer in peers:
         if use_blocklist:
             got, body = call(session, peer, "GET", "/ha/sync", timeout=timeout)
-            if got:
-                blocklist.update(extract_ips(body))
-            else:
+            entries = extract_ips(body) if got else None
+            if entries is None:
                 LOGGER.error(f"Can't read the blocklist of {peer}: {body}")
-                status = 2
+                complete = False
+            else:
+                blocklist.update(entries)
 
         if use_whitelist:
             # SysWarden exposes its whitelist only inside the telemetry payload; there is
             # no dedicated route for it yet.
             got, body = call(session, peer, "GET", "/ha/telemetry", timeout=timeout)
-            if got:
-                whitelist.update(parse_telemetry(body if isinstance(body, dict) else {})["whitelist_ips"])
-            else:
+            entries = extract_whitelist_ips(body) if got else None
+            if entries is None:
                 LOGGER.error(f"Can't read the whitelist of {peer}: {body}")
-                status = 2
+                complete = False
+            else:
+                whitelist.update(entries)
+
+    if not complete:
+        LOGGER.error("The SysWarden list snapshot is incomplete, keeping every cached list unchanged")
+        sys_exit(2)
 
     if use_blocklist and getenv("SYSWARDEN_BLOCKLIST_EXCLUDE_OWN", "yes") == "yes":
+        # BunkerWeb already denies these at Layer 7; denying them again from a list it fed
+        # itself adds nothing, and it makes the downloaded list look larger than it is.
         cached_owned = JOB.get_cache("pushed.json")
         if cached_owned:
             with suppress(BaseException):
-                owned = loads(cached_owned.decode("utf-8", "replace") if isinstance(cached_owned, bytes) else cached_owned)
-                if isinstance(owned, list):
-                    before = len(blocklist)
-                    blocklist -= {entry for entry in owned if isinstance(entry, str)}
-                    LOGGER.info(f"Excluded {before - len(blocklist)} entry(ies) we pushed ourselves, BunkerWeb already bans them at Layer 7")
+                claims, _ = load_registry(loads(cached_owned.decode("utf-8", "replace") if isinstance(cached_owned, bytes) else cached_owned))
+                before = len(blocklist)
+                blocklist -= set(claims)
+                if before != len(blocklist):
+                    LOGGER.info(f"Excluded {before - len(blocklist)} entry(ies) this plugin pushed itself")
 
+    prepared = []
     for name, entries, wanted in (("blocklist.list", blocklist, use_blocklist), ("whitelist.list", whitelist, use_whitelist)):
         if not wanted:
             continue
-
-        content = b""
-        kept = 0
-        for entry in sorted(entries):
-            ok, data = check_line(entry.encode())
-            if ok:
-                content += data + b"\n"
-                kept += 1
-
-        if not content:
-            # Keep whatever is already cached: an empty or fully invalid answer must not
-            # wipe a working list (and the Lua side fails open on an empty one anyway).
-            LOGGER.warning(f"No valid entry for {name}, keeping the cached file as is...")
+        content, kept, invalid = serialize_addresses(entries)
+        if invalid:
+            LOGGER.error(f"{name} contains {invalid} invalid entry(ies), keeping every cached list unchanged")
             status = 2
-            continue
+        prepared.append((name, content, kept))
 
+    if status != 0:
+        sys_exit(status)
+
+    changed = False
+    for name, content, kept in prepared:
         new_hash = bytes_hash(content)
         if new_hash == JOB.cache_hash(name):
             LOGGER.info(f"New {name} file is identical to cache file, reload is not needed")
@@ -118,8 +123,11 @@ try:
             continue
 
         LOGGER.info(f"Downloaded {kept} entry(ies) into {name}")
-        # 1 asks the scheduler to reload nginx, which is what makes the new list live.
-        status = status or 1
+        changed = True
+
+    # 1 asks the scheduler to reload nginx, which is what makes the new lists live.
+    if status == 0 and changed:
+        status = 1
 except SystemExit as e:
     status = e.code
 except:

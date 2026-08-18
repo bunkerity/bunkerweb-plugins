@@ -38,12 +38,13 @@ class FingerprintAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
-def get_timeout(default: int = 10) -> int:
-    """SYSWARDEN_TIMEOUT as an int, falling back to the default on garbage."""
+def get_timeout(default: int = 5) -> int:
+    """SYSWARDEN_TIMEOUT bounded to 1-30 seconds."""
     try:
-        return int(getenv("SYSWARDEN_TIMEOUT", str(default)))
+        value = int(getenv("SYSWARDEN_TIMEOUT", str(default)))
     except ValueError:
         return default
+    return value if 1 <= value <= 30 else default
 
 
 def tls_settings(logger) -> Tuple[Union[bool, str], str]:
@@ -104,10 +105,19 @@ def make_session(logger, *, methods: Tuple[str, ...] = ("GET",)) -> Session:
     verify, fingerprint = tls_settings(logger)
 
     session = Session()
+    # SysWarden peers are private, explicitly configured destinations. Ignoring ambient
+    # proxy variables also keeps fingerprint pinning on the adapter's direct pool.
+    session.trust_env = False
     session.verify = verify
     session.headers.update({"Authorization": f"Bearer {token}", "User-Agent": "bunkerweb-syswarden"})
 
-    retry = Retry(total=3, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=methods)
+    retry = Retry(
+        total=1,
+        backoff_factor=0.25,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=methods,
+        respect_retry_after_header=False,
+    )
     adapter = FingerprintAdapter(fingerprint, max_retries=retry) if fingerprint else HTTPAdapter(max_retries=retry)
     session.mount("https://", adapter)
     return session
@@ -119,7 +129,7 @@ def call(
     method: str,
     path: str,
     *,
-    timeout: int = 10,
+    timeout: int = 5,
     payload: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, Any]:
     """Call one peer. Returns ``(True, decoded_body)`` or ``(False, error_message)``.
@@ -127,8 +137,8 @@ def call(
     Never raises: a dead peer must not stop the pass on the other ones.
     """
     try:
-        response = session.request(method, f"{peer}{path}", json=payload, timeout=timeout)
-    except BaseException as e:
+        response = session.request(method, f"{peer}{path}", json=payload, timeout=timeout, allow_redirects=False)
+    except Exception as e:
         return False, f"{method} {peer}{path} failed: {e}"
 
     if response.status_code != 200:
@@ -139,34 +149,38 @@ def call(
         return False, f"{method} {peer}{path} returned an unreadable body: {e}"
 
 
-def extract_ips(body: Any) -> List[str]:
-    """Pull the IP list out of a /ha/sync response, tolerating both shapes seen so far.
+def extract_ips(body: Any) -> Optional[List[str]]:
+    """Pull a complete IP list from a /ha/sync response.
 
     A peer with an empty blocklist answers ``{"ips": null}``, which lands here as an
-    absent list rather than an error.
+    authoritative empty list. Missing or malformed fields return ``None`` instead, so a
+    broken response can never masquerade as "the peer holds nothing".
     """
     if isinstance(body, dict):
-        body = body.get("ips", [])
-    if not isinstance(body, list):
+        if "ips" not in body:
+            return None
+        body = body.get("ips")
+    if body is None:
         return []
-    return [entry.strip() for entry in body if isinstance(entry, str) and entry.strip()]
+    if not isinstance(body, list) or any(not isinstance(entry, str) for entry in body):
+        return None
+    return [entry.strip() for entry in body if entry.strip()]
 
 
-def fetch_capabilities(session: Session, peer: str, *, timeout: int = 10) -> Tuple[bool, Set[str]]:
+def fetch_capabilities(session: Session, peer: str, *, timeout: int = 5) -> Tuple[bool, Set[str]]:
     """Ask a peer what its HA API can do, through ``GET /ha/status``.
 
     Returns ``(reachable, capabilities)``. A peer that predates capability reporting
-    answers without the field, which yields an empty set — the caller then speaks the
-    legacy dialect to it. The set is also empty when the peer has
-    ``integrations.bunkerweb.enabled`` off, which is the same thing from here: it refuses
-    expiring bans and provenance, and only the legacy payloads work against it.
+    answers without the field, which yields an empty set. The push job treats that peer
+    as readable but unsupported for mutation. The set is also empty when the peer has
+    ``integrations.bunkerweb.enabled`` off.
 
-    An unreachable peer is NOT reported as capability-less. Confusing the two would make
-    the caller delete on a shared blocklist using a stale local registry.
+    An unreachable or malformed peer is not reported as capability-less: both cases make
+    the cluster preflight incomplete and block every mutation.
     """
     try:
-        response = session.get(f"{peer}/ha/status", timeout=timeout)
-    except BaseException:
+        response = session.get(f"{peer}/ha/status", timeout=timeout, allow_redirects=False)
+    except Exception:
         return False, set()
     if response.status_code != 200:
         return False, set()
@@ -176,10 +190,15 @@ def fetch_capabilities(session: Session, peer: str, *, timeout: int = 10) -> Tup
         return False, set()
     if not isinstance(body, dict):
         return False, set()
-    return True, {entry for entry in (body.get("capabilities") or []) if isinstance(entry, str)}
+    capabilities = body.get("capabilities")
+    if capabilities is None:
+        return True, set()
+    if not isinstance(capabilities, list) or any(not isinstance(entry, str) for entry in capabilities):
+        return False, set()
+    return True, set(capabilities)
 
 
-def fetch_sync(session: Session, peer: str, *, timeout: int = 10, details: bool = False, page_size: int = 500) -> Tuple[bool, Dict[str, List]]:
+def fetch_sync(session: Session, peer: str, *, timeout: int = 5, details: bool = False, page_size: int = 500) -> Tuple[bool, Dict[str, List]]:
     """Read a peer's blocklist through ``GET /ha/sync``, following the provenance pages.
 
     Returns ``(ok, {"ips": [...], "bans": [...]})``. ``ips`` is the whole blocklist the
@@ -187,8 +206,8 @@ def fetch_sync(session: Session, peer: str, *, timeout: int = 10, details: bool 
     their provenance, and stays empty unless ``details`` is set and the peer supports it.
 
     ``bans`` is omitted from the answer when the ledger is empty, so an empty list here
-    means "nothing expiring", never "unsupported" — the caller decides which dialect to
-    speak from the peer's advertised capabilities, not from the shape of this answer.
+    means "nothing expiring", never "unsupported". Mutation support comes from the
+    peer's advertised capabilities, not from the shape of this answer.
     """
     snapshot: Dict[str, List] = {"ips": [], "bans": []}
     params: Dict[str, Any] = {"details": "true", "limit": page_size} if details else {}
@@ -196,8 +215,8 @@ def fetch_sync(session: Session, peer: str, *, timeout: int = 10, details: bool 
     # entries, so a cursor that keeps pointing forward is a bug on the other side.
     for page in range(64):
         try:
-            response = session.get(f"{peer}/ha/sync", params=params or None, timeout=timeout)
-        except BaseException:
+            response = session.get(f"{peer}/ha/sync", params=params or None, timeout=timeout, allow_redirects=False)
+        except Exception:
             return False, snapshot
         if response.status_code != 200:
             return False, snapshot
@@ -208,12 +227,19 @@ def fetch_sync(session: Session, peer: str, *, timeout: int = 10, details: bool 
         if not isinstance(body, dict):
             return False, snapshot
         if page == 0:
-            snapshot["ips"] = extract_ips(body)
-        entries = body.get("bans")
-        if isinstance(entries, list):
-            snapshot["bans"].extend(entry for entry in entries if isinstance(entry, dict))
+            ips = extract_ips(body)
+            if ips is None:
+                return False, snapshot
+            snapshot["ips"] = ips
+        entries = body.get("bans", [])
+        if details:
+            if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+                return False, snapshot
+            snapshot["bans"].extend(entries)
         cursor = body.get("next_cursor")
-        if not details or not isinstance(cursor, str) or not cursor:
+        if not details or cursor is None:
             return True, snapshot
+        if not isinstance(cursor, str) or not cursor:
+            return False, snapshot
         params = {"details": "true", "limit": page_size, "cursor": cursor}
-    return True, snapshot
+    return False, snapshot

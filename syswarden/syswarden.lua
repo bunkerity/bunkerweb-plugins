@@ -15,11 +15,10 @@ local get_deny_status = utils.get_deny_status
 local get_phase = ngx.get_phase
 local has_variable = utils.has_variable
 local ipmatcher_new = ipmatcher.new
-local cache_key = syswarden_helpers.cache_key
-local classify_cache = syswarden_helpers.classify_cache
 local decide = syswarden_helpers.decide
-local lists_empty = syswarden_helpers.lists_empty
 local list_sizes = syswarden_helpers.list_sizes
+local matchers_empty = syswarden_helpers.matchers_empty
+local request_enabled = syswarden_helpers.request_enabled
 local decode = cjson.decode
 local tostring = tostring
 local ipairs = ipairs
@@ -30,6 +29,11 @@ local open = io.open
 -- output. The scheduler ships this directory to every BunkerWeb instance, which is how
 -- a job running in the scheduler container reaches the Lua code in another one.
 local CACHE_DIR = "/var/cache/bunkerweb/syswarden/"
+
+-- Per-worker compiled state. Reloads create new workers, so a changed downloaded list is
+-- visible immediately without a stale per-address verdict cache.
+local worker_matchers = {}
+local worker_matcher_errors = {}
 
 -- Read one cached list file into a table of lines. A missing file is not an error:
 -- it means the download job has not run yet, and the caller fails open on it.
@@ -51,20 +55,16 @@ end
 function syswarden:initialize(ctx)
 	-- Call parent initialize
 	plugin.initialize(self, "syswarden", ctx)
-	-- Decode the lists only in the request phases that consume them (access/preread),
-	-- so init/log/api don't pay for a datastore read they never use.
+	-- Request instances only select the per-service matchers. The expensive constructors
+	-- ran once in init_worker and these tables are read-only for the worker lifetime.
 	if get_phase() ~= "init" and self.is_request and self:is_needed() then
-		local lists, err = self.datastore:get("plugin_syswarden_lists", true)
-		if not lists then
-			self.logger:log(ERR, "can't get SysWarden lists from datastore : " .. tostring(err))
-			lists = {}
-		end
-		-- Both settings are multisite: a service that only asks for the blocklist must not
-		-- get the whitelist's allow, so the list it did not enable is empty for it. The
-		-- tables themselves are read-only and shared with the worker LRU on purpose.
-		self.lists = {
-			blocklist = self.variables["USE_SYSWARDEN_BLOCKLIST"] == "yes" and (lists.blocklist or {}) or {},
-			whitelist = self.variables["USE_SYSWARDEN_WHITELIST"] == "yes" and (lists.whitelist or {}) or {},
+		self.matchers = {
+			blocklist = self.variables["USE_SYSWARDEN_BLOCKLIST"] == "yes" and worker_matchers.blocklist or nil,
+			whitelist = self.variables["USE_SYSWARDEN_WHITELIST"] == "yes" and worker_matchers.whitelist or nil,
+		}
+		self.matcher_errors = {
+			blocklist = self.variables["USE_SYSWARDEN_BLOCKLIST"] == "yes" and worker_matcher_errors.blocklist or nil,
+			whitelist = self.variables["USE_SYSWARDEN_WHITELIST"] == "yes" and worker_matcher_errors.whitelist or nil,
 		}
 	end
 end
@@ -76,7 +76,11 @@ function syswarden:is_needed()
 	end
 	-- Request phases: the deny path is per-service, so it follows the multisite settings
 	if self.is_request and (self.ctx.bw.server_name ~= "_") then
-		return self.variables["USE_SYSWARDEN_BLOCKLIST"] == "yes" or self.variables["USE_SYSWARDEN_WHITELIST"] == "yes"
+		return request_enabled(
+			self.variables["USE_SYSWARDEN"],
+			self.variables["USE_SYSWARDEN_BLOCKLIST"],
+			self.variables["USE_SYSWARDEN_WHITELIST"]
+		)
 	end
 	-- Other cases : the integration is enabled at all
 	local is_needed, err = has_variable("USE_SYSWARDEN", "yes")
@@ -121,7 +125,9 @@ function syswarden:init_worker()
 	if not is_needed then
 		return self:ret(true, "syswarden is not used")
 	end
-	-- Warm the matcher once per worker so the first request doesn't pay for building it.
+	worker_matchers = {}
+	worker_matcher_errors = {}
+	-- Compile once per worker. A high-cardinality request stream must never rebuild a list.
 	local lists = self.datastore:get("plugin_syswarden_lists", true)
 	if lists then
 		for _, kind in ipairs({ "blocklist", "whitelist" }) do
@@ -129,7 +135,10 @@ function syswarden:init_worker()
 			if list and #list > 0 then
 				local matcher, merr = ipmatcher_new(list)
 				if not matcher then
+					worker_matcher_errors[kind] = merr
 					self.logger:log(ERR, "can't build the " .. kind .. " matcher : " .. tostring(merr))
+				else
+					worker_matchers[kind] = matcher
 				end
 			end
 		end
@@ -137,24 +146,10 @@ function syswarden:init_worker()
 	return self:ret(true, "success")
 end
 
--- Compute (and cache) the verdict for an address: "whitelisted", "blocked" or
--- "no-match". Returns nil, err on failure so callers can fail open.
+-- Compute the verdict for an address through the worker's precompiled matchers.
+-- Returns nil, err on failure so callers can fail open.
 function syswarden:peer_verdict(addr)
-	local ok, cached = self:is_in_cache(addr)
-	if not ok then
-		self.logger:log(ERR, "error while checking cache : " .. cached)
-	elseif classify_cache(cached) ~= "miss" then
-		return cached
-	end
-	local verdict, err = decide(self.lists, addr, ipmatcher_new)
-	if verdict == nil then
-		return nil, err
-	end
-	local cache_ok, cache_err = self:add_to_cache(addr, verdict)
-	if not cache_ok then
-		self.logger:log(ERR, "error while adding element to cache : " .. cache_err)
-	end
-	return verdict
+	return decide(self.matchers, self.matcher_errors, addr)
 end
 
 -- Shared by access() and preread(): both deny the same way, on the same verdict.
@@ -164,7 +159,10 @@ function syswarden:check(addr)
 	end
 	-- Fail open while the lists are not loaded: an empty blocklist means the download
 	-- job hasn't run yet (or the peer is down), never "deny everything".
-	if lists_empty(self.lists) then
+	if
+		matchers_empty(self.matchers)
+		and not (self.matcher_errors and (self.matcher_errors.blocklist or self.matcher_errors.whitelist))
+	then
 		return self:ret(true, "SysWarden lists not loaded yet, allowing")
 	end
 	local verdict, err = self:peer_verdict(addr)
@@ -189,24 +187,6 @@ end
 
 function syswarden:preread()
 	return self:check(self.ctx.bw.remote_addr)
-end
-
-function syswarden:is_in_cache(ele)
-	local ok, data = self.cachestore_local:get(cache_key(self.ctx.bw.server_name, ele))
-	if not ok then
-		return false, data
-	end
-	return true, data
-end
-
-function syswarden:add_to_cache(ele, value)
-	-- One hour: the blocklist itself refreshes hourly, so a longer TTL would keep
-	-- denying an address the peer has already released.
-	local ok, err = self.cachestore_local:set(cache_key(self.ctx.bw.server_name, ele), value, 3600)
-	if not ok then
-		return false, err
-	end
-	return true
 end
 
 function syswarden:api()
