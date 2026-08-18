@@ -31,6 +31,7 @@ from syswarden_helpers import (  # type: ignore
     parse_ban_key,
     plan_peer,
     provenance_ips,
+    releasable,
     sanitize_source,
     select_bans,
 )
@@ -152,7 +153,8 @@ try:
     still_banned = set(details)
 
     pushed_ok = set()
-    removed_ok = set()
+    # Every address any peer still holds this pass, the input to the cleanup barrier below.
+    seen_remote = set()
     peer_failed = False
 
     for peer in peers:
@@ -178,6 +180,7 @@ try:
         # (ip, source, peer_scope) and it only deletes records matching all three, so what
         # it reports as ours is authoritative and survives a lost job cache.
         remote = canonical_set(snapshot["ips"])
+        seen_remote |= remote
         ours = provenance_ips(snapshot["bans"], source) if provenance else set()
         to_add, to_remove, stale_legacy = plan_peer(banned, still_banned, remote, ours, owned, provenance)
 
@@ -217,7 +220,6 @@ try:
                 peer_failed = True
                 status = 2
                 continue
-            removed_ok.update(batch)
             LOGGER.info(f"➖ Removed {len(batch)} lifted ban(s) from {peer}")
 
         for batch in chunked(stale_legacy, ips_chunk):
@@ -227,13 +229,14 @@ try:
                 peer_failed = True
                 status = 2
                 continue
-            removed_ok.update(batch)
             LOGGER.info(f"➖ Removed {len(batch)} entry(ies) this plugin had pushed to {peer} before it supported ban provenance")
 
     if not audit:
-        # Ownership is only released when every peer answered: an IP whose DELETE failed
-        # somewhere stays ours, so the next pass retries instead of orphaning it there.
-        deleted_everywhere = set() if peer_failed else removed_ok
+        # Ownership is only released when every peer answered *and* none of them still
+        # reports the address: a DELETE receipt is not enough, because SysWarden peers
+        # replicate the static blocklist between themselves and can push an entry back
+        # between two of our requests. Releasing early would strand it in that kernel.
+        deleted_everywhere = set() if peer_failed else releasable(owned, seen_remote, still_banned)
         new_owned = next_owned(pushed_ok, owned, deleted_everywhere)
         if new_owned != owned:
             cached, err = JOB.cache_file("pushed.json", dumps(new_owned).encode())

@@ -143,6 +143,15 @@ dialect. So when a peer starts reporting provenance, the plugin keeps reconcilin
 entries it wrote before, and removes them with the legacy payload once BunkerWeb stops
 banning them. Without that they would stay blocked in the kernel forever.
 
+**Clusters that replicate between themselves.** SysWarden peers can sync their static
+blocklist to each other with their own ha-sync, so an entry the plugin deletes on one peer
+can be pushed back by another between two requests of the same pass. The plugin therefore
+releases ownership of an address only after a full pass in which no peer reports it any
+more and BunkerWeb no longer bans it, never on the delete receipt alone. A resurrected
+entry is seen again on the next pass and deleted again. This only closes if
+`SYSWARDEN_PEERS` lists **every** peer of the cluster: a peer the plugin cannot see keeps
+re-seeding entries it will never be asked to drop.
+
 In every case, if a `DELETE` fails on one peer the entry stays in the registry so the next
 pass retries it, rather than orphaning it in that peer's blocklist. And an address the
 `SYSWARDEN_BAN_MAX_ITEMS` cap held back is never treated as unbanned: being over the cap

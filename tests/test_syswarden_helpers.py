@@ -249,6 +249,30 @@ class TestNextOwned:
         assert helpers.next_owned(banned=set(), owned={"1.1.1.1"}, deleted_everywhere=set()) == ["1.1.1.1"]
 
 
+class TestReleasable:
+    def test_an_entry_no_peer_holds_any_more_is_released(self):
+        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote=set(), still_banned=set()) == ["1.1.1.1"]
+
+    def test_an_entry_a_peer_still_holds_stays_ours(self):
+        # The cluster-wide cleanup barrier: SysWarden's own ha-sync can push an entry back
+        # from another peer between two of our requests. Keeping ownership is what lets the
+        # next pass see the resurrection and delete it again.
+        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote={"1.1.1.1"}, still_banned=set()) == []
+
+    def test_a_still_banned_entry_is_never_released(self):
+        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote=set(), still_banned={"1.1.1.1"}) == []
+
+    def test_deleting_an_entry_this_pass_does_not_release_it_yet(self):
+        # It was read from the peer before the DELETE, so it is still in seen_remote and
+        # survives one more pass. Releasing on the delete receipt is the bug this guards.
+        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote={"1.1.1.1"}, still_banned=set()) == []
+        # Next pass the peer no longer reports it, and it is finally dropped.
+        assert helpers.releasable(owned={"1.1.1.1"}, seen_remote=set(), still_banned=set()) == ["1.1.1.1"]
+
+    def test_output_is_sorted(self):
+        assert helpers.releasable(owned={"9.9.9.9", "1.1.1.1"}, seen_remote=set(), still_banned=set()) == ["1.1.1.1", "9.9.9.9"]
+
+
 class TestChunked:
     def test_splits_into_batches(self):
         assert helpers.chunked(["a", "b", "c", "d", "e"], 2) == [["a", "b"], ["c", "d"], ["e"]]

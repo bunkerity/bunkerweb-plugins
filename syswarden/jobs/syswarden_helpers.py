@@ -351,6 +351,24 @@ def next_owned(banned: Iterable[str], owned: Iterable[str], deleted_everywhere: 
     return sorted(set(banned) | (set(owned) - set(deleted_everywhere)))
 
 
+def releasable(owned: Iterable[str], seen_remote: Iterable[str], still_banned: Iterable[str]) -> List[str]:
+    """The ownership entries this pass may drop, i.e. the cluster-wide cleanup barrier.
+
+    An address is released only once no peer reports it any more *and* BunkerWeb no longer
+    bans it — never merely because this pass deleted it. SysWarden peers replicate their
+    static blocklist to each other with their own ha-sync, so an entry deleted on one peer
+    can be pushed back by another between two of this job's requests. Releasing on the
+    delete receipt would make that resurrection permanent: the address would leave the
+    registry, ``plan_peer`` would never list it again, and it would stay in that peer's
+    kernel forever. Holding it one more pass costs a minute and converges instead.
+
+    ``seen_remote`` must be the union of every peer's blocklist as read this pass, and the
+    caller must not use this when a peer failed: the union is partial then, and a peer that
+    did not answer would look like a peer that no longer holds the address.
+    """
+    return sorted((set(owned) - set(seen_remote)) - set(still_banned))
+
+
 def chunked(items: Sequence[str], size: int) -> List[List[str]]:
     """Split into batches of at most ``size`` (``size <= 0`` means one single batch)."""
     if size <= 0:
