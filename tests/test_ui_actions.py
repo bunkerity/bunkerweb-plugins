@@ -8,6 +8,7 @@ us test a single plugin many times. (authentik is excluded: it ships no
 """
 
 import importlib.util
+from json import dumps
 from pathlib import Path
 
 import pytest
@@ -43,8 +44,11 @@ def test_pre_render_error_path(plugin, fake_ping_utils):
     ret = module.pre_render(bw_instances_utils=fake)
     # A generic marker is shown; the raw exception text is not leaked to the UI.
     assert ret["error"] == "Could not retrieve the plugin status"
-    assert "boom" not in ret["error"]
-    assert "internal" not in ret["error"]
+    # Scan the whole payload, not just the field pinned above: a leak would surface in
+    # some other card's value, where nothing is asserting on it.
+    rendered = dumps(ret, default=str)
+    assert "boom" not in rendered
+    assert "internal.scheduler" not in rendered
     assert ret["ping_status"]["value"] == "error"
 
 

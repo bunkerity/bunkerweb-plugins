@@ -10,12 +10,31 @@ to themselves.
 from contextlib import suppress
 from ipaddress import ip_address, ip_network
 from itertools import islice
-from os import getenv, sep
+from os import getenv
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 # Default port of SysWarden's HA API (`[integrations.ha] peer_port`).
 SYSWARDEN_DEFAULT_PORT = 62026
+
+# Bounds SysWarden enforces on a temporary ban. TTL comes from firewall.MinimumBanTTL /
+# MaximumBanTTL, the two byte caps from maxHAReasonBytes / maxHASourceBytes, and the batch
+# size from maxHABansPerRequest. A payload outside any of them is answered with a 400, so
+# the plugin clamps rather than letting a whole batch be refused.
+SYSWARDEN_MIN_TTL = 1
+SYSWARDEN_MAX_TTL = 30 * 24 * 3600
+SYSWARDEN_MAX_REASON_BYTES = 512
+SYSWARDEN_MAX_SOURCE_BYTES = 64
+SYSWARDEN_MAX_BANS_PER_REQUEST = 500
+SYSWARDEN_MAX_IPS_PER_REQUEST = 1024
+
+# Provenance tag written on every ban this plugin pushes. SysWarden keys its ledger on
+# (ip, source, peer_scope) and only ever deletes records matching all three, so this value
+# is what tells our own entries apart from an operator's `syswarden block`.
+SYSWARDEN_BAN_SOURCE = "bunkerweb"
+
+# The charset SysWarden accepts for `source` (validHASource in ha_api.go).
+_SOURCE_ALLOWED = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/-")
 
 
 def get_env_secret(primary: str, fallback: str = "", default: str = "") -> str:
@@ -39,15 +58,6 @@ def get_env_secret(primary: str, fallback: str = "", default: str = "") -> str:
         if value:
             return value.strip() if isinstance(value, str) else value
     return default
-
-
-def read_run_secret(name: str) -> Optional[str]:
-    """Read ``/run/secrets/<name>`` (lowercased) if present, else None."""
-    secret_path = Path(sep, "run", "secrets", name.lower())
-    if secret_path.is_file():
-        with suppress(OSError):
-            return secret_path.read_text(encoding="utf-8").strip()
-    return None
 
 
 def parse_peers(value: Optional[str], default_port: int = SYSWARDEN_DEFAULT_PORT) -> Tuple[List[str], List[str]]:
@@ -114,16 +124,42 @@ def parse_ban_key(key) -> Optional[Dict[str, str]]:
     return None
 
 
+def canonical_address(value: Optional[str]) -> str:
+    """Render an address the way SysWarden stores it, or ``""`` if it would be refused.
+
+    Mirrors Go's ``canonicalHAAddress``: ``netip`` parsing, IPv4-mapped and zoned
+    addresses rejected, a network masked to its prefix. Two reasons this has to happen
+    before anything goes on the wire. A single refused entry makes SysWarden reject the
+    *entire* batch of up to 500 bans, so one malformed address would stop every ban that
+    minute. And an address that differs only in case (``2001:DB8::1``) is accepted but
+    stored canonicalized, so without this the next pass sees it as both "to add" and "to
+    remove" and oscillates forever.
+    """
+    text = (value or "").strip()
+    if not text:
+        return ""
+    try:
+        if "/" in text:
+            network = ip_network(text, strict=False)
+            return "" if network.version == 6 and network[0].ipv4_mapped else str(network)
+        address = ip_address(text)
+    except ValueError:
+        return ""
+    if address.version == 6 and (address.ipv4_mapped or "%" in text):
+        return ""
+    return str(address)
+
+
 def normalize_ban(record: Dict) -> Optional[Dict]:
-    """Normalize one ban into ``{"ip", "service", "ban_scope", "ttl"}``.
+    """Normalize one ban into ``{"ip", "service", "ban_scope", "ttl", "reason"}``.
 
     Accepts both shapes the plugin reads: a Redis-derived dict (ip/service only) and a
     record from ``GET /bans`` on the instance API (``ip, service, ban_scope, exp,
-    permanent, ...``). ``ttl`` is the remaining lifetime in seconds, or None when the
-    ban is permanent or carries no expiry — callers must treat None as "never expires",
-    never as "expired".
+    permanent, reason, ...``). ``ttl`` is the remaining lifetime in seconds, or None when
+    the ban is permanent or carries no expiry — callers must treat None as "never
+    expires", never as "expired".
     """
-    ip = str(record.get("ip") or "").strip()
+    ip = canonical_address(str(record.get("ip") or ""))
     if not ip:
         return None
     service = str(record.get("service") or "").strip()
@@ -132,25 +168,38 @@ def normalize_ban(record: Dict) -> Optional[Dict]:
     ttl = None
     if not record.get("permanent"):
         exp = record.get("exp", record.get("ttl"))
-        if isinstance(exp, (int, float)):
-            ttl = int(exp)
-    return {"ip": ip, "service": service, "ban_scope": ban_scope, "ttl": ttl}
+        if isinstance(exp, (int, float)) and not isinstance(exp, bool):
+            # Redis answers -1 for a key with no expiry and -2 for one that vanished
+            # between the scan and the read; the instance API answers 0 for an expired
+            # ban. Only the first of those is a ban, and pushing the others would ban an
+            # address BunkerWeb no longer bans — permanently so, on a peer without TTLs.
+            if exp == -1:
+                ttl = None
+            elif exp <= 0:
+                return None
+            else:
+                ttl = int(exp)
+    return {"ip": ip, "service": service, "ban_scope": ban_scope, "ttl": ttl, "reason": str(record.get("reason") or "").strip()}
 
 
-def select_bans(records: Iterable[Dict], scope_filter: Sequence[str] = (), min_ttl: int = 0) -> Set[str]:
-    """Merge ban records into the set of IPs to push.
+def select_bans(records: Iterable[Dict], scope_filter: Sequence[str] = (), min_ttl: int = 0) -> Dict[str, Dict]:
+    """Merge ban records into ``{ip: {"ttl", "reason"}}``, ready to push.
 
     Deduplicates on ``(ip, ban_scope, service)`` the way BunkerWeb's own bans page does,
     then flattens to IPs: SysWarden's blocklist is host-wide, so a per-service scope has
-    no meaning once the ban reaches nftables.
+    no meaning once the ban reaches nftables. The mapping is keyed by IP, so iterating it
+    (or wrapping it in ``set()``) still yields exactly the addresses to ban.
 
     ``scope_filter`` limits which *services* are propagated; global bans always pass,
     since they are not tied to a service. ``min_ttl`` drops short-lived bans (rate-limit
     noise) — a permanent ban (``ttl is None``) is never dropped by it.
+
+    When several bans collide on one IP, the longest one wins: a permanent ban (``ttl is
+    None``) beats every dated one, so a shorter service ban can never cut it short.
     """
     allowed = {service for service in scope_filter if service}
     seen: Set[Tuple[str, str, str]] = set()
-    ips: Set[str] = set()
+    bans: Dict[str, Dict] = {}
     for record in records:
         ban = normalize_ban(record)
         if not ban:
@@ -163,8 +212,105 @@ def select_bans(records: Iterable[Dict], scope_filter: Sequence[str] = (), min_t
         if key in seen:
             continue
         seen.add(key)
-        ips.add(ban["ip"])
-    return ips
+        current = bans.get(ban["ip"])
+        if current is None or (current["ttl"] is not None and (ban["ttl"] is None or ban["ttl"] > current["ttl"])):
+            bans[ban["ip"]] = {"ttl": ban["ttl"], "reason": ban["reason"]}
+    return bans
+
+
+def clamp_ttl(ttl: Optional[int], minimum: int = SYSWARDEN_MIN_TTL, maximum: int = SYSWARDEN_MAX_TTL) -> int:
+    """Fit a BunkerWeb ban lifetime into the window SysWarden accepts.
+
+    A permanent ban (``ttl is None``) becomes ``maximum``: SysWarden has no permanent
+    temporary-ban state, and the push job re-sends every still-banned IP each minute, so
+    the ceiling is refreshed long before it is reached.
+    """
+    if ttl is None or ttl > maximum:
+        return maximum
+    return max(int(ttl), minimum)
+
+
+def sanitize_reason(reason: Optional[str], default: str = "BunkerWeb ban") -> str:
+    """Make a ban reason acceptable to SysWarden's ``validHAReason``.
+
+    Control and non-printable characters are dropped and the result is truncated on
+    *bytes*, since that is what SysWarden counts. An empty result falls back to
+    ``default`` rather than failing the whole batch on a 400.
+    """
+    text = "".join(character for character in (reason or "") if character.isprintable()).strip()
+    if not text:
+        text = default
+    encoded = text.encode("utf-8")[:SYSWARDEN_MAX_REASON_BYTES]
+    return encoded.decode("utf-8", "ignore").strip() or default
+
+
+def sanitize_source(source: Optional[str], default: str = SYSWARDEN_BAN_SOURCE) -> str:
+    """Make a provenance tag acceptable to SysWarden's ``validHASource``."""
+    text = "".join(character for character in (source or "") if character in _SOURCE_ALLOWED)[:SYSWARDEN_MAX_SOURCE_BYTES]
+    return text or default
+
+
+def build_ban_batch(bans: Dict[str, Dict], source: str = SYSWARDEN_BAN_SOURCE) -> List[Dict]:
+    """Turn ``{ip: {"ttl", "reason"}}`` into the ``bans`` array of a temporary POST.
+
+    Every entry carries exactly the four fields SysWarden requires — it rejects an object
+    holding anything else — with the TTL clamped and the reason sanitized.
+    """
+    tag = sanitize_source(source)
+    return [{"ip": ip, "ttl": clamp_ttl(bans[ip].get("ttl")), "reason": sanitize_reason(bans[ip].get("reason", "")), "source": tag} for ip in sorted(bans)]
+
+
+def build_unban_batch(ips: Iterable[str], source: str = SYSWARDEN_BAN_SOURCE) -> List[Dict]:
+    """Turn IPs into the ``bans`` array of a temporary DELETE (``ip`` and ``source`` only)."""
+    tag = sanitize_source(source)
+    return [{"ip": ip, "source": tag} for ip in sorted(ips)]
+
+
+def canonical_set(values: Iterable[str]) -> Set[str]:
+    """Canonicalize a peer's addresses so both sides of a comparison use one spelling.
+
+    Our own side is canonicalized in ``normalize_ban``. Doing only that would move the
+    oscillation rather than fix it: an address the peer spells differently would show up
+    as both "to add" and "to remove" on every pass. Anything unparsable is dropped, since
+    it can match nothing we would ever send.
+    """
+    return {canonical for canonical in (canonical_address(value) for value in values) if canonical}
+
+
+def provenance_ips(bans: Iterable, source: str = SYSWARDEN_BAN_SOURCE) -> Set[str]:
+    """The addresses a peer reports as banned under our own provenance tag.
+
+    This replaces the ``pushed.json`` registry wherever the peer supports provenance: the
+    peer is then the one holding the ownership, and its answer survives a lost job cache.
+    """
+    tag = sanitize_source(source)
+    return canonical_set(str(ban.get("ip") or "") for ban in bans if isinstance(ban, dict) and ban.get("source") == tag)
+
+
+def plan_peer(
+    banned: Iterable[str], still_banned: Iterable[str], remote: Iterable[str], ours: Iterable[str], owned: Iterable[str], provenance: bool
+) -> Tuple[List[str], List[str], List[str]]:
+    """Decide what to send one peer: ``(to_add, to_remove, stale_legacy)``.
+
+    This is the whole consequential computation of a pass, kept here rather than in the
+    job script so it can be tested without Docker.
+
+    ``still_banned`` is every address BunkerWeb bans, the ``SYSWARDEN_BAN_MAX_ITEMS`` cap
+    ignored, while ``banned`` is what this pass may push. Removals are computed against
+    the former: being over the cap delays a ban, it must never remove one.
+
+    ``stale_legacy`` only exists for a peer that reports provenance. Expiring bans and the
+    peer's static blocklist are disjoint stores on the SysWarden side, and a legacy push
+    wrote the static one — reachable only through the legacy dialect. Without this, an
+    address pushed before the peer was upgraded stays blocked in its kernel forever. It is
+    also the one decision that still depends on ``pushed.json``: a lost cache orphans those
+    entries, which is the tradeoff for not being able to ask the peer who wrote them.
+    """
+    banned, still, remote, ours, owned = set(banned), set(still_banned), set(remote), set(ours), set(owned)
+    held = ours if provenance else remote
+    to_add, to_remove = diff_push(banned, held, ours if provenance else owned)
+    stale_legacy = sorted(((owned & remote) - ours) - still) if provenance else []
+    return to_add, sorted(set(to_remove) - still), stale_legacy
 
 
 def cap_items(ips: Iterable[str], max_items: int) -> Tuple[List[str], int]:
@@ -225,22 +371,6 @@ def check_line(line: bytes) -> Tuple[bool, bytes]:
     return False, b""
 
 
-def split_families(entries: Iterable[str]) -> Tuple[List[str], List[str]]:
-    """Split validated entries into (v4, v6). Invalid entries are dropped.
-
-    SysWarden keeps two nftables sets (``syswarden_blacklist`` / ``syswarden_blacklist6``)
-    and sorts pushed entries itself, so this exists for reporting and tests rather than
-    for the wire format.
-    """
-    v4: List[str] = []
-    v6: List[str] = []
-    for entry in entries:
-        with suppress(ValueError):
-            version = ip_network(entry, strict=False).version if "/" in entry else ip_address(entry).version
-            (v4 if version == 4 else v6).append(entry)
-    return v4, v6
-
-
 def normalize_fingerprint(value: Optional[str]) -> str:
     """Normalize a certificate fingerprint for comparison.
 
@@ -255,16 +385,6 @@ def normalize_fingerprint(value: Optional[str]) -> str:
     for prefix in ("sha256:", "sha-256:"):
         text = text.removeprefix(prefix)
     return text.replace(":", "").replace(" ", "")
-
-
-def fingerprint_matches(expected: str, actual: str) -> bool:
-    """Compare two fingerprints after normalization. Empty values never match.
-
-    Fails closed on purpose: an unset or unparsable expected fingerprint must not be
-    read as "anything goes".
-    """
-    left, right = normalize_fingerprint(expected), normalize_fingerprint(actual)
-    return bool(left) and bool(right) and left == right
 
 
 def _section(payload: Dict, key: str) -> Dict:

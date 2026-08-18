@@ -48,7 +48,7 @@
       "help": "SHA-256 fingerprint of the peer's certificate to pin, when no CA bundle is available (SysWarden self-signs per host). Read it with: openssl x509 -in /var/lib/syswarden/ha/server.crt -noout -fingerprint -sha256",
       "id": "syswarden-ssl-fingerprint",
       "label": "SysWarden certificate fingerprint (SHA-256)",
-      "regex": "^([Ss][Hh][Aa]-?256[ =:]*)?([A-Fa-f0-9]{2}:?){0,32}$",
+      "regex": "^([Ss][Hh][Aa]-?256([ _-]?[Ff][Ii][Nn][Gg][Ee][Rr][Pp][Rr][Ii][Nn][Tt])?[ =:]*)?([A-Fa-f0-9]{2}:?){0,32}$",
       "type": "text"
     },
     "SYSWARDEN_SSL_INSECURE": {
@@ -91,7 +91,7 @@
     "SYSWARDEN_BAN_MAX_ITEMS": {
       "context": "global",
       "default": "10000",
-      "help": "Maximum number of bans pushed per pass. Beyond it the set is truncated deterministically (sorted) and the count dropped is logged.",
+      "help": "Maximum number of bans pushed per pass, 0 meaning no limit. Beyond it the set is truncated deterministically (sorted) and the count dropped is logged; a ban held back this way is delayed, never removed from the peer.",
       "id": "syswarden-ban-max-items",
       "label": "Maximum bans pushed",
       "regex": "^[0-9]+$",
@@ -100,10 +100,10 @@
     "SYSWARDEN_BAN_CHUNK_SIZE": {
       "context": "global",
       "default": "500",
-      "help": "Number of entries per POST/DELETE request to /ha/sync.",
+      "help": "Number of entries per POST/DELETE request to /ha/sync. A peer refuses an oversized batch outright (500 entries with ban provenance, 1024 without), so a higher value is lowered to whichever ceiling applies to that peer.",
       "id": "syswarden-ban-chunk-size",
       "label": "Ban push batch size",
-      "regex": "^[0-9]+$",
+      "regex": "^[1-9][0-9]*$",
       "type": "number"
     },
     "SYSWARDEN_BAN_SCOPE_FILTER": {
@@ -124,6 +124,15 @@
       "label": "Minimum ban TTL to push (s)",
       "regex": "^[0-9]+$",
       "type": "number"
+    },
+    "SYSWARDEN_BAN_SOURCE": {
+      "context": "global",
+      "default": "bunkerweb",
+      "help": "Provenance tag written on every pushed ban. A peer that tracks provenance only lets us delete what carries our own tag, so give each BunkerWeb cluster pushing to the same host a distinct value.",
+      "id": "syswarden-ban-source",
+      "label": "Ban provenance tag",
+      "regex": "^[A-Za-z0-9._:/-]{1,64}$",
+      "type": "text"
     },
     "USE_SYSWARDEN_BLOCKLIST": {
       "context": "multisite",

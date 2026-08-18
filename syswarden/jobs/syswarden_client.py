@@ -10,7 +10,7 @@ from json import JSONDecodeError
 from os import getenv
 from pathlib import Path
 from sys import exit as sys_exit
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from requests import Session
 from requests.adapters import HTTPAdapter
@@ -140,9 +140,80 @@ def call(
 
 
 def extract_ips(body: Any) -> List[str]:
-    """Pull the IP list out of a /ha/sync response, tolerating both shapes seen so far."""
+    """Pull the IP list out of a /ha/sync response, tolerating both shapes seen so far.
+
+    A peer with an empty blocklist answers ``{"ips": null}``, which lands here as an
+    absent list rather than an error.
+    """
     if isinstance(body, dict):
         body = body.get("ips", [])
     if not isinstance(body, list):
         return []
     return [entry.strip() for entry in body if isinstance(entry, str) and entry.strip()]
+
+
+def fetch_capabilities(session: Session, peer: str, *, timeout: int = 10) -> Tuple[bool, Set[str]]:
+    """Ask a peer what its HA API can do, through ``GET /ha/status``.
+
+    Returns ``(reachable, capabilities)``. A peer that predates capability reporting
+    answers without the field, which yields an empty set — the caller then speaks the
+    legacy dialect to it. The set is also empty when the peer has
+    ``integrations.bunkerweb.enabled`` off, which is the same thing from here: it refuses
+    expiring bans and provenance, and only the legacy payloads work against it.
+
+    An unreachable peer is NOT reported as capability-less. Confusing the two would make
+    the caller delete on a shared blocklist using a stale local registry.
+    """
+    try:
+        response = session.get(f"{peer}/ha/status", timeout=timeout)
+    except BaseException:
+        return False, set()
+    if response.status_code != 200:
+        return False, set()
+    try:
+        body = response.json()
+    except (JSONDecodeError, ValueError):
+        return False, set()
+    if not isinstance(body, dict):
+        return False, set()
+    return True, {entry for entry in (body.get("capabilities") or []) if isinstance(entry, str)}
+
+
+def fetch_sync(session: Session, peer: str, *, timeout: int = 10, details: bool = False, page_size: int = 500) -> Tuple[bool, Dict[str, List]]:
+    """Read a peer's blocklist through ``GET /ha/sync``, following the provenance pages.
+
+    Returns ``(ok, {"ips": [...], "bans": [...]})``. ``ips`` is the whole blocklist the
+    peer enforces, static entries included; ``bans`` is the ledger of expiring bans with
+    their provenance, and stays empty unless ``details`` is set and the peer supports it.
+
+    ``bans`` is omitted from the answer when the ledger is empty, so an empty list here
+    means "nothing expiring", never "unsupported" — the caller decides which dialect to
+    speak from the peer's advertised capabilities, not from the shape of this answer.
+    """
+    snapshot: Dict[str, List] = {"ips": [], "bans": []}
+    params: Dict[str, Any] = {"details": "true", "limit": page_size} if details else {}
+    # Bounded rather than while True: the ledger holds at most maxHALedgerRecords (16384)
+    # entries, so a cursor that keeps pointing forward is a bug on the other side.
+    for page in range(64):
+        try:
+            response = session.get(f"{peer}/ha/sync", params=params or None, timeout=timeout)
+        except BaseException:
+            return False, snapshot
+        if response.status_code != 200:
+            return False, snapshot
+        try:
+            body = response.json()
+        except (JSONDecodeError, ValueError):
+            return False, snapshot
+        if not isinstance(body, dict):
+            return False, snapshot
+        if page == 0:
+            snapshot["ips"] = extract_ips(body)
+        entries = body.get("bans")
+        if isinstance(entries, list):
+            snapshot["bans"].extend(entry for entry in entries if isinstance(entry, dict))
+        cursor = body.get("next_cursor")
+        if not details or not isinstance(cursor, str) or not cursor:
+            return True, snapshot
+        params = {"details": "true", "limit": page_size, "cursor": cursor}
+    return True, snapshot

@@ -6,7 +6,7 @@ flowchart TD
 
     subgraph host[Docker host]
         direction TB
-        nft{"nftables inet syswarden<br/>docker_protect, hook forward<br/>saddr or daddr in @syswarden_blacklist?"}
+        nft{"nftables inet syswarden<br/>docker_protect, hook forward<br/>saddr or daddr in @banned_ips<br/>or @syswarden_blacklist?"}
         subgraph bw[BunkerWeb]
             direction TB
             l7["Core checks, then syswarden.lua<br/>access / preread:<br/>whitelist first, then blocklist"]

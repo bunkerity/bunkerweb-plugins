@@ -18,8 +18,23 @@ from logger import setup_logger  # type: ignore
 from common_utils import get_redis_client  # type: ignore
 from jobs import Job  # type: ignore
 
-from syswarden_helpers import cap_items, chunked, diff_push, next_owned, parse_ban_key, select_bans  # type: ignore
-from syswarden_client import call, extract_ips, get_peers, get_timeout, make_session  # type: ignore
+from syswarden_helpers import (  # type: ignore
+    SYSWARDEN_BAN_SOURCE,
+    SYSWARDEN_MAX_BANS_PER_REQUEST,
+    SYSWARDEN_MAX_IPS_PER_REQUEST,
+    build_ban_batch,
+    build_unban_batch,
+    canonical_set,
+    cap_items,
+    chunked,
+    next_owned,
+    parse_ban_key,
+    plan_peer,
+    provenance_ips,
+    sanitize_source,
+    select_bans,
+)
+from syswarden_client import call, fetch_capabilities, fetch_sync, get_peers, get_timeout, make_session  # type: ignore
 
 LOGGER = setup_logger("SYSWARDEN.BAN-PUSH", getenv("LOG_LEVEL", "INFO"))
 status = 0
@@ -41,6 +56,17 @@ try:
     except ValueError:
         LOGGER.error("SYSWARDEN_BAN_MAX_ITEMS, SYSWARDEN_BAN_CHUNK_SIZE and SYSWARDEN_BAN_MIN_TTL must be integers")
         sys_exit(2)
+
+    if chunk_size <= 0:
+        # chunked() reads a non-positive size as "one single batch", which SysWarden would
+        # then refuse whole once there are more bans than a request may carry.
+        LOGGER.warning("SYSWARDEN_BAN_CHUNK_SIZE must be at least 1, falling back to 500")
+        chunk_size = 500
+
+    # The provenance tag every pushed ban carries. It is what a peer keys our entries on,
+    # so two BunkerWeb clusters pushing to one SysWarden host must not share it, or each
+    # would read the other's bans as its own and delete them.
+    source = sanitize_source(getenv("SYSWARDEN_BAN_SOURCE", SYSWARDEN_BAN_SOURCE))
 
     peers = get_peers(LOGGER)
     timeout = get_timeout()
@@ -83,6 +109,9 @@ try:
                             ban_data = loads(raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw)
                             record["permanent"] = ban_data.get("permanent", False)
                             record["ban_scope"] = ban_data.get("ban_scope")
+                            # BunkerWeb stores the reason in the same blob; without this the
+                            # peer only ever sees the generic fallback when Redis is enabled.
+                            record["reason"] = ban_data.get("reason")
                     record["exp"] = redis_client.ttl(key)
                     records.append(record)
             LOGGER.info(f"Found {len(records)} ban(s) in Redis")
@@ -102,7 +131,8 @@ try:
             records.extend(entry for entry in instance_bans if isinstance(entry, dict))
 
     scope_filter = getenv("SYSWARDEN_BAN_SCOPE_FILTER", "").split()
-    banned, dropped = cap_items(select_bans(records, scope_filter, min_ttl), max_items)
+    details = select_bans(records, scope_filter, min_ttl)
+    banned, dropped = cap_items(details, max_items)
     if dropped:
         LOGGER.warning(f"More than {max_items} bans to push, {dropped} of them were dropped for this pass")
     LOGGER.info(f"{len(banned)} banned IP(s) to synchronize with {len(peers)} SysWarden peer(s)")
@@ -117,54 +147,94 @@ try:
 
     session = make_session(LOGGER, methods=("GET", "POST", "DELETE"))
 
+    # Everything BunkerWeb still bans, cap included: an address dropped by the cap is not
+    # unbanned, so it must never be computed as something to remove from a peer.
+    still_banned = set(details)
+
+    pushed_ok = set()
     removed_ok = set()
     peer_failed = False
 
     for peer in peers:
-        got, body = call(session, peer, "GET", "/ha/sync", timeout=timeout)
+        # The peer states what its API can do. A peer that predates capability reporting,
+        # or that has integrations.bunkerweb.enabled off, reports nothing and gets the
+        # legacy dialect.
+        reachable, capabilities = fetch_capabilities(session, peer, timeout=timeout)
+        if not reachable:
+            LOGGER.error(f"Can't read the status of {peer}, skipping it for this pass")
+            peer_failed = True
+            status = 2
+            continue
+        provenance = "sync_provenance" in capabilities
+
+        got, snapshot = fetch_sync(session, peer, timeout=timeout, details=provenance)
         if not got:
-            LOGGER.error(f"Can't read the blocklist of {peer}: {body}")
+            LOGGER.error(f"Can't read the blocklist of {peer}")
             peer_failed = True
             status = 2
             continue
 
-        remote = extract_ips(body)
-        # to_remove is intersected with our own registry on purpose: /ha/sync is a shared
-        # blocklist that also holds operator entries and real HA-peer entries.
-        to_add, to_remove = diff_push(banned, remote, owned)
+        # A peer that tracks provenance owns the bookkeeping: its ledger is keyed on
+        # (ip, source, peer_scope) and it only deletes records matching all three, so what
+        # it reports as ours is authoritative and survives a lost job cache.
+        remote = canonical_set(snapshot["ips"])
+        ours = provenance_ips(snapshot["bans"], source) if provenance else set()
+        to_add, to_remove, stale_legacy = plan_peer(banned, still_banned, remote, ours, owned, provenance)
 
         if audit:
-            LOGGER.info(f"[audit] {peer}: would add {len(to_add)} IP(s) and remove {len(to_remove)} IP(s), nothing sent")
+            LOGGER.info(f"[audit] {peer}: would add {len(to_add)} IP(s) and remove {len(to_remove) + len(stale_legacy)} IP(s), nothing sent")
             if to_add:
                 LOGGER.info(f"[audit] {peer}: would add {' '.join(to_add)}")
-            if to_remove:
-                LOGGER.info(f"[audit] {peer}: would remove {' '.join(to_remove)}")
+            if to_remove or stale_legacy:
+                LOGGER.info(f"[audit] {peer}: would remove {' '.join(to_remove + stale_legacy)}")
             continue
 
-        for batch in chunked(to_add, chunk_size):
-            sent, error = call(session, peer, "POST", "/ha/sync", timeout=timeout, payload={"ips": batch})
+        # SysWarden refuses an oversized batch outright, and the two dialects have
+        # different ceilings (maxHABansPerRequest vs maxHAIPsPerRequest), so the setting
+        # can only ever lower them.
+        ban_chunk = min(chunk_size, SYSWARDEN_MAX_BANS_PER_REQUEST)
+        ips_chunk = min(chunk_size, SYSWARDEN_MAX_IPS_PER_REQUEST)
+        peer_chunk = ban_chunk if provenance else ips_chunk
+
+        for batch in chunked(to_add, peer_chunk):
+            payload = {"bans": build_ban_batch({ip: details[ip] for ip in batch}, source)} if provenance else {"ips": batch}
+            sent, error = call(session, peer, "POST", "/ha/sync", timeout=timeout, payload=payload)
             if not sent:
                 LOGGER.error(f"Can't push {len(batch)} ban(s) to {peer}: {error}")
                 peer_failed = True
                 status = 2
                 continue
+            # Ownership is a receipt, never a claim: an IP whose push failed must not be
+            # recorded as ours, or a later pass would delete an entry we never wrote.
+            pushed_ok.update(batch)
             LOGGER.info(f"➕ Pushed {len(batch)} ban(s) to {peer}")
 
-        for batch in chunked(to_remove, chunk_size):
-            sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload={"ips": batch})
+        for batch in chunked(to_remove, peer_chunk):
+            payload = {"bans": build_unban_batch(batch, source)} if provenance else {"ips": batch}
+            sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload=payload)
             if not sent:
-                LOGGER.error(f"Can't remove {len(batch)} expired ban(s) from {peer}: {error}")
+                LOGGER.error(f"Can't remove {len(batch)} lifted ban(s) from {peer}: {error}")
                 peer_failed = True
                 status = 2
                 continue
             removed_ok.update(batch)
-            LOGGER.info(f"➖ Removed {len(batch)} expired ban(s) from {peer}")
+            LOGGER.info(f"➖ Removed {len(batch)} lifted ban(s) from {peer}")
+
+        for batch in chunked(stale_legacy, ips_chunk):
+            sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload={"ips": batch})
+            if not sent:
+                LOGGER.error(f"Can't remove {len(batch)} entry(ies) left over from the legacy dialect on {peer}: {error}")
+                peer_failed = True
+                status = 2
+                continue
+            removed_ok.update(batch)
+            LOGGER.info(f"➖ Removed {len(batch)} entry(ies) this plugin had pushed to {peer} before it supported ban provenance")
 
     if not audit:
         # Ownership is only released when every peer answered: an IP whose DELETE failed
         # somewhere stays ours, so the next pass retries instead of orphaning it there.
         deleted_everywhere = set() if peer_failed else removed_ok
-        new_owned = next_owned(banned, owned, deleted_everywhere)
+        new_owned = next_owned(pushed_ok, owned, deleted_everywhere)
         if new_owned != owned:
             cached, err = JOB.cache_file("pushed.json", dumps(new_owned).encode())
             if not cached:

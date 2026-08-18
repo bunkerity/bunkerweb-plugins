@@ -76,6 +76,8 @@ def test_no_telemetry_yet_degrades_to_zero(actions):
 def test_broken_database_never_leaks_the_exception(actions):
     ret = actions.pre_render(bw_instances_utils=FakePing(), db=FakeDB(exc=RuntimeError("boom postgres://user:pass@db")))
     assert ret["error"] == "Could not retrieve the SysWarden telemetry"
-    assert "postgres" not in ret["error"]
+    # Scan the whole payload: a credential would leak through whichever card happened to
+    # render it, not through the field just pinned to a literal.
+    assert "postgres" not in dumps(ret, default=str)
     # The ping card still answers: one broken source must not blank the whole page.
     assert ret["ping_status"]["value"] == "up"

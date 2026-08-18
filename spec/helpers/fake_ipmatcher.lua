@@ -25,6 +25,23 @@ function _M.new_err()
 	return nil, "construction boom"
 end
 
+-- Factory that succeeds once then fails, so the SECOND matcher decide() builds (the
+-- blocklist one, after the whitelist) is the one that errors. Without this the blocklist
+-- error branch is never reached: a matcher error there would fall through as "no-match",
+-- which the caller caches as an allow for the whole TTL.
+function _M.new_second_err(list)
+	_M._built = (_M._built or 0) + 1
+	if _M._built >= 2 then
+		return nil, "blocklist boom"
+	end
+	return setmetatable({ list = list }, matcher)
+end
+
+-- Reset the counter used by new_second_err between examples.
+function _M.reset()
+	_M._built = 0
+end
+
 -- Factory whose :match errors (drives the (nil, err) match-error path).
 function _M.new_match_err(list)
 	return setmetatable({ list = list }, {

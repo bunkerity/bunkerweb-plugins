@@ -119,8 +119,14 @@ class TestParseBanKey:
 
 class TestNormalizeBan:
     def test_api_record_keeps_scope_and_ttl(self):
-        record = {"ip": "1.2.3.4", "service": "app", "ban_scope": "service", "exp": 3600, "permanent": False}
-        assert helpers.normalize_ban(record) == {"ip": "1.2.3.4", "service": "app", "ban_scope": "service", "ttl": 3600}
+        record = {"ip": "1.2.3.4", "service": "app", "ban_scope": "service", "exp": 3600, "permanent": False, "reason": "bad behavior"}
+        assert helpers.normalize_ban(record) == {
+            "ip": "1.2.3.4",
+            "service": "app",
+            "ban_scope": "service",
+            "ttl": 3600,
+            "reason": "bad behavior",
+        }
 
     def test_permanent_ban_has_no_ttl(self):
         record = {"ip": "1.2.3.4", "exp": 42, "permanent": True}
@@ -142,7 +148,7 @@ class TestSelectBans:
             {"ip": "1.2.3.4", "service": "a", "ban_scope": "service"},
             {"ip": "1.2.3.4"},
         ]
-        assert helpers.select_bans(records) == {"1.2.3.4"}
+        assert set(helpers.select_bans(records)) == {"1.2.3.4"}
 
     def test_scope_filter_keeps_global_bans(self):
         records = [
@@ -150,11 +156,11 @@ class TestSelectBans:
             {"ip": "2.2.2.2", "service": "dropped"},
             {"ip": "3.3.3.3"},
         ]
-        assert helpers.select_bans(records, scope_filter=["kept"]) == {"1.1.1.1", "3.3.3.3"}
+        assert set(helpers.select_bans(records, scope_filter=["kept"])) == {"1.1.1.1", "3.3.3.3"}
 
     def test_empty_scope_filter_means_every_service(self):
         records = [{"ip": "1.1.1.1", "service": "a"}, {"ip": "2.2.2.2", "service": "b"}]
-        assert helpers.select_bans(records, scope_filter=[]) == {"1.1.1.1", "2.2.2.2"}
+        assert set(helpers.select_bans(records, scope_filter=[])) == {"1.1.1.1", "2.2.2.2"}
 
     def test_min_ttl_drops_short_bans_but_never_permanent_ones(self):
         records = [
@@ -162,10 +168,28 @@ class TestSelectBans:
             {"ip": "2.2.2.2", "exp": 3600},
             {"ip": "3.3.3.3", "permanent": True},
         ]
-        assert helpers.select_bans(records, min_ttl=60) == {"2.2.2.2", "3.3.3.3"}
+        assert set(helpers.select_bans(records, min_ttl=60)) == {"2.2.2.2", "3.3.3.3"}
 
-    def test_no_records_yields_an_empty_set(self):
-        assert helpers.select_bans([]) == set()
+    def test_no_records_yields_an_empty_mapping(self):
+        assert helpers.select_bans([]) == {}
+
+    def test_ttl_and_reason_travel_with_the_ip(self):
+        records = [{"ip": "1.1.1.1", "exp": 900, "reason": "bad behavior"}]
+        assert helpers.select_bans(records) == {"1.1.1.1": {"ttl": 900, "reason": "bad behavior"}}
+
+    def test_the_longest_ban_wins_on_a_shared_ip(self):
+        records = [
+            {"ip": "1.1.1.1", "service": "short", "exp": 60},
+            {"ip": "1.1.1.1", "service": "long", "exp": 3600},
+        ]
+        assert helpers.select_bans(records)["1.1.1.1"]["ttl"] == 3600
+
+    def test_a_permanent_ban_is_never_shortened_by_a_dated_one(self):
+        records = [
+            {"ip": "1.1.1.1", "service": "perm", "permanent": True},
+            {"ip": "1.1.1.1", "service": "short", "exp": 60},
+        ]
+        assert helpers.select_bans(records)["1.1.1.1"]["ttl"] is None
 
 
 class TestCapItems:
@@ -249,31 +273,19 @@ class TestCheckLine:
         assert helpers.check_line(line) == (False, b"")
 
 
-class TestSplitFamilies:
-    def test_separates_v4_and_v6(self):
-        v4, v6 = helpers.split_families(["1.2.3.4", "::1", "10.0.0.0/8", "2001:db8::/32"])
-        assert v4 == ["1.2.3.4", "10.0.0.0/8"]
-        assert v6 == ["::1", "2001:db8::/32"]
+class TestNormalizeFingerprint:
+    def test_openssl_output_becomes_a_bare_digest(self):
+        # This is what the README tells the operator to paste, so it has to survive.
+        assert helpers.normalize_fingerprint("SHA256 Fingerprint=AB:CD:EF:01") == "abcdef01"
 
-    def test_invalid_entries_are_dropped(self):
-        assert helpers.split_families(["nope", "1.2.3.4"]) == (["1.2.3.4"], [])
+    def test_a_sha256_prefix_is_stripped(self):
+        assert helpers.normalize_fingerprint("sha256:ABCDEF01") == "abcdef01"
+        assert helpers.normalize_fingerprint("sha-256:ab:cd:ef:01") == "abcdef01"
 
-
-class TestFingerprint:
-    def test_openssl_output_matches_a_bare_digest(self):
-        openssl = "SHA256 Fingerprint=AB:CD:EF:01"
-        assert helpers.fingerprint_matches(openssl, "abcdef01")
-
-    def test_sha256_prefix_is_accepted(self):
-        assert helpers.fingerprint_matches("sha256:ABCDEF01", "ab:cd:ef:01")
-
-    def test_a_different_digest_does_not_match(self):
-        assert not helpers.fingerprint_matches("abcdef01", "abcdef02")
-
-    @pytest.mark.parametrize("expected,actual", (("", "abcdef01"), ("abcdef01", ""), ("", "")))
-    def test_empty_values_fail_closed(self, expected, actual):
-        # An unset fingerprint must never be read as "anything goes".
-        assert not helpers.fingerprint_matches(expected, actual)
+    def test_an_empty_value_stays_empty(self):
+        # tls_settings reads "" as "no pin configured", so this must not invent one.
+        assert helpers.normalize_fingerprint("") == ""
+        assert helpers.normalize_fingerprint(None) == ""
 
 
 class TestParseTelemetry:
@@ -310,3 +322,203 @@ class TestParseTelemetry:
 
     def test_version_falls_back_to_github_release(self):
         assert helpers.parse_telemetry({"github_release": "v4.02.8"})["version"] == "v4.02.8"
+
+
+class TestClampTTL:
+    def test_a_permanent_ban_takes_the_ceiling(self):
+        # SysWarden has no permanent temporary ban, and the push job refreshes every
+        # minute, so the ceiling is renewed long before it is reached.
+        assert helpers.clamp_ttl(None) == helpers.SYSWARDEN_MAX_TTL
+
+    def test_a_long_ban_is_capped(self):
+        assert helpers.clamp_ttl(helpers.SYSWARDEN_MAX_TTL * 4) == helpers.SYSWARDEN_MAX_TTL
+
+    def test_a_short_or_expired_ban_takes_the_floor(self):
+        assert helpers.clamp_ttl(0) == helpers.SYSWARDEN_MIN_TTL
+        assert helpers.clamp_ttl(-30) == helpers.SYSWARDEN_MIN_TTL
+
+    def test_a_normal_ban_passes_through(self):
+        assert helpers.clamp_ttl(3600) == 3600
+
+
+class TestSanitizeReason:
+    def test_control_characters_are_dropped(self):
+        assert helpers.sanitize_reason("bad\nbehavior\x00") == "badbehavior"
+
+    def test_an_empty_reason_falls_back(self):
+        assert helpers.sanitize_reason("") == "BunkerWeb ban"
+        assert helpers.sanitize_reason("   ") == "BunkerWeb ban"
+
+    def test_truncation_counts_bytes_and_never_splits_a_character(self):
+        # A 3-byte character on purpose: 512 is not a multiple of 3, so the cut lands
+        # mid-character and the decode has to drop the partial one. A 2-byte character
+        # would divide evenly and never exercise that.
+        sanitized = helpers.sanitize_reason("€" * 400)
+        assert len(sanitized.encode("utf-8")) <= helpers.SYSWARDEN_MAX_REASON_BYTES
+        assert sanitized == "€" * 170
+
+
+class TestSanitizeSource:
+    def test_the_default_is_kept_as_is(self):
+        assert helpers.sanitize_source(helpers.SYSWARDEN_BAN_SOURCE) == "bunkerweb"
+
+    def test_characters_outside_the_accepted_set_are_dropped(self):
+        assert helpers.sanitize_source("bunker web!ç") == "bunkerweb"
+
+    def test_an_unusable_source_falls_back(self):
+        assert helpers.sanitize_source("!!!") == "bunkerweb"
+
+    def test_the_tag_is_truncated(self):
+        assert len(helpers.sanitize_source("a" * 200)) == helpers.SYSWARDEN_MAX_SOURCE_BYTES
+
+
+class TestBuildBanBatch:
+    def test_entries_carry_exactly_the_four_required_fields(self):
+        batch = helpers.build_ban_batch({"1.1.1.1": {"ttl": 900, "reason": "bad behavior"}})
+        assert batch == [{"ip": "1.1.1.1", "ttl": 900, "reason": "bad behavior", "source": "bunkerweb"}]
+
+    def test_output_is_sorted_and_reasons_are_defaulted(self):
+        batch = helpers.build_ban_batch({"9.9.9.9": {"ttl": None, "reason": ""}, "1.1.1.1": {"ttl": 60, "reason": "x"}})
+        assert [entry["ip"] for entry in batch] == ["1.1.1.1", "9.9.9.9"]
+        assert batch[1] == {"ip": "9.9.9.9", "ttl": helpers.SYSWARDEN_MAX_TTL, "reason": "BunkerWeb ban", "source": "bunkerweb"}
+
+
+class TestBuildUnbanBatch:
+    def test_a_delete_entry_carries_only_ip_and_source(self):
+        assert helpers.build_unban_batch(["2.2.2.2", "1.1.1.1"]) == [
+            {"ip": "1.1.1.1", "source": "bunkerweb"},
+            {"ip": "2.2.2.2", "source": "bunkerweb"},
+        ]
+
+
+class TestProvenanceIPs:
+    def test_only_our_own_source_is_claimed(self):
+        bans = [
+            {"ip": "1.1.1.1", "source": "bunkerweb", "peer_scope": "10.0.0.2/32"},
+            {"ip": "2.2.2.2", "source": "crowdsec", "peer_scope": "10.0.0.3/32"},
+        ]
+        assert helpers.provenance_ips(bans) == {"1.1.1.1"}
+
+    def test_malformed_entries_are_ignored(self):
+        assert helpers.provenance_ips(["nope", {"source": "bunkerweb"}, {"ip": "  ", "source": "bunkerweb"}]) == set()
+
+    def test_an_empty_ledger_claims_nothing(self):
+        assert helpers.provenance_ips([]) == set()
+
+
+class TestCanonicalAddress:
+    def test_a_plain_address_passes_through(self):
+        assert helpers.canonical_address("203.0.113.5") == "203.0.113.5"
+        assert helpers.canonical_address(" 203.0.113.5 ") == "203.0.113.5"
+
+    def test_ipv6_is_lowercased_and_compressed(self):
+        # SysWarden stores the canonical form. Without this the next pass would see the
+        # address as both "to add" and "to remove" and oscillate forever.
+        assert helpers.canonical_address("2001:DB8::1") == "2001:db8::1"
+
+    def test_a_network_is_masked_to_its_prefix(self):
+        assert helpers.canonical_address("203.0.113.5/24") == "203.0.113.0/24"
+
+    @pytest.mark.parametrize("value", ("::ffff:203.0.113.5", "fe80::1%eth0", "not-an-ip", "", "   ", "203.0.113.5.6"))
+    def test_what_syswarden_would_refuse_is_dropped(self, value):
+        # A single refused entry makes SysWarden reject the whole batch of up to 500
+        # bans, so these must never reach the wire.
+        assert helpers.canonical_address(value) == ""
+
+
+class TestNormalizeBanExpiry:
+    def test_a_redis_key_without_expiry_is_permanent(self):
+        # Redis answers -1 for a key with no TTL.
+        assert helpers.normalize_ban({"ip": "1.1.1.1", "exp": -1})["ttl"] is None
+
+    @pytest.mark.parametrize("exp", (0, -2))
+    def test_an_expired_or_vanished_ban_is_dropped(self, exp):
+        # -2 is Redis for "the key went away between the scan and the read", 0 is the
+        # instance API for an expired ban. Pushing either would ban an address BunkerWeb
+        # no longer bans — permanently so on a peer without lifetimes.
+        assert helpers.normalize_ban({"ip": "1.1.1.1", "exp": exp}) is None
+
+    def test_a_permanent_ban_ignores_its_expiry_field(self):
+        assert helpers.normalize_ban({"ip": "1.1.1.1", "exp": 0, "permanent": True})["ttl"] is None
+
+    def test_an_address_syswarden_would_refuse_is_dropped(self):
+        assert helpers.normalize_ban({"ip": "::ffff:203.0.113.5"}) is None
+
+    def test_the_address_is_canonicalized(self):
+        assert helpers.normalize_ban({"ip": "2001:DB8::1"})["ip"] == "2001:db8::1"
+
+
+class TestWireConstants:
+    def test_the_limits_match_the_ones_syswarden_enforces(self):
+        # Pinned to literals on purpose: every other assertion in this file reads these
+        # from the module, so a wrong value would agree with itself and still be refused
+        # on the wire. Each mirrors a symbol in SysWarden's ha_api.go / firewall package.
+        assert (
+            helpers.SYSWARDEN_DEFAULT_PORT,  # [integrations.ha] peer_port default
+            helpers.SYSWARDEN_MIN_TTL,  # firewall.MinimumBanTTL, 1 second
+            helpers.SYSWARDEN_MAX_TTL,  # firewall.MaximumBanTTL, 30 days
+            helpers.SYSWARDEN_MAX_REASON_BYTES,  # maxHAReasonBytes
+            helpers.SYSWARDEN_MAX_SOURCE_BYTES,  # maxHASourceBytes
+            helpers.SYSWARDEN_MAX_BANS_PER_REQUEST,  # maxHABansPerRequest
+            helpers.SYSWARDEN_MAX_IPS_PER_REQUEST,  # maxHAIPsPerRequest
+        ) == (62026, 1, 2592000, 512, 64, 500, 1024)
+
+
+class TestCanonicalSet:
+    def test_a_peer_spelling_is_brought_to_our_own(self):
+        # Canonicalizing only our side would move the oscillation rather than fix it.
+        assert helpers.canonical_set(["2001:DB8::1", "203.0.113.5"]) == {"2001:db8::1", "203.0.113.5"}
+
+    def test_unparsable_entries_are_dropped(self):
+        assert helpers.canonical_set(["nope", "", "203.0.113.5"]) == {"203.0.113.5"}
+
+
+class TestProvenanceCanonicalization:
+    def test_a_ledger_entry_matches_the_key_select_bans_produced(self):
+        ours = helpers.provenance_ips([{"ip": "2001:DB8::1", "source": "bunkerweb"}])
+        banned = set(helpers.select_bans([{"ip": "2001:db8::1"}]))
+        # Same address, two spellings. If these differ, every pass pushes and deletes it.
+        assert ours == banned
+        assert helpers.plan_peer(banned, banned, ours, ours, [], provenance=True) == ([], [], [])
+
+
+class TestPlanPeer:
+    def test_a_provenance_peer_is_diffed_against_its_own_ledger(self):
+        to_add, to_remove, stale = helpers.plan_peer(
+            banned={"1.1.1.1"}, still_banned={"1.1.1.1"}, remote={"1.1.1.1", "9.9.9.9"}, ours=set(), owned=[], provenance=True
+        )
+        # 9.9.9.9 is on the peer but not ours and not banned: it must be left alone.
+        assert (to_add, to_remove, stale) == (["1.1.1.1"], [], [])
+
+    def test_an_entry_left_over_from_the_legacy_dialect_is_reclaimed(self):
+        # Pushed before the peer was upgraded: it lives in the peer's static blocklist,
+        # not in its ledger, and only the legacy dialect can remove it.
+        _, to_remove, stale = helpers.plan_peer(banned=set(), still_banned=set(), remote={"1.1.1.1"}, ours=set(), owned=["1.1.1.1"], provenance=True)
+        assert (to_remove, stale) == ([], ["1.1.1.1"])
+
+    def test_a_legacy_leftover_that_is_still_banned_is_kept(self):
+        _, _, stale = helpers.plan_peer(banned={"1.1.1.1"}, still_banned={"1.1.1.1"}, remote={"1.1.1.1"}, ours=set(), owned=["1.1.1.1"], provenance=True)
+        assert stale == []
+
+    def test_a_lost_registry_orphans_legacy_leftovers(self):
+        # Documented tradeoff, not an oversight: without pushed.json there is no way to
+        # tell our own legacy entries from an operator's, so nothing is removed.
+        _, _, stale = helpers.plan_peer(banned=set(), still_banned=set(), remote={"1.1.1.1"}, ours=set(), owned=[], provenance=True)
+        assert stale == []
+
+    def test_an_address_held_back_by_the_cap_is_never_removed(self):
+        # It is over SYSWARDEN_BAN_MAX_ITEMS, so it is not in `banned` this pass — but it
+        # is still banned, and delaying a ban must not look like lifting one.
+        _, to_remove, _ = helpers.plan_peer(banned=set(), still_banned={"1.1.1.1"}, remote={"1.1.1.1"}, ours={"1.1.1.1"}, owned=[], provenance=True)
+        assert to_remove == []
+
+    def test_a_legacy_peer_never_gets_a_stale_legacy_list(self):
+        to_add, to_remove, stale = helpers.plan_peer(
+            banned={"1.1.1.1"}, still_banned={"1.1.1.1"}, remote={"2.2.2.2"}, ours=set(), owned=["2.2.2.2"], provenance=False
+        )
+        assert (to_add, to_remove, stale) == (["1.1.1.1"], ["2.2.2.2"], [])
+
+    def test_a_legacy_peer_only_removes_what_the_registry_claims(self):
+        # 9.9.9.9 is on the peer and unbanned, but was never ours: an operator put it there.
+        _, to_remove, _ = helpers.plan_peer(banned=set(), still_banned=set(), remote={"9.9.9.9"}, ours=set(), owned=[], provenance=False)
+        assert to_remove == []

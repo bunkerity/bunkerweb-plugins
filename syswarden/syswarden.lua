@@ -178,7 +178,7 @@ function syswarden:check(addr)
 	end
 	if verdict == "blocked" then
 		self:set_metric("counters", "failed_syswarden", 1)
-		return self:ret(true, "IP is in the SysWarden blocklist", get_deny_status())
+		return self:ret(true, addr .. " is in the SysWarden blocklist", get_deny_status())
 	end
 	return self:ret(true, addr .. " is not in the SysWarden blocklist")
 end

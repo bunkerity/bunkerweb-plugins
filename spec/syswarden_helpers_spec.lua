@@ -88,6 +88,17 @@ describe("syswarden helpers", function()
 			assert.is_nil(verdict)
 			assert.equals("construction boom", err)
 		end)
+		it("propagates an error from the blocklist matcher too", function()
+			-- The whitelist is consulted first, so only a factory that fails on its
+			-- SECOND call reaches this branch. It matters: without it a transient error
+			-- would return "no-match", and the caller caches that as an allow for the
+			-- whole TTL rather than skipping the cache.
+			fake.reset()
+			local input = lists({ whitelist = { "9.9.9.9" }, blocklist = { "1.2.3.4" } })
+			local verdict, err = helpers.decide(input, "1.2.3.4", fake.new_second_err)
+			assert.is_nil(verdict)
+			assert.equals("blocklist boom", err)
+		end)
 	end)
 
 	describe("list_sizes", function()
