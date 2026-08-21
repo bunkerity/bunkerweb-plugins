@@ -184,3 +184,31 @@ def find_matching_cert(certs: List[Dict], domains: List[str], now: Optional[date
         if hostnames_match(cert.get("hostnames", []), domains):
             return cert.get("id"), True, is_expired(cert.get("expires_on", ""), now)
     return None, False, False
+
+
+def delivery_status(status: int, cached_any: bool, pending: bool) -> Tuple[int, bool]:
+    """Resolve a job's exit code so a successful cache write is never stranded.
+
+    The scheduler ships ``/var/cache/bunkerweb`` to the BunkerWeb instances only when a job
+    in the same batch exits ``1`` (``JobScheduler.run_pending``). So a job that caches a
+    file and then exits ``>=2`` because a *later* item failed leaves that file in the
+    scheduler's cache and the database only. On the next run its hash still matches, so
+    nothing is re-cached, the job exits ``0``, and the file is never delivered — the
+    instances keep enforcing the previous one indefinitely.
+
+    Carrying a pending-delivery marker across runs closes that hole: the exit code becomes
+    ``1`` on the first run that is not itself a failure.
+
+    ``status`` is the exit code the job computed, ``cached_any`` whether this run wrote at
+    least one cache file, ``pending`` whether a previous run left the marker behind.
+
+    Returns ``(exit_status, keep_marker)``. The marker is cleared as soon as ``1`` is
+    returned; if that ship then fails, the scheduler logs it and the next changed run
+    delivers.
+    """
+    pending = pending or cached_any
+    if status >= 2:
+        return status, pending
+    if pending:
+        return 1, False
+    return status, False
