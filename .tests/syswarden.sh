@@ -141,6 +141,22 @@ docker compose logs bunkerweb 2>/dev/null | grep -F "203.0.113.10 is in the SysW
 	|| fail "the deny is not attributable to the syswarden plugin"
 echo "✅ The deny verdict is attributable to the syswarden plugin"
 
+# Every nginx worker must deny, not only the one that happened to compile the lists.
+# BunkerWeb runs init_worker() once per *instance* — the phase is gated behind a shared
+# "misc_ready" flag taken under a lock — so a plugin that builds per-worker state there
+# leaves every other worker allowing the address, and which worker answers a connection is
+# an accept race. Concurrent requests spread over the workers, so one non-403 here means
+# the per-worker build regressed.
+codes="$(docker compose exec -T pulled-client sh -c '
+for _ in $(seq 1 24) ; do
+	curl -s -o /dev/null -w "%{http_code}\n" -H "Host: www.example.com" http://bunkerweb:8080/ &
+done
+wait
+' 2>/dev/null | tr -d "\r")"
+[ "$(printf '%s\n' "$codes" | grep -c '^403$')" = "24" ] \
+	|| fail "a blocked address must be denied by every worker, got: $(printf '%s' "$codes" | tr '\n' ' ')"
+echo "✅ Every worker denies the blocked address (24/24 concurrent requests)"
+
 # The same address in both lists must be allowed: the whitelist is the operator's explicit
 # override and it is pulled from /ha/telemetry, not from the blocklist.
 code="$(http_code allowed-client)"

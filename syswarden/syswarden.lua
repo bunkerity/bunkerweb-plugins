@@ -34,6 +34,40 @@ local CACHE_DIR = "/var/cache/bunkerweb/syswarden/"
 -- visible immediately without a stale per-address verdict cache.
 local worker_matchers = {}
 local worker_matcher_errors = {}
+local worker_built = false
+
+-- Compile the cached lists into matchers for the worker running this Lua VM.
+--
+-- BunkerWeb runs init_worker() **once per instance, not once per worker**: the phase is
+-- gated behind a shared "misc_ready" flag taken under a lock, so the first worker to grab
+-- it runs every plugin's init_worker() and all the others skip it. Building the matchers
+-- there alone left every other worker with an empty table, and since nginx hands a new
+-- connection to whichever worker wins the accept race, a blocked address was denied or
+-- allowed depending on which worker answered. Hence the lazy build below, on the first
+-- request each worker serves.
+local function build_matchers(datastore, logger)
+	local lists = datastore:get("plugin_syswarden_lists", true)
+	if not lists then
+		-- init() has not stored anything yet. Stay unbuilt and retry on the next request
+		-- rather than caching an empty verdict for the worker's whole lifetime.
+		return
+	end
+	worker_matchers = {}
+	worker_matcher_errors = {}
+	worker_built = true
+	for _, kind in ipairs({ "blocklist", "whitelist" }) do
+		local list = lists[kind]
+		if list and #list > 0 then
+			local matcher, merr = ipmatcher_new(list)
+			if not matcher then
+				worker_matcher_errors[kind] = merr
+				logger:log(ERR, "can't build the " .. kind .. " matcher : " .. tostring(merr))
+			else
+				worker_matchers[kind] = matcher
+			end
+		end
+	end
+end
 
 -- Read one cached list file into a table of lines. A missing file is not an error:
 -- it means the download job has not run yet, and the caller fails open on it.
@@ -55,9 +89,12 @@ end
 function syswarden:initialize(ctx)
 	-- Call parent initialize
 	plugin.initialize(self, "syswarden", ctx)
-	-- Request instances only select the per-service matchers. The expensive constructors
-	-- ran once in init_worker and these tables are read-only for the worker lifetime.
+	-- Request instances only select the per-service matchers: the expensive constructors
+	-- run once per worker, and these tables are read-only for the worker lifetime after that.
 	if get_phase() ~= "init" and self.is_request and self:is_needed() then
+		if not worker_built then
+			build_matchers(self.datastore, self.logger)
+		end
 		self.matchers = {
 			blocklist = self.variables["USE_SYSWARDEN_BLOCKLIST"] == "yes" and worker_matchers.blocklist or nil,
 			whitelist = self.variables["USE_SYSWARDEN_WHITELIST"] == "yes" and worker_matchers.whitelist or nil,
@@ -125,24 +162,10 @@ function syswarden:init_worker()
 	if not is_needed then
 		return self:ret(true, "syswarden is not used")
 	end
-	worker_matchers = {}
-	worker_matcher_errors = {}
-	-- Compile once per worker. A high-cardinality request stream must never rebuild a list.
-	local lists = self.datastore:get("plugin_syswarden_lists", true)
-	if lists then
-		for _, kind in ipairs({ "blocklist", "whitelist" }) do
-			local list = lists[kind]
-			if list and #list > 0 then
-				local matcher, merr = ipmatcher_new(list)
-				if not matcher then
-					worker_matcher_errors[kind] = merr
-					self.logger:log(ERR, "can't build the " .. kind .. " matcher : " .. tostring(merr))
-				else
-					worker_matchers[kind] = matcher
-				end
-			end
-		end
-	end
+	-- Warms the one worker this phase actually runs in; every other worker builds its own
+	-- matchers on its first request. Compiling once per worker matters because a
+	-- high-cardinality request stream must never rebuild a list.
+	build_matchers(self.datastore, self.logger)
 	return self:ret(true, "success")
 end
 
