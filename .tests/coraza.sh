@@ -5,13 +5,21 @@
 
 echo "ℹ️ Starting Coraza tests ..."
 
-# Create working directory
+# Create working directory (plugin data may be owned by uid 101 from a prior run, so
+# prefer sudo when available — but fall back to a plain rm for sudo-less local runs).
 if [ -d /tmp/bunkerweb-plugins ] ; then
-	do_and_check_cmd sudo rm -rf /tmp/bunkerweb-plugins
+	sudo -n rm -rf /tmp/bunkerweb-plugins 2>/dev/null || do_and_check_cmd rm -rf /tmp/bunkerweb-plugins
 fi
 do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/coraza/bw-data/plugins
 do_and_check_cmd cp -r ./coraza /tmp/bunkerweb-plugins/coraza/bw-data/plugins
-do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/coraza/bw-data
+# BunkerWeb runs as uid 101 and only needs to READ the mounted plugin. Prefer the
+# canonical chown; fall back to world-readable when passwordless sudo isn't available.
+if sudo -n chown -R 101:101 /tmp/bunkerweb-plugins/coraza/bw-data 2>/dev/null ; then
+	echo "ℹ️ chowned plugin data to 101:101"
+else
+	echo "ℹ️ sudo unavailable, making plugin data world-readable instead"
+	do_and_check_cmd chmod -R a+rX /tmp/bunkerweb-plugins/coraza/bw-data
+fi
 do_and_check_cmd cp -r ./coraza/api /tmp/bunkerweb-plugins/coraza
 
 # Copy compose
