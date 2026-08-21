@@ -67,6 +67,23 @@ done
 [ "$success" = "ok" ] || fail "untrusted client never got denied — trusted IP list / origin cert not ready"
 echo "✅ Untrusted client (192.0.2.10) is denied (403)"
 
+# Every nginx worker must deny, not only the one that happened to answer above. BunkerWeb
+# runs init_worker() once per *instance* (the phase is gated behind a shared "misc_ready"
+# flag taken under a lock), so a plugin that ever builds per-worker state there leaves the
+# other workers with none — and which worker answers a connection is an accept race, sticky
+# under low load, which is exactly why a sequential probe cannot see it. Concurrency spreads
+# the connections, so one non-403 here means per-worker state regressed.
+codes="$(docker compose exec -T evil-client sh -c '
+for _ in $(seq 1 24) ; do
+	curl -sk -o /dev/null -w "%{http_code}\n" \
+		--connect-to www.example.com:8443:bunkerweb:8443 https://www.example.com:8443/ &
+done
+wait
+' 2>/dev/null | tr -d "\r")"
+[ "$(printf '%s\n' "$codes" | grep -c '^403$')" = "24" ] \
+	|| fail "an untrusted address must be denied by every worker, got: $(printf '%s' "$codes" | tr '\n' ' ')"
+echo "✅ Every worker denies the untrusted client (24/24 concurrent requests)"
+
 # A Cloudflare-range client must reach the upstream (200) — proving the trusted path and
 # that the list really contains 173.245.48.0/20. (BunkerWeb is fully loaded by now, per
 # the deny above, so a 200 is the upstream, not the "Generating..." loading page.)

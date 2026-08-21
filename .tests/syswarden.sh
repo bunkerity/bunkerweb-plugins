@@ -157,6 +157,18 @@ wait
 	|| fail "a blocked address must be denied by every worker, got: $(printf '%s' "$codes" | tr '\n' ' ')"
 echo "✅ Every worker denies the blocked address (24/24 concurrent requests)"
 
+# init_workers() is the phase that runs in EVERY worker, and an external plugin only reaches
+# it if helpers.order_plugins appends plugins that are absent from core/order.json. That is
+# what the source says; this asserts it on the running image instead of trusting it. The
+# expected count is derived from the log itself (one INIT-WORKERS-<id> logger per worker)
+# rather than hardcoded, so the assertion holds whatever WORKER_PROCESSES=auto resolves to.
+workers="$(docker compose logs bunkerweb 2>/dev/null | grep -o "INIT-WORKERS-[0-9]*" | sort -u | wc -l)"
+fired="$(docker compose logs bunkerweb 2>/dev/null | grep -c "syswarden:init_workers() call successful" || true)"
+[ "${workers:-0}" -ge 1 ] || fail "no INIT-WORKERS logger in the bunkerweb logs, cannot check the per-worker phase"
+[ "${fired:-0}" = "${workers}" ] \
+	|| fail "syswarden:init_workers() fired in ${fired:-0} of ${workers} worker(s) — the per-worker phase is not firing"
+echo "✅ init_workers() fired in every worker ($fired/$workers)"
+
 # The same address in both lists must be allowed: the whitelist is the operator's explicit
 # override and it is pulled from /ha/telemetry, not from the blocklist.
 code="$(http_code allowed-client)"
