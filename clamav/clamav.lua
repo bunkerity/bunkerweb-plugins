@@ -17,6 +17,8 @@ local socket = ngx.socket
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
+local concat = table.concat
+local sub = string.sub
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
 local tonumber = tonumber
@@ -408,8 +410,23 @@ function clamav:scan_buffer(content)
 	return true, detected, checksum
 end
 
+-- Verdict caches are namespaced by the settings that decided the verdict. On reload
+-- BunkerWeb calls cachestore:purge(), but that is mlcache:purge() — it clears this
+-- instance's local cache and never deletes the Redis keys (lua/bunkerweb/cachestore.lua).
+-- So with USE_REDIS=yes a verdict computed under the previous ClamAV backend would keep being
+-- served for up to the 24h TTL. Hashing them into the key retires those entries the moment
+-- the configuration changes, instead of silently ignoring the operator's change.
+function clamav:cache_key(checksum)
+	if not self.cache_ns then
+		local sha = sha512:new()
+		sha:update(concat({ self.variables["CLAMAV_HOST"], self.variables["CLAMAV_PORT"] }, "\0"))
+		self.cache_ns = sub(to_hex(sha:final()), 1, 16)
+	end
+	return "plugin_clamav_" .. self.cache_ns .. "_" .. checksum
+end
+
 function clamav:is_in_cache(checksum)
-	local ok, data = self.cachestore:get("plugin_clamav_" .. checksum)
+	local ok, data = self.cachestore:get(self:cache_key(checksum))
 	if not ok then
 		return false, data
 	end
@@ -417,7 +434,7 @@ function clamav:is_in_cache(checksum)
 end
 
 function clamav:add_to_cache(checksum, value)
-	local ok, err = self.cachestore:set("plugin_clamav_" .. checksum, value, 86400)
+	local ok, err = self.cachestore:set(self:cache_key(checksum), value, 86400)
 	if not ok then
 		return false, err
 	end

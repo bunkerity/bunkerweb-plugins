@@ -18,6 +18,8 @@ local WARN = ngx.WARN
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
+local concat = table.concat
+local sub = string.sub
 local http_new = http.new
 local has_variable = utils.has_variable
 local get_deny_status = utils.get_deny_status
@@ -341,8 +343,27 @@ function sentinelone:get_result(response)
 	return sentinelone_helpers.evaluate(response.rank, tonumber(self.variables["SENTINELONE_FILE_RANK"]))
 end
 
+-- Verdict caches are namespaced by the settings that decided the verdict. On reload
+-- BunkerWeb calls cachestore:purge(), but that is mlcache:purge() — it clears this
+-- instance's local cache and never deletes the Redis keys (lua/bunkerweb/cachestore.lua).
+-- So with USE_REDIS=yes a verdict computed under the previous tenant or rank threshold would keep being
+-- served for up to the 24h TTL. Hashing them into the key retires those entries the moment
+-- the configuration changes, instead of silently ignoring the operator's change.
+function sentinelone:cache_key(key)
+	if not self.cache_ns then
+		local sha = sha1:new()
+		sha:update(concat({
+			self.variables["SENTINELONE_API_URL"],
+			self.variables["SENTINELONE_API_TOKEN"],
+			self.variables["SENTINELONE_FILE_RANK"],
+		}, "\0"))
+		self.cache_ns = sub(to_hex(sha:final()), 1, 16)
+	end
+	return "plugin_sentinelone_" .. self.cache_ns .. "_" .. key
+end
+
 function sentinelone:is_in_cache(key)
-	local ok, data = self.cachestore:get("plugin_sentinelone_" .. key)
+	local ok, data = self.cachestore:get(self:cache_key(key))
 	if not ok then
 		return false, data
 	end
@@ -350,7 +371,7 @@ function sentinelone:is_in_cache(key)
 end
 
 function sentinelone:add_to_cache(key, value)
-	local ok, err = self.cachestore:set("plugin_sentinelone_" .. key, value, 86400)
+	local ok, err = self.cachestore:set(self:cache_key(key), value, 86400)
 	if not ok then
 		return false, err
 	end
