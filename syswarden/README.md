@@ -424,8 +424,11 @@ Send alerts to a custom webhook.
   and deletes carry the explicit BunkerWeb cluster source. Inspect other producers and
   SysWarden's own logs.
 - **`USE_SYSWARDEN_BLOCKLIST=yes` denies nobody.** The Lua side fails open until
-  `blocklist.list` exists. Confirm `syswarden-blocklist-download` ran (the plugin's ping,
-  `POST /syswarden/ping`, reports peer reachability from the cached telemetry).
+  `blocklist.list` exists. Confirm `syswarden-blocklist-download` ran, and read the peer
+  reachability card in the web UI — it comes from the telemetry the poll job stored in the
+  database. The plugin's ping (`POST /syswarden/ping`) only reports that the plugin is live
+  on that instance; it deliberately reads no telemetry, because the copy shipped to an
+  instance is only refreshed when a job asks for a reload.
 
 # Notes
 

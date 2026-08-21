@@ -16,11 +16,18 @@ from logger import setup_logger  # type: ignore
 from common_utils import bytes_hash  # type: ignore
 from jobs import Job  # type: ignore
 
-from syswarden_helpers import extract_whitelist_ips, load_registry, serialize_addresses  # type: ignore
+from syswarden_helpers import delivery_status, extract_whitelist_ips, load_registry, serialize_addresses  # type: ignore
 from syswarden_client import call, extract_ips, get_peers, get_timeout, make_session  # type: ignore
 
 LOGGER = setup_logger("SYSWARDEN.BLOCKLIST-DOWNLOAD", getenv("LOG_LEVEL", "INFO"))
 status = 0
+changed = False
+
+# A cache file written while a *later* item of the same run fails would make the job
+# exit >=2, and the scheduler ships /var/cache/bunkerweb to the instances only when a job
+# exits 1. This marker carries that pending delivery over to the next run so a refreshed
+# file can never sit in the scheduler's cache forever (see delivery_status()).
+PENDING_MARKER = "pending_delivery"
 
 
 def any_service_uses(setting: str) -> bool:
@@ -109,7 +116,6 @@ try:
     if status != 0:
         sys_exit(status)
 
-    changed = False
     for name, content, kept in prepared:
         new_hash = bytes_hash(content)
         if new_hash == JOB.cache_hash(name):
@@ -133,5 +139,22 @@ except SystemExit as e:
 except:
     status = 2
     LOGGER.exception("Exception while running syswarden-blocklist-download.py")
+
+# Resolve the pending delivery outside the try/except above so an early sys_exit() — the
+# "still fresh, nothing to do" path — cannot skip it either.
+try:
+    pending = JOB.get_cache(PENDING_MARKER) is not None
+    status, keep_marker = delivery_status(status, changed, pending)
+    if keep_marker:
+        LOGGER.warning("A cached file is not delivered to the instances yet, retrying on the next run")
+        if not pending:
+            JOB.cache_file(PENDING_MARKER, b"1")
+    elif pending:
+        JOB.del_cache(PENDING_MARKER)
+except NameError:
+    # JOB was never created (the job failed before that): nothing was cached either.
+    pass
+except BaseException:
+    LOGGER.exception("Exception while resolving the pending cache delivery in syswarden-blocklist-download.py")
 
 sys_exit(status)

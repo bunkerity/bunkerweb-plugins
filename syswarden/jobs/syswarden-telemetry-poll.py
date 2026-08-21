@@ -56,8 +56,12 @@ try:
         entries.append(entry)
 
     # No timestamp in the payload on purpose: the hash guard below is what keeps a
-    # minute-ly job from rewriting the cache (which the scheduler ships to every
-    # instance) when nothing about the peers changed.
+    # minute-ly job from rewriting the cache when nothing about the peers changed.
+    #
+    # This one needs no pending-delivery marker, unlike syswarden-blocklist-download.py:
+    # nothing on a BunkerWeb instance reads telemetry.json. The web UI reads it straight
+    # out of the job cache in the database (ui/actions.py), which is always current, and
+    # syswarden.lua's ping answers for its own instance without opening this file.
     content = dumps({"peers": entries}, sort_keys=True).encode()
     new_hash = bytes_hash(content)
     if new_hash == JOB.cache_hash("telemetry.json"):

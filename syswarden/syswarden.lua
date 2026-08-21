@@ -1,4 +1,3 @@
-local cjson = require("cjson.safe")
 local class = require("middleclass")
 local ipmatcher = require("resty.ipmatcher")
 local plugin = require("bunkerweb.plugin")
@@ -19,7 +18,6 @@ local decide = syswarden_helpers.decide
 local list_sizes = syswarden_helpers.list_sizes
 local matchers_empty = syswarden_helpers.matchers_empty
 local request_enabled = syswarden_helpers.request_enabled
-local decode = cjson.decode
 local tostring = tostring
 local ipairs = ipairs
 local insert = table.insert
@@ -43,8 +41,10 @@ local worker_built = false
 -- it runs every plugin's init_worker() and all the others skip it. Building the matchers
 -- there alone left every other worker with an empty table, and since nginx hands a new
 -- connection to whichever worker wins the accept race, a blocked address was denied or
--- allowed depending on which worker answered. Hence the lazy build below, on the first
--- request each worker serves.
+-- allowed depending on which worker answered. init_workers() below is the phase that does
+-- run per worker, and this lazy build on the first request each worker serves is the net
+-- under it: a worker respawned after a crash gets no startup phase at all (the shared flag
+-- is already set), and a BunkerWeb release that predates init_workers() never calls it.
 local function build_matchers(datastore, logger)
 	local lists = datastore:get("plugin_syswarden_lists", true)
 	if not lists then
@@ -150,10 +150,17 @@ function syswarden:init()
 	return self:ret(true, "success")
 end
 
-function syswarden:init_worker()
-	-- Check if init_worker is needed
+-- init_workers(), plural, not init_worker(): BunkerWeb runs this one in **every** worker
+-- (confs/init-worker-lua.conf), while the singular phase is gated behind a shared
+-- "misc_ready" flag and runs in exactly one worker per instance. Compiling here means each
+-- worker pays the cost at startup instead of on the request it happens to serve first.
+-- The lazy build in initialize() stays as the safety net: a BunkerWeb release that does not
+-- know this phase simply never calls it, and a worker respawned after a crash finds
+-- "misc_ready" already set and gets no startup phase at all.
+function syswarden:init_workers()
+	-- Check if init_workers is needed
 	if self.is_loading then
-		return self:ret(true, "init_worker not needed")
+		return self:ret(true, "init_workers not needed")
 	end
 	local is_needed, err = has_variable("USE_SYSWARDEN", "yes")
 	if is_needed == nil then
@@ -162,9 +169,8 @@ function syswarden:init_worker()
 	if not is_needed then
 		return self:ret(true, "syswarden is not used")
 	end
-	-- Warms the one worker this phase actually runs in; every other worker builds its own
-	-- matchers on its first request. Compiling once per worker matters because a
-	-- high-cardinality request stream must never rebuild a list.
+	-- Compiling once per worker matters because a high-cardinality request stream must
+	-- never rebuild a list.
 	build_matchers(self.datastore, self.logger)
 	return self:ret(true, "success")
 end
@@ -221,31 +227,14 @@ function syswarden:api()
 		if not check then
 			return self:ret(true, "SysWarden plugin not enabled")
 		end
-		-- Report peer reachability from the cached telemetry rather than calling the HA
-		-- API here: the ping then costs no extra entry in the peer's IP allowlist, and a
-		-- slow or dead peer can't stall the web UI.
-		local file = open(CACHE_DIR .. "telemetry.json", "r")
-		if not file then
-			return self:ret(true, "SysWarden telemetry not available yet", HTTP_OK)
-		end
-		local raw = file:read("*a")
-		file:close()
-		local telemetry = decode(raw or "")
-		if type(telemetry) ~= "table" or type(telemetry.peers) ~= "table" then
-			return self:ret(true, "SysWarden telemetry is not readable yet", HTTP_OK)
-		end
-		local total, reachable = 0, 0
-		for _, peer in ipairs(telemetry.peers) do
-			total = total + 1
-			if peer.reachable then
-				reachable = reachable + 1
-			end
-		end
-		return self:ret(
-			true,
-			"syswarden is up (" .. tostring(reachable) .. "/" .. tostring(total) .. " peer(s) reachable)",
-			HTTP_OK
-		)
+		-- Report this instance only, and never call the HA API here: the ping then costs
+		-- no extra entry in the peer's IP allowlist, and a slow or dead peer can't stall
+		-- the web UI. Peer reachability deliberately does NOT come from here — it is read
+		-- straight from the job cache in the database by ui/actions.py. The copy of
+		-- telemetry.json sitting next to this code is shipped to instances only when some
+		-- job returns exit code 1 (the scheduler ships /cache on reload, nowhere else), so
+		-- answering from it would report peer state that is arbitrarily old.
+		return self:ret(true, "syswarden is up", HTTP_OK)
 	end
 	return self:ret(false, "success")
 end
