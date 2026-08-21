@@ -162,8 +162,12 @@ echo "✅ Every worker denies the blocked address (24/24 concurrent requests)"
 # what the source says; this asserts it on the running image instead of trusting it. The
 # expected count is derived from the log itself (one INIT-WORKERS-<id> logger per worker)
 # rather than hardcoded, so the assertion holds whatever WORKER_PROCESSES=auto resolves to.
-workers="$(docker compose logs bunkerweb 2>/dev/null | grep -o "INIT-WORKERS-[0-9]*" | sort -u | wc -l)"
-fired="$(docker compose logs bunkerweb 2>/dev/null | grep -c "syswarden:init_workers() call successful" || true)"
+# Both sides count *distinct worker ids*, never log lines: every reload runs the phase again in
+# a fresh set of workers whose ids restart at 0, so the occurrences are a multiple of the worker
+# count and comparing them to it fails on a stack that reloaded even once.
+seen_workers() { docker compose logs bunkerweb 2>/dev/null | grep -o "INIT-WORKERS-[0-9]*" | sort -u ; }
+workers="$(seen_workers | wc -l)"
+fired="$(docker compose logs bunkerweb 2>/dev/null | grep -F "syswarden:init_workers() call successful" | grep -o "INIT-WORKERS-[0-9]*" | sort -u | wc -l)"
 [ "${workers:-0}" -ge 1 ] || fail "no INIT-WORKERS logger in the bunkerweb logs, cannot check the per-worker phase"
 [ "${fired:-0}" = "${workers}" ] \
 	|| fail "syswarden:init_workers() fired in ${fired:-0} of ${workers} worker(s) — the per-worker phase is not firing"
