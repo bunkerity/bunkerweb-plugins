@@ -83,10 +83,12 @@ For a request to `https://app.example.com/...`:
    antibot, DNSBL, blacklist, ...). If any of them deny, the request stops
    before SentinelOne is contacted.
 2. `sentinelone.lua` runs when `USE_SENTINELONE=yes` and at least one of
-   `SENTINELONE_SCAN_IP` / `SENTINELONE_SCAN_FILE` is `yes`. At worker startup an
-   `init_worker` pre-connect validates the API URL, the token and reachability
-   against SentinelOne's `system/info` endpoint, so a misconfiguration is logged
-   early rather than only surfacing on the first request. If
+   `SENTINELONE_SCAN_IP` / `SENTINELONE_SCAN_FILE` is `yes`. Once per BunkerWeb
+   instance at startup, an `init_worker` pre-connect validates the API URL, the
+   token and reachability against SentinelOne's `system/info` endpoint, so a
+   misconfiguration is logged early rather than only surfacing on the first
+   request. BunkerWeb runs that phase in a single worker, which is what a one-off
+   check wants; every request opens its own connection. If
    `SENTINELONE_API_URL` or `SENTINELONE_API_TOKEN` is empty the plugin logs a
    warning and skips all checks (the request is allowed).
 3. **IP scan** (when `SENTINELONE_SCAN_IP=yes` _and_ the client IP is global):
