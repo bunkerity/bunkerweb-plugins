@@ -12,7 +12,10 @@ from hashlib import sha256
 from ipaddress import ip_address, ip_network
 from itertools import islice
 from os import getenv
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from pathlib import Path
+from re import fullmatch
+from secrets import token_urlsafe
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 # Default port of SysWarden's HA API (`[integrations.ha] peer_port`).
@@ -36,6 +39,26 @@ SYSWARDEN_MAX_IPS_PER_REQUEST = 1024
 # Upstream plans a verifiable local fence (`native_sync_fence_v1`) for v4.03.0; until a peer
 # can attest to it, no finite window here proves the migration is over.
 SYSWARDEN_LEGACY_GRACE = 3600
+
+# The local cluster fence of v4.03.0 (ha_fence.go). `native_sync_fence_v1` is the capability
+# a peer advertises on /ha/status; the proof itself is the dynamic `native_sync_fence` object.
+# The two scopes are different strings and are not interchangeable: the status object is scoped
+# to the mutations it fences, the manifest to what the operator asserts he enumerated.
+SYSWARDEN_FENCE_CAPABILITY = "native_sync_fence_v1"
+SYSWARDEN_FENCE_VERSION = 1
+SYSWARDEN_FENCE_SCHEMA_VERSION = 1
+SYSWARDEN_FENCE_STATUS_SCOPE = "legacy_ips_mutations"
+SYSWARDEN_FENCE_MANIFEST_SCOPE = "one_receiving_api_endpoint_per_syswarden_node"
+SYSWARDEN_FENCE_STATE_DRAINED = "active_drained"
+SYSWARDEN_FENCE_STATE_INACTIVE = "inactive"
+
+# Shapes upstream validates, mirrored here so a malformed manifest or a malformed proof is
+# refused before it can be used as evidence: haFenceUUIDv4RE, haFenceProofRE and
+# validHAFenceCondition in ha_fence.go / ha_fence_manifest.go.
+_FENCE_TOKEN_PATTERN = r"[A-Za-z0-9_-]{43}"
+_FENCE_CONDITION_PREFIX = "sw-fence-v1-"
+_FENCE_UUID4_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+_SHA256_PATTERN = r"[0-9a-f]{64}"
 
 # The charset SysWarden accepts for `source` (validHASource in ha_api.go).
 _SOURCE_ALLOWED = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/-")
@@ -539,3 +562,249 @@ def parse_telemetry(payload: Dict, status: Optional[Dict] = None) -> Dict:
         "services": system.get("services") or [],
         "ports": system.get("ports") or [],
     }
+
+
+def canonical_proof_token(value: Any) -> bool:
+    """A 43-character unpadded base64url token that survives a decode/encode round trip.
+
+    The regex alone is not the contract: upstream decodes the token, checks it is 32 bytes,
+    and re-encodes it, so a value like ``"d" * 43`` matches the pattern yet is answered 400.
+    Accepting one here would mean sending a condition the peer refuses.
+    """
+    if not isinstance(value, str) or not fullmatch(_FENCE_TOKEN_PATTERN, value):
+        return False
+    try:
+        raw = urlsafe_b64decode(value + "=")
+    except Exception:
+        return False
+    return len(raw) == 32 and urlsafe_b64encode(raw).rstrip(b"=").decode() == value
+
+
+def fence_challenge() -> str:
+    """A fresh nonce for ``X-SysWarden-HA-Challenge``.
+
+    32 random bytes in unpadded base64url, which is exactly the 43-character token
+    `parseHAFenceChallenge` accepts. The peer echoes it inside the signed-off proof, so a
+    replayed or cached `/ha/status` body can be told apart from a live one.
+    """
+    return token_urlsafe(32)
+
+
+def load_manifest(raw: Any) -> Optional[Dict[str, Any]]:
+    """Validate the fence manifest produced by ``syswarden ha-fence manifest create``.
+
+    Returns the normalized manifest, or ``None`` when the envelope is not one this plugin
+    may act on. The checks mirror `validateHAFenceManifest`, minus the two digests: upstream
+    generates and validates those, and the roadmap is explicit that the partner compares the
+    published values instead of reimplementing the canonicalization. Recomputing them here
+    would only add a second way to reject a healthy peer.
+
+    ``operator_asserted_complete`` is required rather than informative. A manifest built
+    without ``--assert-complete`` describes a perimeter nobody vouched for, and a fence over
+    an incomplete perimeter proves nothing.
+    """
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("schema_version") != SYSWARDEN_FENCE_SCHEMA_VERSION:
+        return None
+    if raw.get("membership_scope") != SYSWARDEN_FENCE_MANIFEST_SCOPE or raw.get("operator_asserted_complete") is not True:
+        return None
+    epoch = raw.get("epoch")
+    if not isinstance(epoch, str) or not fullmatch(_FENCE_UUID4_PATTERN, epoch):
+        return None
+    membership = raw.get("membership_sha256")
+    writers_digest = raw.get("legacy_writer_inventory_sha256")
+    for digest in (membership, writers_digest):
+        if not isinstance(digest, str) or not fullmatch(_SHA256_PATTERN, digest):
+            return None
+    writer_ids = raw.get("legacy_writer_ids")
+    if not isinstance(writer_ids, list) or any(not isinstance(entry, str) for entry in writer_ids):
+        return None
+
+    members = raw.get("members")
+    if not isinstance(members, list) or not members:
+        return None
+    normalized: List[Dict[str, Any]] = []
+    for member in members:
+        if not isinstance(member, dict):
+            return None
+        # A bare IP literal in its canonical form, like upstream's canonicalHAFenceAddress:
+        # canonical_address() is the ban-path normalizer and also accepts CIDRs, which would
+        # build a nonsense endpoint URL here and describe a manifest upstream would refuse.
+        address = member.get("address")
+        try:
+            parsed = ip_address(address) if isinstance(address, str) else None
+        except ValueError:
+            parsed = None
+        # Canonical form only, and neither an IPv4-mapped nor a zoned address: upstream
+        # rejects both because they let one host appear twice under two spellings, which
+        # would put the same peer in the membership digest twice.
+        if parsed is None or str(parsed) != address or getattr(parsed, "ipv4_mapped", None) or getattr(parsed, "scope_id", None):
+            address = ""
+        else:
+            address = str(parsed)
+        port = member.get("port")
+        leaf = member.get("tls_leaf_certificate_sha256")
+        if not address or not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+            return None
+        if not isinstance(leaf, str) or not fullmatch(_SHA256_PATTERN, leaf):
+            return None
+        normalized.append({"address": address, "port": port, "tls_leaf_certificate_sha256": leaf})
+
+    endpoints = {(member["address"], member["port"]) for member in normalized}
+    leaves = {member["tls_leaf_certificate_sha256"] for member in normalized}
+    # Upstream refuses both a duplicate endpoint and a duplicate leaf identity: two members
+    # sharing one certificate means one stolen key impersonates both.
+    if len(endpoints) != len(normalized) or len(leaves) != len(normalized):
+        return None
+
+    return {
+        "epoch": epoch,
+        "membership_sha256": membership,
+        "legacy_writer_inventory_sha256": writers_digest,
+        "legacy_writer_ids": list(writer_ids),
+        "members": normalized,
+    }
+
+
+def manifest_peers(manifest: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """``members`` as ``(base_url, leaf_sha256)`` pairs.
+
+    Once a manifest is mounted this list is the perimeter, not ``SYSWARDEN_PEERS``: the fence
+    is only meaningful over the endpoints the operator enumerated and digested. The pin is
+    per peer, on the exact leaf certificate, so a re-issued certificate under the same CA no
+    longer passes silently.
+    """
+    peers = []
+    for member in manifest.get("members", []):
+        address = member["address"]
+        host = f"[{address}]" if ":" in address else address
+        peers.append((f"https://{host}:{member['port']}", member["tls_leaf_certificate_sha256"]))
+    return peers
+
+
+def fence_fingerprint(status: Any) -> Optional[Tuple[Any, Any, Any]]:
+    """The triple that must not move between two reads: generation, server identity, condition.
+
+    Returned even for a fence this plugin refuses to act on, because the point of comparing
+    it is to notice the peer changed underneath a decision already taken.
+    """
+    proof = status.get("native_sync_fence") if isinstance(status, dict) else None
+    if not isinstance(proof, dict):
+        return None
+    return (proof.get("generation"), proof.get("server_instance_id"), proof.get("condition"))
+
+
+def fence_proof(status: Any, manifest: Dict[str, Any], challenge: str) -> Tuple[str, Optional[str], str]:
+    """Read one peer's fence proof. Returns ``(verdict, condition, reason)``.
+
+    ``verdict`` is one of:
+
+    * ``fenced`` — the six conditions hold together, so the legacy cleanup may run and must
+      carry ``condition`` in ``X-SysWarden-HA-Fence-Condition``.
+    * ``inactive`` — no fence is engaged. The cleanup may run, and must **not** carry the
+      header: `withLegacyMutation` answers 412 to a condition sent while the fence is
+      inactive, so sending it defensively would break the very pass it means to protect.
+    * ``unusable`` — anything else. Nothing legacy is sent to that peer this pass.
+
+    The six conditions, in the order upstream states them: the body comes from an
+    authenticated, uncached ``GET /ha/status`` (the caller's job, this function only sees its
+    result), the challenge is echoed, epoch and membership match the manifest, the state is
+    exactly ``active_drained``, both mutation counters are zero, and the identity triple is
+    stable. A single missing proof is a broken fence, never an ambiguity.
+    """
+    if not isinstance(status, dict):
+        return "unusable", None, "the status body is not an object"
+
+    capabilities = status.get("capabilities")
+    if not isinstance(capabilities, list) or SYSWARDEN_FENCE_CAPABILITY not in capabilities:
+        return "unusable", None, f"the peer does not advertise {SYSWARDEN_FENCE_CAPABILITY}"
+
+    proof = status.get("native_sync_fence")
+    if not isinstance(proof, dict):
+        return "unusable", None, "the peer advertises the fence but returned no proof object"
+
+    if proof.get("version") != SYSWARDEN_FENCE_VERSION or proof.get("scope") != SYSWARDEN_FENCE_STATUS_SCOPE:
+        return "unusable", None, "the fence proof is not the version and scope this plugin understands"
+
+    if proof.get("challenge") != challenge:
+        return "unusable", None, "the fence proof does not echo this pass's challenge"
+
+    # Identity first, because it is state-independent: upstream refuses to publish any state
+    # whose generation is zero (validateHAFenceState), and the server instance id comes out of
+    # the same token generator as the condition, so both shapes hold in every state.
+    generation = proof.get("generation")
+    if type(generation) is not int or not 1 <= generation < 2**64:
+        return "unusable", None, f"the fence proof carries no usable generation ({generation!r})"
+    if not canonical_proof_token(proof.get("server_instance_id")):
+        return "unusable", None, "the fence proof carries no usable server identity"
+
+    # The state is read before the campaign identity, and that order matters. A peer that
+    # never engaged a fence bootstraps to `inactive` with the three campaign digests empty
+    # (prepareForServer in ha_fence.go), so comparing them first would turn every healthy
+    # peer into an unusable one the moment a manifest is mounted.
+    state = proof.get("state")
+    if state == SYSWARDEN_FENCE_STATE_INACTIVE:
+        # Upstream refuses to publish an inactive state that still carries campaign data, so
+        # a peer reporting one is not a peer with no campaign: it is a peer whose fence file
+        # this plugin cannot account for. Exact shapes, not truthiness: the four campaign
+        # strings are always serialized as "" and the timestamp as null, so a missing key or
+        # a falsey value of the wrong type is just as unaccountable.
+        for field in ("epoch", "membership_sha256", "legacy_writer_inventory_sha256", "condition"):
+            if proof.get(field, None) != "":
+                return "unusable", None, f"the inactive fence reports {field}={proof.get(field, None)!r} instead of an empty string"
+        if proof.get("drained_at", False) is not None:
+            return "unusable", None, "the inactive fence carries a drain timestamp"
+        return "inactive", None, "no fence is engaged on this peer"
+    if state != SYSWARDEN_FENCE_STATE_DRAINED:
+        return "unusable", None, f"the fence is in state {state!r}"
+
+    if proof.get("epoch") != manifest["epoch"]:
+        return "unusable", None, "the peer is fenced under another epoch than the manifest"
+    if proof.get("membership_sha256") != manifest["membership_sha256"]:
+        return "unusable", None, "the peer reports another membership than the manifest"
+    if proof.get("legacy_writer_inventory_sha256") != manifest["legacy_writer_inventory_sha256"]:
+        return "unusable", None, "the peer reports another legacy-writer inventory than the manifest"
+
+    for counter in ("active_outbound_writers", "active_inbound_legacy_mutations"):
+        value = proof.get(counter)
+        # `is not int` on purpose: booleans are ints in Python, and False would otherwise
+        # read as a drained counter.
+        if type(value) is not int or value != 0:
+            return "unusable", None, f"{counter} is {value!r}, the peer has not drained"
+
+    condition = proof.get("condition")
+    if not isinstance(condition, str) or not condition.startswith(_FENCE_CONDITION_PREFIX):
+        return "unusable", None, "the fence proof carries no usable condition token"
+    if not canonical_proof_token(condition.removeprefix(_FENCE_CONDITION_PREFIX)):
+        return "unusable", None, "the fence condition is not a canonical token, upstream would refuse it"
+
+    return "fenced", condition, "the peer proves a drained fence"
+
+
+def cluster_fenced(verdicts: Iterable[str], expected_peers: int) -> bool:
+    """True only when every peer of the perimeter proved a drained fence on this pass.
+
+    ``verdicts`` holds one entry per peer that answered. A peer that could not be read leaves
+    no verdict at all, which is why the count is compared to the perimeter: a partial view is
+    a broken barrier, not a smaller one. This gates the two decisions that may only be taken
+    under a complete fence — releasing a claim, and treating a reappearance as an operator
+    decision rather than as HA replication.
+    """
+    verdicts = list(verdicts)
+    return expected_peers > 0 and len(verdicts) == expected_peers and all(verdict == "fenced" for verdict in verdicts)
+
+
+def fence_reason(code: int) -> str:
+    """Plain sentence for the status codes the fence answers legacy mutations with.
+
+    Straight from `withLegacyMutation`: without this the logs would only ever say "returned
+    status 412", which is the one case an operator must not read as a network hiccup.
+    """
+    return {
+        400: "the fence condition this plugin sent was malformed",
+        412: "the fence moved: the condition no longer matches, nothing was written",
+        423: "legacy writes are fenced on this peer",
+        428: "this peer required a fence condition and none was sent",
+        503: "the fence is transitioning, the mutation was not queued",
+    }.get(code, "")

@@ -60,6 +60,15 @@
       "regex": "^(yes|no)$",
       "type": "check"
     },
+    "SYSWARDEN_FENCE_MANIFEST": {
+      "context": "global",
+      "default": "",
+      "help": "Path to the mounted HA fence manifest produced by 'syswarden ha-fence manifest create --assert-complete'. It governs the ban push job only: its members list replaces SYSWARDEN_PEERS there, and every member is pinned to the exact leaf certificate the manifest records. The read-only jobs keep using SYSWARDEN_PEERS.",
+      "id": "syswarden-fence-manifest",
+      "label": "SysWarden fence manifest",
+      "regex": "^(/[^\\0]*)?$",
+      "type": "text"
+    },
     "SYSWARDEN_TIMEOUT": {
       "context": "global",
       "default": "5",

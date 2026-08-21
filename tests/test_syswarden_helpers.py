@@ -604,3 +604,326 @@ class TestProvenanceCanonicalization:
         # Same address, two spellings. If these differ, every pass pushes and deletes it.
         assert ours == banned
         assert helpers.plan_peer(banned, set(), ours, set(), True) == ([], [], [])
+
+
+EPOCH = "0f9c1a2b-3d4e-4f50-8a1b-2c3d4e5f6071"
+# A real token, not "d" * 43: that one matches the character class yet does not survive
+# upstream's decode/re-encode, so a peer would answer 400 to a condition built from it.
+TOKEN = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+CHALLENGE = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA"
+# Upstream mints the server instance id with the same generator as the condition, so it has
+# the same canonical shape and a plain name like "sw-1" is not one.
+INSTANCE = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA"
+
+
+def _manifest(**overrides):
+    manifest = {
+        "schema_version": 1,
+        "epoch": EPOCH,
+        "membership_scope": "one_receiving_api_endpoint_per_syswarden_node",
+        "operator_asserted_complete": True,
+        "membership_sha256": "a" * 64,
+        "legacy_writer_inventory_sha256": "b" * 64,
+        "legacy_writer_ids": ["bunkerweb-primary"],
+        "members": [{"address": "10.0.0.5", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64}],
+    }
+    manifest.update(overrides)
+    return manifest
+
+
+def _proof(**overrides):
+    proof = {
+        "version": 1,
+        "scope": "legacy_ips_mutations",
+        "state": "active_drained",
+        "epoch": EPOCH,
+        "membership_sha256": "a" * 64,
+        "legacy_writer_inventory_sha256": "b" * 64,
+        "generation": 7,
+        "server_instance_id": INSTANCE,
+        "active_outbound_writers": 0,
+        "active_inbound_legacy_mutations": 0,
+        "condition": "sw-fence-v1-" + TOKEN,
+        "challenge": CHALLENGE,
+    }
+    proof.update(overrides)
+    return {"capabilities": ["auth_all_routes", "native_sync_fence_v1", "sync_ttl", "sync_provenance"], "native_sync_fence": proof}
+
+
+class TestFenceChallenge:
+    def test_it_is_the_43_character_token_upstream_accepts(self):
+        challenge = helpers.fence_challenge()
+        assert len(challenge) == 43
+        assert all(char.isalnum() or char in "_-" for char in challenge)
+
+    def test_two_passes_never_share_a_challenge(self):
+        assert helpers.fence_challenge() != helpers.fence_challenge()
+
+
+class TestLoadManifest:
+    def test_a_complete_asserted_manifest_is_normalized(self):
+        loaded = helpers.load_manifest(_manifest())
+        assert loaded["epoch"] == EPOCH
+        assert loaded["members"] == [{"address": "10.0.0.5", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64}]
+
+    def test_an_unasserted_perimeter_is_refused(self):
+        # Without --assert-complete nobody vouched for the member list, and a fence over an
+        # incomplete perimeter proves nothing.
+        assert helpers.load_manifest(_manifest(operator_asserted_complete=False)) is None
+
+    @pytest.mark.parametrize(
+        "override",
+        (
+            {"schema_version": 2},
+            {"membership_scope": "legacy_ips_mutations"},
+            {"epoch": "not-a-uuid"},
+            {"epoch": "0f9c1a2b-3d4e-1f50-8a1b-2c3d4e5f6071"},
+            {"membership_sha256": "a" * 63},
+            {"legacy_writer_inventory_sha256": "B" * 64},
+            {"legacy_writer_ids": None},
+            {"members": []},
+        ),
+    )
+    def test_a_broken_envelope_is_refused(self, override):
+        assert helpers.load_manifest(_manifest(**override)) is None
+
+    @pytest.mark.parametrize(
+        "member",
+        (
+            {"address": "syswarden.internal", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64},
+            {"address": "10.0.0.5", "port": 0, "tls_leaf_certificate_sha256": "c" * 64},
+            {"address": "10.0.0.5", "port": True, "tls_leaf_certificate_sha256": "c" * 64},
+            {"address": "10.0.0.5", "port": 62026, "tls_leaf_certificate_sha256": "nope"},
+            {"address": "10.0.0.5", "port": 62026},
+        ),
+    )
+    def test_a_broken_member_is_refused(self, member):
+        # Upstream refuses DNS names and non-canonical addresses in the manifest, so a
+        # plugin that accepted them would pin something the digest never covered.
+        assert helpers.load_manifest(_manifest(members=[member])) is None
+
+    def test_a_duplicate_endpoint_is_refused(self):
+        member = {"address": "10.0.0.5", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64}
+        assert helpers.load_manifest(_manifest(members=[member, dict(member)])) is None
+
+
+class TestManifestPeers:
+    def test_members_become_pinned_base_urls(self):
+        loaded = helpers.load_manifest(_manifest())
+        assert helpers.manifest_peers(loaded) == [("https://10.0.0.5:62026", "c" * 64)]
+
+    def test_an_ipv6_member_keeps_its_brackets(self):
+        member = {"address": "2001:db8::1", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64}
+        loaded = helpers.load_manifest(_manifest(members=[member]))
+        assert helpers.manifest_peers(loaded)[0][0] == "https://[2001:db8::1]:62026"
+
+
+class TestFenceProof:
+    def test_a_drained_fence_yields_its_condition(self):
+        verdict, condition, _ = helpers.fence_proof(_proof(), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert (verdict, condition) == ("fenced", "sw-fence-v1-" + TOKEN)
+
+    def test_a_peer_that_never_engaged_a_fence_is_usable(self):
+        # prepareForServer bootstraps a v4.03 peer to `inactive` with the three campaign
+        # digests empty, so a plugin that compared them before reading the state would
+        # refuse every healthy peer as soon as a manifest is mounted.
+        body = _proof(
+            state="inactive",
+            epoch="",
+            membership_sha256="",
+            legacy_writer_inventory_sha256="",
+            condition="",
+            drained_at=None,
+            generation=1,
+        )
+        verdict, condition, _ = helpers.fence_proof(body, helpers.load_manifest(_manifest()), CHALLENGE)
+        assert (verdict, condition) == ("inactive", None)
+
+    def test_an_inactive_fence_carries_no_condition(self):
+        # The cleanup still runs there, and it must not send a condition: upstream answers
+        # 412 to one presented while the fence is inactive.
+        body = _proof(state="inactive", epoch="", membership_sha256="", legacy_writer_inventory_sha256="", condition="", drained_at=None)
+        verdict, condition, _ = helpers.fence_proof(body, helpers.load_manifest(_manifest()), CHALLENGE)
+        assert (verdict, condition) == ("inactive", None)
+
+    def test_an_inactive_fence_still_carrying_campaign_data_is_refused(self):
+        # validateHAFenceState refuses to publish that state at all, so a peer reporting one
+        # is not a peer without a campaign: it is a peer this plugin cannot account for.
+        verdict, _, reason = helpers.fence_proof(_proof(state="inactive"), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+        assert "instead of an empty string" in reason
+
+    @pytest.mark.parametrize("state", ("engaging", "recovering", "error", "", None))
+    def test_a_transitioning_fence_proves_nothing(self, state):
+        verdict, _, _ = helpers.fence_proof(_proof(state=state), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    def test_a_replayed_body_is_caught_by_the_challenge(self):
+        verdict, _, reason = helpers.fence_proof(_proof(challenge="C" * 42 + "A"), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+        assert "challenge" in reason
+
+    @pytest.mark.parametrize(
+        "override",
+        (
+            {"epoch": "1f9c1a2b-3d4e-4f50-8a1b-2c3d4e5f6071"},
+            {"membership_sha256": "f" * 64},
+            {"legacy_writer_inventory_sha256": "f" * 64},
+        ),
+    )
+    def test_a_peer_fenced_under_another_manifest_is_refused(self, override):
+        verdict, _, _ = helpers.fence_proof(_proof(**override), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    @pytest.mark.parametrize("counter", ("active_outbound_writers", "active_inbound_legacy_mutations"))
+    def test_a_peer_that_has_not_drained_is_refused(self, counter):
+        verdict, _, reason = helpers.fence_proof(_proof(**{counter: 1}), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+        assert counter in reason
+
+    def test_a_peer_without_the_capability_is_refused(self):
+        body = _proof()
+        body["capabilities"] = ["auth_all_routes", "peer_cidr"]
+        verdict, _, _ = helpers.fence_proof(body, helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    def test_the_capability_alone_is_not_the_proof(self):
+        verdict, _, reason = helpers.fence_proof({"capabilities": ["native_sync_fence_v1"]}, helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+        assert "no proof object" in reason
+
+    @pytest.mark.parametrize("condition", ("", "sw-fence-v0-" + "d" * 43, "d" * 43, None))
+    def test_an_unusable_condition_token_is_refused(self, condition):
+        verdict, _, _ = helpers.fence_proof(_proof(condition=condition), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    @pytest.mark.parametrize("override", ({"version": 2}, {"scope": "one_receiving_api_endpoint_per_syswarden_node"}))
+    def test_another_fence_contract_is_refused(self, override):
+        verdict, _, _ = helpers.fence_proof(_proof(**override), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+
+class TestFenceFingerprint:
+    def test_it_is_the_triple_that_must_not_move(self):
+        assert helpers.fence_fingerprint(_proof()) == (7, INSTANCE, "sw-fence-v1-" + TOKEN)
+
+    def test_a_moved_generation_is_a_different_fingerprint(self):
+        assert helpers.fence_fingerprint(_proof(generation=8)) != helpers.fence_fingerprint(_proof())
+
+    def test_a_body_without_a_proof_has_none(self):
+        assert helpers.fence_fingerprint({"capabilities": []}) is None
+
+
+class TestFenceReason:
+    @pytest.mark.parametrize("code", (400, 412, 423, 428, 503))
+    def test_every_fence_code_reads_as_a_sentence(self, code):
+        assert helpers.fence_reason(code)
+
+    def test_an_ordinary_failure_gets_no_invented_explanation(self):
+        assert helpers.fence_reason(500) == ""
+
+
+class TestCanonicalProofToken:
+    def test_a_real_token_round_trips(self):
+        assert helpers.canonical_proof_token(helpers.fence_challenge())
+
+    @pytest.mark.parametrize("value", ("d" * 43, "A" * 42, "A" * 44, "A" * 42 + "!", "", None, 43))
+    def test_anything_upstream_would_re_encode_differently_is_refused(self, value):
+        # "d" * 43 is the trap: it matches the character class, decodes to 32 bytes, and
+        # re-encodes to something else, so upstream answers 400 to it.
+        assert not helpers.canonical_proof_token(value)
+
+
+class TestFenceProofWireTypes:
+    @pytest.mark.parametrize("value", (False, True, 0.0, "0", None))
+    def test_a_counter_that_is_not_a_plain_integer_is_not_drained(self, value):
+        # False == 0 in Python, so a loose comparison would read a boolean as a drained peer.
+        verdict, _, _ = helpers.fence_proof(_proof(active_outbound_writers=value), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    @pytest.mark.parametrize("value", (True, "7", 7.0, None, 0, -1, 2**64))
+    def test_a_generation_upstream_would_never_publish_is_refused(self, value):
+        # validateHAFenceState refuses generation 0 outright, and the field is a uint64.
+        verdict, _, _ = helpers.fence_proof(_proof(generation=value), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    @pytest.mark.parametrize("value", ("", "   ", None, 12, "sw-1", "d" * 43))
+    def test_a_server_identity_that_is_not_a_canonical_token_is_refused(self, value):
+        # It comes out of randomHAFenceToken, so it has the condition's shape.
+        verdict, _, _ = helpers.fence_proof(_proof(server_instance_id=value), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    def test_a_non_canonical_condition_is_refused_before_it_is_ever_sent(self):
+        verdict, _, reason = helpers.fence_proof(_proof(condition="sw-fence-v1-" + "d" * 43), helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+        assert "canonical" in reason
+
+
+class TestManifestMemberIdentity:
+    def test_a_cidr_address_is_refused(self):
+        # canonical_address() accepts CIDRs for the ban path; a manifest member is a bare IP
+        # literal, and letting one through would build https://10.0.0.5/32:62026.
+        member = {"address": "10.0.0.5/32", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64}
+        assert helpers.load_manifest(_manifest(members=[member])) is None
+
+    @pytest.mark.parametrize("address", ("010.0.0.5", "10.0.0.05", "::ffff:10.0.0.5", "2001:DB8::1"))
+    def test_a_non_canonical_address_is_refused(self, address):
+        member = {"address": address, "port": 62026, "tls_leaf_certificate_sha256": "c" * 64}
+        assert helpers.load_manifest(_manifest(members=[member])) is None
+
+    def test_two_members_sharing_one_certificate_are_refused(self):
+        # One stolen key would impersonate both endpoints, and upstream refuses it too.
+        members = [
+            {"address": "10.0.0.5", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64},
+            {"address": "10.0.0.6", "port": 62026, "tls_leaf_certificate_sha256": "c" * 64},
+        ]
+        assert helpers.load_manifest(_manifest(members=members)) is None
+
+
+class TestClusterFenced:
+    def test_every_member_must_prove_a_drained_fence(self):
+        assert helpers.cluster_fenced(["fenced", "fenced"], 2)
+
+    def test_one_inactive_member_is_not_a_fenced_cluster(self):
+        # An inactive peer can still take a legacy write from anyone, so the barrier is not
+        # closed and no claim may be released against it.
+        assert not helpers.cluster_fenced(["fenced", "inactive"], 2)
+
+    def test_a_peer_that_never_answered_leaves_no_verdict_and_breaks_the_barrier(self):
+        # An unreachable peer contributes no verdict at all; counting only the answers would
+        # turn a partial view into a complete one.
+        assert not helpers.cluster_fenced(["fenced"], 2)
+
+    @pytest.mark.parametrize("verdicts", ([], ["unusable"], ["fenced", "unusable"]))
+    def test_anything_short_of_a_full_proof_is_refused(self, verdicts):
+        assert not helpers.cluster_fenced(verdicts, max(len(verdicts), 1))
+
+    def test_an_empty_perimeter_is_never_fenced(self):
+        assert not helpers.cluster_fenced([], 0)
+
+
+class TestInactiveProofShape:
+    @pytest.mark.parametrize(
+        "override",
+        (
+            {"epoch": 0},
+            {"membership_sha256": False},
+            {"legacy_writer_inventory_sha256": None},
+            {"condition": []},
+            {"drained_at": ""},
+        ),
+    )
+    def test_a_falsey_value_of_the_wrong_type_is_not_an_empty_campaign(self, override):
+        # Upstream always serializes the four campaign strings as "" and the timestamp as
+        # null, so anything else is a body this plugin cannot account for.
+        clean = {"epoch": "", "membership_sha256": "", "legacy_writer_inventory_sha256": "", "condition": "", "drained_at": None}
+        body = _proof(state="inactive", **{**clean, **override})
+        verdict, _, _ = helpers.fence_proof(body, helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"
+
+    @pytest.mark.parametrize("missing", ("epoch", "membership_sha256", "legacy_writer_inventory_sha256", "condition", "drained_at"))
+    def test_a_missing_campaign_field_is_refused(self, missing):
+        body = _proof(state="inactive", epoch="", membership_sha256="", legacy_writer_inventory_sha256="", condition="", drained_at=None)
+        del body["native_sync_fence"][missing]
+        verdict, _, _ = helpers.fence_proof(body, helpers.load_manifest(_manifest()), CHALLENGE)
+        assert verdict == "unusable"

@@ -1,9 +1,10 @@
 """Unit tests for the SysWarden HTTP client.
 
-Two things are covered here. `fetch_capabilities` / `fetch_sync` decide which wire format
+Three things are covered here. `fetch_fence_status` / `fetch_sync` decide which wire format
 the push job speaks to each peer, and getting that wrong means either pushing a payload an
 older peer refuses, or falling back to shared-blocklist semantics against a peer that
-actually tracks ownership. `tls_settings` and `make_session` decide whether to talk to a
+actually tracks ownership. `mutate_legacy` carries the fence condition, and the codes it
+hands back are the difference between "retry later" and "stop, the fence moved". `tls_settings` and `make_session` decide whether to talk to a
 peer at all: the bearer token travels on that connection, so every refusal there has to
 stop the job rather than downgrade it.
 """
@@ -66,55 +67,79 @@ class FakeSession:
         self.queries = []
         self.requests = []
 
-    def get(self, url, params=None, timeout=None, allow_redirects=True):
-        self.queries.append({"params": params, "allow_redirects": allow_redirects})
+    def get(self, url, params=None, headers=None, timeout=None, allow_redirects=True):
+        self.queries.append({"params": params, "headers": headers, "allow_redirects": allow_redirects})
         answer = self._responses.pop(0)
         if isinstance(answer, BaseException):
             raise answer
         return answer
 
-    def request(self, method, url, json=None, timeout=None, allow_redirects=True):
-        self.requests.append({"method": method, "payload": json, "allow_redirects": allow_redirects})
+    def request(self, method, url, json=None, headers=None, timeout=None, allow_redirects=True):
+        self.requests.append({"method": method, "payload": json, "headers": headers, "allow_redirects": allow_redirects})
         answer = self._responses.pop(0)
         if isinstance(answer, BaseException):
             raise answer
         return answer
 
 
-class TestFetchCapabilities:
-    def test_a_current_peer_reports_provenance(self):
+class TestFetchFenceStatus:
+    def test_a_current_peer_reports_its_capabilities(self):
         body = {"hostname": "sw", "api_version": "2", "capabilities": ["peer_cidr", "sync_ttl", "sync_provenance"]}
-        reachable, capabilities = client.fetch_capabilities(FakeSession(FakeResponse(200, body)), "https://peer:62026")
-        assert reachable
-        assert "sync_provenance" in capabilities
+        session = FakeSession(FakeResponse(200, body))
+        assert client.fetch_fence_status(session, "https://peer:62026", "c" * 43) == (True, body)
 
-    def test_a_peer_without_the_field_reports_nothing(self):
-        # A version that predates capability reporting is reachable but unsupported for
-        # mutation; the ban-push preflight decides that from the empty capability set.
-        body = {"hostname": "sw", "os": "linux", "version": "v4.02.8", "status": "online"}
-        assert client.fetch_capabilities(FakeSession(FakeResponse(200, body)), "https://peer:62026") == (True, set())
-
-    def test_bunkerweb_integration_off_drops_the_provenance_capability(self):
-        body = {"capabilities": ["auth_all_routes", "peer_cidr", "tls_verified_client"]}
-        reachable, capabilities = client.fetch_capabilities(FakeSession(FakeResponse(200, body)), "https://peer:62026")
-        assert reachable
-        assert "sync_provenance" not in capabilities
-
-    def test_a_malformed_capability_field_is_not_a_usable_peer(self):
-        assert client.fetch_capabilities(FakeSession(FakeResponse(200, {"capabilities": "sync_provenance"})), "https://peer:62026") == (False, set())
+    def test_the_challenge_travels_and_the_answer_is_never_cached(self):
+        session = FakeSession(FakeResponse(200, {"capabilities": []}))
+        client.fetch_fence_status(session, "https://peer:62026", "c" * 43)
+        assert session.queries == [
+            {
+                "params": None,
+                "headers": {"X-SysWarden-HA-Challenge": "c" * 43, "Cache-Control": "no-store"},
+                "allow_redirects": False,
+            }
+        ]
 
     @pytest.mark.parametrize("answer", (OSError("connection refused"), FakeResponse(500), FakeResponse(403), FakeResponse(200)))
-    def test_an_unreachable_peer_is_never_reported_as_capability_less(self, answer):
-        # Both states block the cluster-wide mutation preflight. FakeResponse(200) with
-        # no body is the unreadable-answer case.
-        assert client.fetch_capabilities(FakeSession(answer), "https://peer:62026") == (False, set())
+    def test_an_unreachable_peer_is_never_reported_as_readable(self, answer):
+        # Every one of these blocks the cluster-wide preflight. FakeResponse(200) with no
+        # body is the unreadable-answer case.
+        reachable, _ = client.fetch_fence_status(FakeSession(answer), "https://peer:62026", "c" * 43)
+        assert reachable is False
+
+    def test_a_body_that_is_not_an_object_is_refused(self):
+        reachable, _ = client.fetch_fence_status(FakeSession(FakeResponse(200, ["capabilities"])), "https://peer:62026", "c" * 43)
+        assert reachable is False
+
+
+class TestMutateLegacy:
+    def test_the_condition_header_is_sent_only_when_there_is_one(self):
+        session = FakeSession(FakeResponse(200, {"status": "ok"}), FakeResponse(200, {"status": "ok"}))
+        client.mutate_legacy(session, "https://peer:62026", "DELETE", ["1.2.3.4"], condition="sw-fence-v1-" + "a" * 43)
+        client.mutate_legacy(session, "https://peer:62026", "POST", ["1.2.3.4"])
+        assert session.requests[0]["headers"] == {"X-SysWarden-HA-Fence-Condition": "sw-fence-v1-" + "a" * 43}
+        # Upstream answers 412 to a condition presented while the fence is inactive, so an
+        # unconditional header would break the very pass it means to protect.
+        assert session.requests[1]["headers"] is None
+
+    @pytest.mark.parametrize("code", (400, 412, 423, 428, 503))
+    def test_the_fence_codes_are_handed_back_instead_of_being_flattened(self, code):
+        sent, status_code, error = client.mutate_legacy(FakeSession(FakeResponse(code)), "https://peer:62026", "DELETE", ["1.2.3.4"])
+        assert (sent, status_code) == (False, code)
+        assert str(code) in error
+
+    def test_a_request_that_never_completed_reports_no_code(self):
+        sent, status_code, _ = client.mutate_legacy(FakeSession(OSError("reset")), "https://peer:62026", "DELETE", ["1.2.3.4"])
+        assert (sent, status_code) == (False, 0)
+
+    def test_a_success_is_a_plain_ok(self):
+        assert client.mutate_legacy(FakeSession(FakeResponse(200, {"status": "ok"})), "https://peer:62026", "POST", ["1.2.3.4"]) == (True, 200, "")
 
 
 class TestCall:
     def test_mutations_never_follow_redirects(self):
         session = FakeSession(FakeResponse(200, {"status": "ok"}))
         assert client.call(session, "https://peer:62026", "POST", "/ha/sync", payload={"bans": []}) == (True, {"status": "ok"})
-        assert session.requests == [{"method": "POST", "payload": {"bans": []}, "allow_redirects": False}]
+        assert session.requests == [{"method": "POST", "payload": {"bans": []}, "headers": None, "allow_redirects": False}]
 
 
 class TestFetchSync:
@@ -123,7 +148,7 @@ class TestFetchSync:
         ok, snapshot = client.fetch_sync(session, "https://peer:62026")
         assert ok
         assert snapshot == {"ips": ["1.1.1.1"], "bans": []}
-        assert session.queries == [{"params": None, "allow_redirects": False}]
+        assert session.queries == [{"params": None, "headers": None, "allow_redirects": False}]
 
     def test_the_detailed_read_returns_both_halves(self):
         bans = [{"ip": "1.1.1.1", "source": "bunkerweb", "expires_at": "2026-08-17T12:00:00Z"}]
@@ -273,6 +298,37 @@ class TestMakeSession:
         assert session.trust_env is False
         assert retry.total == 1
         assert retry.respect_retry_after_header is False
+
+
+class TestManifestPinnedSession:
+    def _pinned(self, monkeypatch):
+        monkeypatch.delenv("SYSWARDEN_API_TOKEN_FILE", raising=False)
+        monkeypatch.setenv("SYSWARDEN_API_TOKEN", "s3cr3t")
+        # No CA bundle, no fingerprint, no insecure opt-out: the pins are the posture, and
+        # make_session must not fall back on the global gate (which would exit 2 here).
+        monkeypatch.delenv("SYSWARDEN_CA_BUNDLE", raising=False)
+        monkeypatch.delenv("SYSWARDEN_SSL_FINGERPRINT", raising=False)
+        monkeypatch.setenv("SYSWARDEN_SSL_INSECURE", "no")
+        return client.make_session(FakeLogger(), pins={"https://10.0.0.5:62026": "c" * 64})
+
+    def test_a_manifest_member_gets_its_own_pinned_adapter(self, monkeypatch):
+        session = self._pinned(monkeypatch)
+        adapter = session.get_adapter("https://10.0.0.5:62026/ha/status")
+        assert isinstance(adapter, client.FingerprintAdapter)
+
+    def test_a_host_outside_the_manifest_is_refused_instead_of_trusted(self, monkeypatch):
+        # The pinned session runs with chain validation off, so a fall-through adapter would
+        # accept any certificate and hand it the bearer token.
+        session = self._pinned(monkeypatch)
+        assert isinstance(session.get_adapter("https://10.0.0.9:62026/ha/status"), client.UnpinnedRefusalAdapter)
+        reachable, error = client.fetch_fence_status(session, "https://10.0.0.9:62026", "c" * 43)
+        assert reachable is False
+        assert "manifest" in error
+
+    def test_pins_do_not_go_through_the_global_tls_gate(self, monkeypatch):
+        # Without pins this environment exits 2; with them it must build a session.
+        session = self._pinned(monkeypatch)
+        assert session.verify is False
 
 
 class TestGetPeers:

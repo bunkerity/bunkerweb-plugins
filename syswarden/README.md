@@ -154,11 +154,52 @@ flight, so an entry the plugin deletes on one peer can be written back by anothe
 explicit and peer by peer; SysWarden never propagates a `DELETE {"ips"}` for you.
 
 Closing that migration is a cluster-wide decision, split three ways. The operator supplies
-the exhaustive, frozen inventory of every node able to hold or republish an entry, and lists
-all of them in `SYSWARDEN_PEERS`. SysWarden supplies a verifiable local fence covering its
-cron, its manual runs and syncs already sent with an older snapshot, planned as a gate of its
-v4.03.0. The plugin keeps the durable registry, cleans up on each peer, and holds its claim
-until the cluster-wide condition is met.
+the exhaustive, frozen inventory of every node able to hold or republish an entry. SysWarden
+supplies a verifiable local fence covering its cron, its manual runs and syncs already sent
+with an older snapshot, shipped as a gate of its v4.03.0. The plugin keeps the durable
+registry, cleans up on each peer, and holds its claim until the cluster-wide condition is met.
+
+**The fence manifest.** On a SysWarden node the operator produces one with
+`syswarden ha-fence manifest create --inventory <inventory.json> --output <manifest.json> --assert-complete`,
+then distributes that same file, byte for byte, to every SysWarden node and to BunkerWeb.
+Point `SYSWARDEN_FENCE_MANIFEST` at the mounted copy. The command writes a root-owned `0600`
+file, so the copy handed to the scheduler has to be readable by the container's user; mount it
+read-only. A manifest that is configured but unreadable, malformed, or built without
+`--assert-complete` stops the job instead of falling back to the looser posture: a perimeter
+nobody vouched for cannot support a proof.
+
+The manifest governs the **push** job only, since it is the only one that mutates a peer. For
+that job `members` becomes the perimeter and `SYSWARDEN_PEERS` is not read, each peer is pinned
+to the **exact** leaf certificate the manifest records (a re-issue under the same CA no longer
+passes), and `epoch` drives the release window, so a new manifest restarts every claim's clock.
+The blocklist download and the telemetry poll keep reading `SYSWARDEN_PEERS` with the CA bundle
+or fingerprint posture: they only read, and a manifest is about who may be written to.
+
+**What the plugin then proves, on every pass.** It mints a fresh 32-byte challenge per peer,
+sends it on an authenticated `GET /ha/status`, and accepts the fence only when the six
+conditions hold together: the challenge comes back echoed, `epoch`, `membership_sha256` and
+`legacy_writer_inventory_sha256` equal the manifest's, the state is exactly `active_drained`,
+`active_outbound_writers` and `active_inbound_legacy_mutations` are both zero, and
+`generation`, `server_instance_id` and `condition` are unchanged. Values are compared as
+strings; the plugin never recomputes SysWarden's digests. A single missing proof is a broken
+fence, not an ambiguity, and that peer is left alone for the pass.
+
+A mounted manifest also changes what it takes to **release** a claim. Without one, an hour of
+continuous absence is the rule. With one, that hour is necessary but no longer sufficient: the
+claim is dropped only when every member proved a drained fence on the same pass, and a manifest
+whose campaign is not engaged holds every claim instead of ageing them out. A fence that moved
+between the decision and the end of the pass holds them too.
+
+A proven fence changes three more things. Legacy `{"ips"}` additions are held rather than sent,
+since upstream answers them `423` by design while the fence is engaged. Every cleanup
+`DELETE {"ips"}` carries the token in `X-SysWarden-HA-Fence-Condition`, and a `412` is read as
+"the fence moved, nothing was written" rather than as a transport error — the header is sent
+only when a live proof exists, because upstream also answers `412` to a condition presented
+while the fence is inactive. After mutating, every fence is read again: if the identity triple
+moved during the pass, the deletions may have landed across a boundary, so every claim is
+held. And an address the plugin had removed reappearing while **every** peer proves a drained
+fence is no longer attributable to HA replication, so the pass stops and leaves the decision
+to the operator instead of deleting it again.
 
 Concretely, the plugin drops a claim only after the address has been absent from every peer
 for an hour and BunkerWeb no longer bans it. A peer reporting it again restarts that window
@@ -169,8 +210,8 @@ the window was measured against is no longer the same. An address BunkerWeb stil
 never cleaned up in the legacy dialect at all: `GET /ha/sync` returns the union of both
 stores and so cannot prove on its own that the static entry is gone.
 
-**No finite window here is a proof.** Until a peer can attest to that fence, an hour is
-convergence and nothing more. If the inventory is incomplete, if a peer is unavailable, or if
+**No finite window is a proof.** Without a manifest, or against peers that do not carry the
+fence, an hour of absence is convergence and nothing more. If the inventory is incomplete, if a peer is unavailable, or if
 a fence is unverified, the migration stays open and the registry is not released. A peer
 leaves the perimeter only on an operator decision attesting it is isolated, decommissioned,
 and unable to republish.
@@ -309,26 +350,27 @@ from that file instead of the environment.
 
 # Settings
 
-| Setting                           | Default     | Context   | Multiple | Description                                                                                                                                                                                                                                                                        |
-| --------------------------------- | ----------- | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USE_SYSWARDEN`                   | `no`        | global    | no       | Activate the SysWarden integration (ban push, blocklist download, telemetry).                                                                                                                                                                                                      |
-| `SYSWARDEN_PEERS`                 |             | global    | no       | SysWarden HA API endpoints, space-separated, as host or host:port (default port 62026). Bracket an IPv6 literal to give it a port: [2001:db8::1]:62026.                                                                                                                            |
-| `SYSWARDEN_API_TOKEN`             |             | global    | no       | Bearer token of the SysWarden HA API ([integrations.ha] token). Required: a peer with an empty token authenticates on the peer IP alone. Supports the SYSWARDEN_API_TOKEN_FILE Docker-secret convention.                                                                           |
-| `SYSWARDEN_CA_BUNDLE`             |             | global    | no       | Path to a mounted CA bundle used to verify the peer's certificate, for example /etc/syswarden/ha-ca.pem.                                                                                                                                                                           |
-| `SYSWARDEN_SSL_FINGERPRINT`       |             | global    | no       | SHA-256 fingerprint of the peer's certificate to pin, when no CA bundle is available. One pin applies to every configured peer; use a CA bundle when peers have distinct certificates. Read it with: openssl x509 -in /var/lib/syswarden/ha/server.crt -noout -fingerprint -sha256 |
-| `SYSWARDEN_SSL_INSECURE`          | `no`        | global    | no       | Talk to the peer without verifying its certificate. Explicit opt-out: without a CA bundle or a fingerprint, the jobs refuse to run instead of degrading silently.                                                                                                                  |
-| `SYSWARDEN_TIMEOUT`               | `5`         | global    | no       | Connect and read timeout in seconds for SysWarden HA API requests (1-30).                                                                                                                                                                                                          |
-| `USE_SYSWARDEN_BAN_PUSH`          | `no`        | global    | no       | Push BunkerWeb's active bans to the SysWarden blocklist, so the attacker is dropped in the kernel for every service on the host, containers included. The dialect is detected per peer: provenance-aware temporary bans on v4.03+, the historical payload on older ones.           |
-| `SYSWARDEN_ENFORCEMENT`           | `enforcing` | global    | no       | 'enforcing' pushes and removes bans; 'audit' logs every add and remove it would have made without sending anything. Start in audit.                                                                                                                                                |
-| `SYSWARDEN_BAN_MAX_ITEMS`         | `10000`     | global    | no       | Maximum number of missing bans added to each peer per pass, 0 meaning no limit. A larger backlog drains deterministically over later passes; existing bans and removals are unaffected.                                                                                            |
-| `SYSWARDEN_BAN_CHUNK_SIZE`        | `500`       | global    | no       | Number of entries per POST/DELETE request to /ha/sync. A peer refuses an oversized batch outright (500 entries with ban provenance, 1024 without), so a higher value is lowered to whichever ceiling applies to that peer.                                                         |
-| `SYSWARDEN_BAN_SCOPE_FILTER`      |             | global    | no       | Space-separated list of services whose bans are propagated. Empty means every service. Global bans are always propagated: they are not tied to a service.                                                                                                                          |
-| `SYSWARDEN_BAN_MIN_TTL`           | `0`         | global    | no       | Skip bans with less than N seconds left, so rate-limit noise does not churn the nftables set. Permanent bans are never skipped.                                                                                                                                                    |
-| `SYSWARDEN_BAN_SOURCE`            |             | global    | no       | Required when ban push is enabled: a cluster-unique provenance tag written on every ban pushed to a peer that tracks provenance. Two BunkerWeb clusters pushing from the same allowed peer scope must never share it, or each would read the other's bans as its own.              |
-| `USE_SYSWARDEN_BLOCKLIST`         | `no`        | multisite | no       | Download SysWarden's blocklist and deny those IPs at Layer 7 as well. Useful when BunkerWeb and SysWarden do not run on the same host.                                                                                                                                             |
-| `USE_SYSWARDEN_WHITELIST`         | `no`        | multisite | no       | Download SysWarden's whitelist and let it win over the blocklist, so an operator's explicit allow keeps working at Layer 7 too.                                                                                                                                                    |
-| `SYSWARDEN_BLOCKLIST_INTERVAL`    | `hour`      | global    | no       | How often the blocklist and whitelist are downloaded.                                                                                                                                                                                                                              |
-| `SYSWARDEN_BLOCKLIST_EXCLUDE_OWN` | `yes`       | global    | no       | Subtract the IPs this plugin pushed from the downloaded blocklist: BunkerWeb already bans them at Layer 7, denying them twice adds nothing.                                                                                                                                        |
+| Setting                           | Default     | Context   | Multiple | Description                                                                                                                                                                                                                                                                                                                |
+| --------------------------------- | ----------- | --------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USE_SYSWARDEN`                   | `no`        | global    | no       | Activate the SysWarden integration (ban push, blocklist download, telemetry).                                                                                                                                                                                                                                              |
+| `SYSWARDEN_PEERS`                 |             | global    | no       | SysWarden HA API endpoints, space-separated, as host or host:port (default port 62026). Bracket an IPv6 literal to give it a port: [2001:db8::1]:62026.                                                                                                                                                                    |
+| `SYSWARDEN_API_TOKEN`             |             | global    | no       | Bearer token of the SysWarden HA API ([integrations.ha] token). Required: a peer with an empty token authenticates on the peer IP alone. Supports the SYSWARDEN_API_TOKEN_FILE Docker-secret convention.                                                                                                                   |
+| `SYSWARDEN_CA_BUNDLE`             |             | global    | no       | Path to a mounted CA bundle used to verify the peer's certificate, for example /etc/syswarden/ha-ca.pem.                                                                                                                                                                                                                   |
+| `SYSWARDEN_SSL_FINGERPRINT`       |             | global    | no       | SHA-256 fingerprint of the peer's certificate to pin, when no CA bundle is available. One pin applies to every configured peer; use a CA bundle when peers have distinct certificates. Read it with: openssl x509 -in /var/lib/syswarden/ha/server.crt -noout -fingerprint -sha256                                         |
+| `SYSWARDEN_SSL_INSECURE`          | `no`        | global    | no       | Talk to the peer without verifying its certificate. Explicit opt-out: without a CA bundle or a fingerprint, the jobs refuse to run instead of degrading silently.                                                                                                                                                          |
+| `SYSWARDEN_FENCE_MANIFEST`        |             | global    | no       | Path to the mounted HA fence manifest produced by 'syswarden ha-fence manifest create --assert-complete'. It governs the ban push job only: its members list replaces SYSWARDEN_PEERS there, and every member is pinned to the exact leaf certificate the manifest records. The read-only jobs keep using SYSWARDEN_PEERS. |
+| `SYSWARDEN_TIMEOUT`               | `5`         | global    | no       | Connect and read timeout in seconds for SysWarden HA API requests (1-30).                                                                                                                                                                                                                                                  |
+| `USE_SYSWARDEN_BAN_PUSH`          | `no`        | global    | no       | Push BunkerWeb's active bans to the SysWarden blocklist, so the attacker is dropped in the kernel for every service on the host, containers included. The dialect is detected per peer: provenance-aware temporary bans on v4.03+, the historical payload on older ones.                                                   |
+| `SYSWARDEN_ENFORCEMENT`           | `enforcing` | global    | no       | 'enforcing' pushes and removes bans; 'audit' logs every add and remove it would have made without sending anything. Start in audit.                                                                                                                                                                                        |
+| `SYSWARDEN_BAN_MAX_ITEMS`         | `10000`     | global    | no       | Maximum number of missing bans added to each peer per pass, 0 meaning no limit. A larger backlog drains deterministically over later passes; existing bans and removals are unaffected.                                                                                                                                    |
+| `SYSWARDEN_BAN_CHUNK_SIZE`        | `500`       | global    | no       | Number of entries per POST/DELETE request to /ha/sync. A peer refuses an oversized batch outright (500 entries with ban provenance, 1024 without), so a higher value is lowered to whichever ceiling applies to that peer.                                                                                                 |
+| `SYSWARDEN_BAN_SCOPE_FILTER`      |             | global    | no       | Space-separated list of services whose bans are propagated. Empty means every service. Global bans are always propagated: they are not tied to a service.                                                                                                                                                                  |
+| `SYSWARDEN_BAN_MIN_TTL`           | `0`         | global    | no       | Skip bans with less than N seconds left, so rate-limit noise does not churn the nftables set. Permanent bans are never skipped.                                                                                                                                                                                            |
+| `SYSWARDEN_BAN_SOURCE`            |             | global    | no       | Required when ban push is enabled: a cluster-unique provenance tag written on every ban pushed to a peer that tracks provenance. Two BunkerWeb clusters pushing from the same allowed peer scope must never share it, or each would read the other's bans as its own.                                                      |
+| `USE_SYSWARDEN_BLOCKLIST`         | `no`        | multisite | no       | Download SysWarden's blocklist and deny those IPs at Layer 7 as well. Useful when BunkerWeb and SysWarden do not run on the same host.                                                                                                                                                                                     |
+| `USE_SYSWARDEN_WHITELIST`         | `no`        | multisite | no       | Download SysWarden's whitelist and let it win over the blocklist, so an operator's explicit allow keeps working at Layer 7 too.                                                                                                                                                                                            |
+| `SYSWARDEN_BLOCKLIST_INTERVAL`    | `hour`      | global    | no       | How often the blocklist and whitelist are downloaded.                                                                                                                                                                                                                                                                      |
+| `SYSWARDEN_BLOCKLIST_EXCLUDE_OWN` | `yes`       | global    | no       | Subtract the IPs this plugin pushed from the downloaded blocklist: BunkerWeb already bans them at Layer 7, denying them twice adds nothing.                                                                                                                                                                                |
 
 ### VirusTotal
 

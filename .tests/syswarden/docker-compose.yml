@@ -24,6 +24,9 @@ services:
       # Only so the test can read a peer's blocklist back with a verified TLS connection.
       # The plugin itself pins the certificate by fingerprint and needs no CA here.
       - ./certs:/certs:ro
+      # The fence manifest an operator would copy out of `syswarden ha-fence manifest
+      # create`, mounted read-only exactly as the README tells them to.
+      - ./fence:/fence:ro
     environment:
       - BUNKERWEB_INSTANCES=bunkerweb
       - SERVER_NAME=www.example.com
@@ -36,6 +39,10 @@ services:
       # The mocks self-sign, so the fingerprint is the posture under test. The test script
       # generates the certificate and exports its SHA-256 before bringing the stack up.
       - SYSWARDEN_SSL_FINGERPRINT=${SYSWARDEN_SSL_FINGERPRINT}
+      # Empty for the first phase, pointed at the mounted manifest for the fence phase.
+      # A manifest replaces the peer list and the global pin with per-peer pinning, so the
+      # two postures have to be exercised one after the other, not side by side.
+      - SYSWARDEN_FENCE_MANIFEST=${SYSWARDEN_FENCE_MANIFEST:-}
       - USE_SYSWARDEN_BAN_PUSH=yes
       - SYSWARDEN_ENFORCEMENT=enforcing
       - SYSWARDEN_BAN_SOURCE=e2e-cluster
@@ -118,6 +125,25 @@ services:
       - SW_MOCK_SEEDED_IPS=203.0.113.0/24
       # The same address is blocklisted and whitelisted: the whitelist must win.
       - SW_MOCK_WHITELIST_IPS=203.0.113.20
+    networks:
+      - bw-services
+
+  # A v4.03 peer whose integrations.bunkerweb.enabled is off: it carries the native-sync
+  # fence and advertises neither sync_ttl nor sync_provenance, so the plugin speaks the
+  # legacy dialect to it and the fence actually covers what it writes. That combination is
+  # the only one where the fence changes the plugin's behaviour.
+  sw-mock-fenced:
+    image: sw-mock:tests
+    depends_on:
+      - sw-mock
+    volumes:
+      - ./certs:/certs:ro
+    environment:
+      - SW_MOCK_TOKEN=e2e-syswarden-token
+      - SW_MOCK_NO_BUNKERWEB=yes
+      # 127.0.0.1 is here for the test's own fence control calls, which are made from
+      # inside this container; the private ranges are for the scheduler.
+      - SW_MOCK_PEERS=127.0.0.1/32 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     networks:
       - bw-services
 

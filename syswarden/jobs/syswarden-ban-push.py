@@ -4,6 +4,7 @@ from contextlib import suppress
 from json import dumps, loads
 from os import getenv, sep
 from os.path import dirname, join
+from pathlib import Path
 from sys import exit as sys_exit, path as sys_path
 from time import time
 
@@ -26,9 +27,16 @@ from syswarden_helpers import (  # type: ignore
     build_unban_batch,
     canonical_set,
     cap_items,
+    cluster_fenced,
     chunked,
     extract_instance_bans,
+    fence_challenge,
+    fence_fingerprint,
+    fence_proof,
+    fence_reason,
+    load_manifest,
     load_registry,
+    manifest_peers,
     membership_digest,
     next_registry,
     parse_ban_key,
@@ -39,7 +47,7 @@ from syswarden_helpers import (  # type: ignore
     supports_ban_sync,
     valid_source,
 )
-from syswarden_client import call, fetch_capabilities, fetch_sync, get_peers, get_timeout, make_session  # type: ignore
+from syswarden_client import call, fetch_fence_status, fetch_sync, get_peers, get_timeout, make_session, mutate_legacy  # type: ignore
 
 LOGGER = setup_logger("SYSWARDEN.BAN-PUSH", getenv("LOG_LEVEL", "INFO"))
 status = 0
@@ -73,7 +81,29 @@ try:
         LOGGER.error("SYSWARDEN_BAN_SOURCE is required for ban push and must be a cluster-unique 1-64 character tag")
         sys_exit(2)
 
-    peers = get_peers(LOGGER)
+    # The fence manifest, when the operator mounted one. It is the perimeter from then on:
+    # `members` is the authoritative endpoint list and each member carries the exact leaf
+    # certificate to pin, which SYSWARDEN_PEERS cannot express. A configured but unusable
+    # manifest stops the job rather than falling back to the looser posture.
+    manifest = None
+    pins = {}
+    manifest_path = getenv("SYSWARDEN_FENCE_MANIFEST", "").strip()
+    if manifest_path:
+        try:
+            manifest = load_manifest(loads(Path(manifest_path).read_text(encoding="utf-8")))
+        except BaseException as e:
+            LOGGER.error(f"Can't read the fence manifest at {manifest_path}: {e}")
+            sys_exit(2)
+        if manifest is None:
+            LOGGER.error(f"The fence manifest at {manifest_path} is not a complete asserted manifest, refusing to mutate any peer")
+            sys_exit(2)
+        members = manifest_peers(manifest)
+        peers = [peer for peer, _ in members]
+        pins = dict(members)
+        LOGGER.info(f"Fence manifest loaded: epoch {manifest['epoch']}, {len(peers)} member(s), SYSWARDEN_PEERS is not used for this pass")
+    else:
+        peers = get_peers(LOGGER)
+
     timeout = get_timeout()
     JOB = Job(LOGGER, __file__)
 
@@ -85,7 +115,9 @@ try:
     if cached_owned:
         with suppress(BaseException):
             owned, membership = load_registry(loads(cached_owned.decode("utf-8", "replace") if isinstance(cached_owned, bytes) else cached_owned))
-    perimeter = membership_digest(peers)
+    # With a manifest the epoch is the perimeter: upstream restarts the continuous-absence
+    # clock on a new epoch, and a new manifest is exactly what a membership change produces.
+    perimeter = manifest["epoch"] if manifest else membership_digest(peers)
     if membership != perimeter:
         # Upstream is explicit: a membership change restarts the continuous-absence clock.
         if any(since is not None for since in owned.values()):
@@ -154,21 +186,40 @@ try:
     details = select_bans(records, scope_filter, min_ttl)
     LOGGER.info(f"{len(details)} banned IP(s) to synchronize with {len(peers)} SysWarden peer(s)")
 
-    session = make_session(LOGGER, methods=("GET", "POST", "DELETE"))
+    session = make_session(LOGGER, methods=("GET", "POST", "DELETE"), pins=pins)
 
     # Preflight the whole cluster before the first mutation. A mixed, partial or unreachable
     # cluster is not authoritative enough to make deletion decisions.
     peer_state = {}
+    fence_state = {}
+    fence_marks = {}
     for peer in peers:
-        # The peer states what its API can do. One that predates capability reporting, or
-        # whose operator has not enabled [integrations.bunkerweb], reports nothing and gets
-        # the legacy dialect; the only published SysWarden release still speaks only that.
-        reachable, capabilities = fetch_capabilities(session, peer, timeout=timeout)
+        # One authenticated GET carries both halves of the preflight: what the peer's API can
+        # do, and the fence proof for the challenge minted right here. A peer that predates
+        # capability reporting, or whose operator has not enabled [integrations.bunkerweb],
+        # reports nothing and gets the legacy dialect.
+        challenge = fence_challenge()
+        reachable, body = fetch_fence_status(session, peer, challenge, timeout=timeout)
         if not reachable:
-            LOGGER.error(f"Can't read the status of {peer}, refusing to mutate any peer")
+            LOGGER.error(f"Can't read the status of {peer} ({body}), refusing to mutate any peer")
+            status = 2
+            continue
+        capabilities = body.get("capabilities") or []
+        if not isinstance(capabilities, list) or any(not isinstance(entry, str) for entry in capabilities):
+            LOGGER.error(f"{peer} reported malformed capabilities, refusing to mutate any peer")
             status = 2
             continue
         provenance = supports_ban_sync(capabilities)
+
+        if manifest:
+            verdict, condition, reason = fence_proof(body, manifest, challenge)
+            fence_state[peer] = (verdict, condition)
+            fence_marks[peer] = fence_fingerprint(body)
+            if verdict == "unusable":
+                LOGGER.error(f"{peer}: no usable fence proof ({reason}), nothing will be written to its static blocklist")
+                status = 2
+            else:
+                LOGGER.info(f"{peer}: fence {verdict} ({reason})")
 
         got, snapshot = fetch_sync(session, peer, timeout=timeout, details=provenance)
         if not got:
@@ -182,6 +233,23 @@ try:
         seen_remote |= remote
 
     still_banned = set(details)
+
+    back = resurrected(owned, seen_remote)
+    # Under a complete and proven fence, a reappearance is no longer attributable to
+    # SysWarden's own ha-sync replication: every peer attests it is drained and refusing
+    # legacy writes, so something outside the contract wrote the address back. Deleting it
+    # again would put the plugin in a loop against an operator, so the pass stops instead and
+    # hands the decision over.
+    fenced_cluster = bool(manifest) and cluster_fenced((verdict for verdict, _ in fence_state.values()), len(peers))
+    if back and fenced_cluster:
+        LOGGER.error(
+            f"{len(back)} entry(ies) this plugin had removed are on a peer again while every peer proves a drained fence. "
+            f"This is an operator decision, not HA replication, so nothing is deleted this pass: {' '.join(back)}"
+        )
+        status = 2
+    elif back:
+        LOGGER.warning(f"{len(back)} entry(ies) this plugin had removed are on a peer again, their claims are kept: {' '.join(back)}")
+
     complete = status == 0 and len(peer_state) == len(peers)
 
     if not complete:
@@ -192,10 +260,6 @@ try:
         if not cached:
             LOGGER.error(f"Error while caching the ownership registry: {err}")
         sys_exit(2)
-
-    back = resurrected(owned, seen_remote)
-    if back:
-        LOGGER.warning(f"{len(back)} entry(ies) this plugin had removed are on a peer again, their claims are kept: {' '.join(back)}")
 
     peer_plans = {}
     for peer, (provenance, remote, ours) in peer_state.items():
@@ -220,14 +284,33 @@ try:
     ban_chunk = min(chunk_size, SYSWARDEN_MAX_BANS_PER_REQUEST)
     ips_chunk = min(chunk_size, SYSWARDEN_MAX_IPS_PER_REQUEST)
     pushed_ok = set()
+    legacy_touched = False
 
     for peer, (provenance, to_add, to_remove, stale_legacy) in peer_plans.items():
+        verdict, condition = fence_state.get(peer, ("inactive", None))
+        if manifest and verdict not in ("fenced", "inactive"):
+            LOGGER.error(f"Skipping {peer} entirely: it produced no usable fence proof this pass")
+            continue
+        # A fence engaged over legacy mutations answers a new {"ips"} write with 423 by
+        # design, so those additions are held instead of being attempted and logged as errors.
+        legacy_open = verdict != "fenced"
         additions_ok = True
+
         for batch in chunked(to_add, ban_chunk if provenance else ips_chunk):
-            payload = {"bans": build_ban_batch({ip: details[ip] for ip in batch}, source)} if provenance else {"ips": batch}
-            sent, error = call(session, peer, "POST", "/ha/sync", timeout=timeout, payload=payload)
+            if provenance:
+                payload = {"bans": build_ban_batch({ip: details[ip] for ip in batch}, source)}
+                sent, error = call(session, peer, "POST", "/ha/sync", timeout=timeout, payload=payload)
+                code = 200 if sent else 0
+            elif not legacy_open:
+                # Held, not failed. The cleanup below is the whole point of the fence, so it
+                # must still run: skipping it here would fence the peer and then leave the
+                # entries the campaign exists to remove exactly where they were.
+                LOGGER.info(f"{peer} is fenced, holding {len(to_add)} legacy addition(s) until its fence is released")
+                break
+            else:
+                sent, code, error = mutate_legacy(session, peer, "POST", batch, timeout=timeout)
             if not sent:
-                LOGGER.error(f"Can't push {len(batch)} ban(s) to {peer}: {error}")
+                LOGGER.error(f"Can't push {len(batch)} ban(s) to {peer}: {error}. {fence_reason(code)}".strip())
                 additions_ok = False
                 status = 2
                 break
@@ -243,10 +326,17 @@ try:
             continue
 
         for batch in chunked(to_remove, ban_chunk if provenance else ips_chunk):
-            payload = {"bans": build_unban_batch(batch, source)} if provenance else {"ips": batch}
-            sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload=payload)
+            if provenance:
+                payload = {"bans": build_unban_batch(batch, source)}
+                sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload=payload)
+                code = 200 if sent else 0
+            else:
+                # The condition is sent only when this pass holds a live proof: upstream
+                # answers 412 to a condition presented while the fence is inactive.
+                sent, code, error = mutate_legacy(session, peer, "DELETE", batch, condition=condition, timeout=timeout)
+                legacy_touched = True
             if not sent:
-                LOGGER.error(f"Can't remove {len(batch)} lifted ban(s) from {peer}: {error}")
+                LOGGER.error(f"Can't remove {len(batch)} lifted ban(s) from {peer}: {error}. {fence_reason(code)}".strip())
                 status = 2
                 break
             LOGGER.info(f"➖ Removed {len(batch)} lifted ban(s) from {peer}")
@@ -254,17 +344,47 @@ try:
         # A separate request carrying only {"ips"}: upstream forbids mixing the two forms in
         # one body, and this is the only dialect that reaches the static store.
         for batch in chunked(stale_legacy, ips_chunk):
-            sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload={"ips": batch})
+            sent, code, error = mutate_legacy(session, peer, "DELETE", batch, condition=condition, timeout=timeout)
+            legacy_touched = True
             if not sent:
-                LOGGER.error(f"Can't remove {len(batch)} entry(ies) left over from the legacy dialect on {peer}: {error}")
+                LOGGER.error(f"Can't remove {len(batch)} entry(ies) left over from the legacy dialect on {peer}: {error}. {fence_reason(code)}".strip())
                 status = 2
                 break
             LOGGER.info(f"➖ Removed {len(batch)} entry(ies) this plugin had pushed to {peer} before it supported ban provenance")
 
+    # Re-read every fence after mutating. A condition accepted at the moment of the DELETE
+    # only proves the fence held then; if the epoch, the generation, the server identity or
+    # the condition moved during the pass, the deletions may have landed across a boundary
+    # and nothing released this pass can be trusted.
+    # Re-read whenever this pass could act on the fence, not only when it deleted: releasing
+    # a claim that has simply been absent for an hour is just as fence-dependent, and a fence
+    # that recovered mid-pass would otherwise go unnoticed on a pass that sent nothing.
+    if manifest and (legacy_touched or fenced_cluster):
+        for peer in peers:
+            challenge = fence_challenge()
+            still_there, body = fetch_fence_status(session, peer, challenge, timeout=timeout)
+            if not still_there:
+                LOGGER.error(f"Can't re-read the fence of {peer} after mutating ({body}), holding every claim")
+                status = 2
+                continue
+            verdict, _, reason = fence_proof(body, manifest, challenge)
+            if verdict == "unusable" or fence_fingerprint(body) != fence_marks.get(peer):
+                LOGGER.error(f"The fence of {peer} moved during the pass ({reason}), holding every claim")
+                status = 2
+
     # The claim is released only after a full grace window during which no peer reported the
     # address and BunkerWeb stopped banning it. A failed pass keeps every claim and restarts
     # the window, which is why this runs whatever `status` says.
-    new_owned = next_registry(pushed_ok, owned, seen_remote, still_banned, time(), status == 0)
+    # Once a manifest is mounted, an hour of absence stops being enough on its own: the
+    # contract is that a claim is released only under a fence proven on every member. A
+    # manifest with no campaign engaged therefore holds every claim instead of ageing them
+    # out, which is the conservative half of "a missing proof is a broken barrier".
+    may_release = status == 0 and (not manifest or fenced_cluster)
+    if manifest and not fenced_cluster and owned:
+        # Guarding on a running clock would never fire: a pass that may not release resets
+        # every clock to None, so from the second pass on there is none left to observe.
+        LOGGER.info(f"A manifest is mounted but no complete fence is proven, holding {len(owned)} claim(s) this pass")
+    new_owned = next_registry(pushed_ok, owned, seen_remote, still_banned, time(), may_release)
     payload = {"membership": perimeter, "claims": new_owned}
     cached, err = JOB.cache_file("pushed.json", dumps(payload).encode())
     if not cached:
