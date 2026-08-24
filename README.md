@@ -9,6 +9,7 @@
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=main&label=CI%2FCD%20main" />
 	<img src="https://img.shields.io/github/issues/bunkerity/bunkerweb-plugins">
 	<img src="https://img.shields.io/github/issues-pr/bunkerity/bunkerweb-plugins">
+	<a href="https://score.getplumber.io/github.com/bunkerity/bunkerweb-plugins"><img src="https://score.getplumber.io/github.com/bunkerity/bunkerweb-plugins.svg" alt="Plumber CI/CD security score" /></a>
 </p>
 
 This repository contains "official" plugins for the [BunkerWeb solution](https://github.com/bunkerity/bunkerweb). If you don't already know BunkerWeb, you should first read the [documentation](https://docs.bunkerweb.io/?utm_campaign=self&utm_source=github).

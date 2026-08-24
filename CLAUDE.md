@@ -50,11 +50,12 @@ Two layers: fast **unit tests** (no Docker) and **end-to-end integration tests**
 
 Runs on push to `dev` and `main`. A `tag` job resolves the **latest stable BunkerWeb release** at runtime via the GitHub `releases/latest` API (`gh api repos/bunkerity/bunkerweb/releases/latest`, which excludes drafts and pre-releases; a leading `v` is stripped) and feeds that tag to every downstream job — same version on both branches, never pinned. Pipeline:
 
-1. **codeql** — `.github/workflows/codeql.yml` (also runs weekly on a cron), matrix `[python, go]`.
-2. **lint** — `pre-commit run --all-files`.
-3. **unit** — matrix `[go, python, lua]` (the unit tests above).
-4. **integration** — `needs: [tag, lint, unit]`, matrix `plugin: [clamav, coraza, virustotal, authentik, notifier]`; each runs `.tests/bw.sh <tag>` then `.tests/<plugin>.sh`.
-5. **build-push** — `main` only: `./.tests/build-push.sh <tag>` builds and pushes the `bunkerweb-coraza` image.
+1. **plumber** — `.github/workflows/plumber.yml` (also runs weekly on a cron): [Plumber](https://getplumber.io) scans `.github/workflows/` for CI/CD supply-chain misconfigurations, gated at `min-score: B` with `soft-fail: false`. Policy overlay + rationale in `.github/plumber/` (read its README before touching a workflow — an unpinned action, a missing job `permissions:` block, or an event-supplied `ref:` will fail the run). The **`dev` and `main` branches must both stay protected**: `branchMustBeProtected` is Critical and caps the score at grade E.
+2. **codeql** — `.github/workflows/codeql.yml` (also runs weekly on a cron), matrix `[python, go]`.
+3. **lint** — `pre-commit run --all-files`.
+4. **unit** — matrix `[go, python, lua]` (the unit tests above).
+5. **integration** — `needs: [tag, lint, unit]`, matrix `plugin: [clamav, coraza, virustotal, authentik, notifier]`; each runs `.tests/bw.sh <tag>` then `.tests/<plugin>.sh`.
+6. **build-push** — `main` only, `needs: [plumber, tag, integration]` so a failing supply-chain scan blocks publishing: `./.tests/build-push.sh <tag>` builds and pushes the `bunkerweb-coraza` image.
 
 There is **no pinned BW version** — the `tag` job always resolves the latest stable release, so the tests track upstream automatically (`COMPATIBILITY.json` is not consulted here). The resolved tag flows into `bw.sh` (pulls `bunkerity/bunkerweb[-scheduler]:<tag>`) and, on `main`, into `build-push.sh` (which also tags the pushed `bunkerweb-coraza` image with it). The job fails fast if the API returns an empty or pre-release (hyphenated) tag.
 

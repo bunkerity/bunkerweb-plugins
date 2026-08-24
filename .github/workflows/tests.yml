@@ -1,5 +1,9 @@
 name: Tests
 
+# Least privilege by default: every job below is read-only unless it says
+# otherwise, so the GITHUB_TOKEN never inherits the repository-wide scope.
+permissions: read-all
+
 on:
   push:
     branches: [dev, main]
@@ -9,6 +13,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plumber:
+    uses: ./.github/workflows/plumber.yml
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+
   codeql:
     uses: ./.github/workflows/codeql.yml
     permissions:
@@ -156,7 +167,9 @@ jobs:
         run: bash .tests/${{ matrix.plugin }}.sh
 
   build-push:
-    needs: [tag, integration]
+    # Publishing is gated on Plumber too: a pipeline that fails its own
+    # supply-chain scan must not push an image to Docker Hub.
+    needs: [plumber, tag, integration]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
