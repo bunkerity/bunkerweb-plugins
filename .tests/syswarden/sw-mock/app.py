@@ -300,7 +300,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "hostname": "sw-mock",
                     "os": "linux",
-                    "version": "v4.03.0",
+                    "version": "v4.03.2",
                     "status": "online",
                     "api_version": "2",
                     "capabilities": capabilities,
@@ -319,6 +319,13 @@ class Handler(BaseHTTPRequestHandler):
                 # A legacy peer ignores the query string entirely, so its answer carries no
                 # `bans` key at all — which is why capabilities, not the body, decide.
                 return self._send(200, payload)
+            if NO_BUNKERWEB:
+                # Upstream gates *any* query string on integrations.bunkerweb.enabled
+                # (ha_api.go:644), not merely the ban payloads. The plugin never reaches this
+                # in practice — it negotiates the dialect from the advertised capabilities and
+                # never asks a peer without them for provenance — but a mock that answers 200
+                # here would let a future change that does ask pass CI and fail in production.
+                return self._error(403, "BunkerWeb integration is disabled")
             query = parse_qs(parsed.query, keep_blank_values=True)
             if set(query) - {"details", "limit", "cursor"} or query.get("details") != ["true"]:
                 return self._error(400, "Invalid provenance query")
