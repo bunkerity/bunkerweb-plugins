@@ -76,6 +76,7 @@ SysWarden stays the only owner of its own state.
 - [Table of contents](#table-of-contents)
 - [How it works](#how-it-works)
   - [Ownership: what the plugin will and will not delete](#ownership-what-the-plugin-will-and-will-not-delete)
+- [Which bans reach SysWarden, and which stay local](#which-bans-reach-syswarden-and-which-stay-local)
 - [Prerequisites](#prerequisites)
   - [SysWarden side](#syswarden-side)
   - [TLS](#tls)
@@ -111,6 +112,33 @@ hooks in the BunkerWeb instance.
 
 Both halves are independent: you can push bans without ever downloading a list, and the
 other way round.
+
+## Which bans reach SysWarden, and which stay local
+
+From **v4.03.2** SysWarden validates every address in a `POST /ha/sync` before it mutates
+anything, and refuses the whole request as soon as one of them is a protected target. Refused
+are: anything carrying a prefix length (a ban target is one host, never a network), IPv4-mapped
+and zoned forms, and every address that is not public unicast — loopback, link-local,
+multicast, RFC1918 (`10/8`, `172.16/12`, `192.168/16`), CGNAT `100.64/10`, the documentation
+and benchmarking ranges, ULA `fc00::/7`, and the rest of the IANA special-purpose registry.
+On top of that each peer refuses its own interface addresses, anything inside its configured
+`peer_ips`, and anything on its whitelist.
+
+The plugin evaluates the first half itself and simply does not send those bans, naming them
+once per pass in the scheduler log. **This is expected, not a fault:** a BunkerWeb behind a
+proxy or a load balancer bans RFC1918 addresses routinely, and those bans stay enforced at
+Layer 7 by BunkerWeb — they just never become a kernel-level nftables drop, because SysWarden
+will not put a private address in a public-facing DROP set.
+
+The second half depends on state only the peer has, so a refusal can still come back. When it
+does, the plugin bisects the batch to find the address, drops it, and lets the rest through;
+it does not fail the pass over an address the peer will never accept. If you see
+`refuses N address(es) as a firewall target` in the scheduler log, that is this path.
+
+> [!NOTE]
+> An address pushed **before** the peer was upgraded to v4.03.2 stays in its blocklist, since
+> `DELETE` is not validated. The plugin removes those on its next pass, which is what upstream
+> intends — unsafe historical entries stay detectable and removable, but cannot be reintroduced.
 
 ## Ownership: what the plugin will and will not delete
 
@@ -156,7 +184,7 @@ explicit and peer by peer; SysWarden never propagates a `DELETE {"ips"}` for you
 Closing that migration is a cluster-wide decision, split three ways. The operator supplies
 the exhaustive, frozen inventory of every node able to hold or republish an entry. SysWarden
 supplies a verifiable local fence covering its cron, its manual runs and syncs already sent
-with an older snapshot, shipped as a gate of its v4.03.0. The plugin keeps the durable
+with an older snapshot, shipped as a gate of its v4.03.2. The plugin keeps the durable
 registry, cleans up on each peer, and holds its claim until the cluster-wide condition is met.
 
 **The fence manifest.** On a SysWarden node the operator produces one with
@@ -231,6 +259,13 @@ SysWarden documents its own side of this integration in
 [its wiki](https://github.com/duggytuxy/syswarden/wiki/BunkerWeb-Integration); read it
 alongside this page, since it is the authority on what the peer accepts.
 
+> [!NOTE]
+> This plugin is developed and tested against SysWarden **v4.03.2**, the release the HA API
+> contract here was verified against. Note that v4.03.0 and v4.03.1 were never published —
+> v4.03.2 is the first public release of that line, and it is amd64 only (ARM64 and aarch64
+> packages were retired). Older peers are still supported: the plugin negotiates the dialect
+> per peer from the capabilities each one advertises.
+
 Enable the HA API on the SysWarden host and allow the BunkerWeb **scheduler** container's
 IP (that is where the jobs run):
 
@@ -252,10 +287,12 @@ enabled = true
 > refuses to run without `SYSWARDEN_API_TOKEN` for the same reason.
 
 > [!NOTE]
-> `[integrations.bunkerweb]` unlocks expiring bans and provenance. Ban push requires every
-> configured peer to advertise both `sync_ttl` and `sync_provenance`; without either one,
-> the job aborts the pass without mutating any peer. Blocklist download and telemetry stay
-> available independently.
+> `[integrations.bunkerweb]` unlocks expiring bans and provenance: with it off, SysWarden
+> advertises neither `sync_ttl` nor `sync_provenance`. That is decided **per peer**, not
+> globally — a peer missing either capability is spoken to in the older `{"ips"}` dialect
+> instead, so a mixed cluster still synchronizes. What it costs on that peer is the ban
+> lifetime and the provenance tag: its entries are permanent until the plugin deletes them.
+> Blocklist download and telemetry stay available independently.
 
 > [!NOTE]
 > Recent SysWarden versions accept a CIDR in `peer_ips`, so a scheduler on a Docker
