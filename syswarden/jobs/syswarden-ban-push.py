@@ -34,6 +34,7 @@ from syswarden_helpers import (  # type: ignore
     fence_fingerprint,
     fence_proof,
     fence_reason,
+    isolate_refused,
     load_manifest,
     load_registry,
     manifest_peers,
@@ -44,10 +45,11 @@ from syswarden_helpers import (  # type: ignore
     provenance_ips,
     resurrected,
     select_bans,
+    split_push_targets,
     supports_ban_sync,
     valid_source,
 )
-from syswarden_client import call, fetch_fence_status, fetch_sync, get_peers, get_timeout, make_session, mutate_legacy  # type: ignore
+from syswarden_client import fetch_fence_status, fetch_sync, get_peers, get_timeout, make_session, mutate_bans, mutate_legacy  # type: ignore
 
 LOGGER = setup_logger("SYSWARDEN.BAN-PUSH", getenv("LOG_LEVEL", "INFO"))
 status = 0
@@ -184,6 +186,20 @@ try:
 
     scope_filter = getenv("SYSWARDEN_BAN_SCOPE_FILTER", "").split()
     details = select_bans(records, scope_filter, min_ttl)
+    # SysWarden v4.03.2 runs every POSTed address through validateHAMutationTargets and
+    # answers the *whole* batch with a 400 on the first protected one, so an address it
+    # would refuse is dropped here rather than sent. Dropping it from the ban set (instead
+    # of skipping it at send time) is deliberate: one this plugin pushed before the upgrade
+    # is then simply no longer banned, so the ordinary diff turns it into a to_remove and
+    # the DELETE — which upstream does not validate — cleans it up.
+    details, refused = split_push_targets(details)
+    if refused:
+        sample = " ".join(refused[:5])
+        suffix = " ..." if len(refused) > 5 else ""
+        LOGGER.info(
+            f"{len(refused)} banned IP(s) are not legal SysWarden firewall targets and stay local to BunkerWeb "
+            f"(private, loopback, link-local or otherwise special-use): {sample}{suffix}"
+        )
     LOGGER.info(f"{len(details)} banned IP(s) to synchronize with {len(peers)} SysWarden peer(s)")
 
     session = make_session(LOGGER, methods=("GET", "POST", "DELETE"), pins=pins)
@@ -296,19 +312,41 @@ try:
         legacy_open = verdict != "fenced"
         additions_ok = True
 
-        for batch in chunked(to_add, ban_chunk if provenance else ips_chunk):
+        def push_additions(items):
+            """Send one additions request in whichever dialect this peer speaks."""
             if provenance:
-                payload = {"bans": build_ban_batch({ip: details[ip] for ip in batch}, source)}
-                sent, error = call(session, peer, "POST", "/ha/sync", timeout=timeout, payload=payload)
-                code = 200 if sent else 0
-            elif not legacy_open:
+                return mutate_bans(session, peer, "POST", build_ban_batch({ip: details[ip] for ip in items}, source), timeout=timeout)
+            return mutate_legacy(session, peer, "POST", items, timeout=timeout)
+
+        for batch in chunked(to_add, ban_chunk if provenance else ips_chunk):
+            if not provenance and not legacy_open:
                 # Held, not failed. The cleanup below is the whole point of the fence, so it
                 # must still run: skipping it here would fence the peer and then leave the
                 # entries the campaign exists to remove exactly where they were.
                 LOGGER.info(f"{peer} is fenced, holding {len(to_add)} legacy addition(s) until its fence is released")
                 break
-            else:
-                sent, code, error = mutate_legacy(session, peer, "POST", batch, timeout=timeout)
+            sent, code, error = push_additions(batch)
+            if not sent and code == 400:
+                LOGGER.warning(f"{peer} refused a batch of {len(batch)} ban(s) as a protected firewall target, isolating it")
+                landed, rejected, failure = isolate_refused(batch, push_additions)
+                # Only a legacy push writes the static store, so only it creates a claim there.
+                if not provenance:
+                    pushed_ok.update(landed)
+                if landed:
+                    LOGGER.info(f"➕ Pushed {len(landed)} ban(s) to {peer}")
+                if rejected:
+                    # Three of upstream's rules read state only the peer has — its own
+                    # interface addresses, its configured HA peer prefixes and its whitelist —
+                    # so the local filter cannot preempt these, and no retry will ever change
+                    # the verdict. Refusing an address is the peer's decision, not our failure:
+                    # going red every minute over it would bury the failures that do matter.
+                    LOGGER.warning(f"{peer} refuses {len(rejected)} address(es) as a firewall target, they stay local to BunkerWeb: {' '.join(rejected)}")
+                if failure:
+                    LOGGER.error(f"Can't push ban(s) to {peer}: {failure[1]}. {fence_reason(failure[0])}".strip())
+                    additions_ok = False
+                    status = 2
+                    break
+                continue
             if not sent:
                 LOGGER.error(f"Can't push {len(batch)} ban(s) to {peer}: {error}. {fence_reason(code)}".strip())
                 additions_ok = False
@@ -327,9 +365,7 @@ try:
 
         for batch in chunked(to_remove, ban_chunk if provenance else ips_chunk):
             if provenance:
-                payload = {"bans": build_unban_batch(batch, source)}
-                sent, error = call(session, peer, "DELETE", "/ha/sync", timeout=timeout, payload=payload)
-                code = 200 if sent else 0
+                sent, code, error = mutate_bans(session, peer, "DELETE", build_unban_batch(batch, source), timeout=timeout)
             else:
                 # The condition is sent only when this pass holds a live proof: upstream
                 # answers 412 to a condition presented while the fence is inactive.

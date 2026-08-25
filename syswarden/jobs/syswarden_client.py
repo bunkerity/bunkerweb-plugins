@@ -210,6 +210,34 @@ def mutate_legacy(
     return True, 200, ""
 
 
+def mutate_bans(
+    session: Session,
+    peer: str,
+    method: str,
+    bans: List[Dict[str, Any]],
+    *,
+    timeout: int = 5,
+) -> Tuple[bool, int, str]:
+    """Send one provenance ``{"bans": [...]}`` mutation. Returns ``(ok, status_code, error)``.
+
+    The provenance twin of :func:`mutate_legacy`, and it exists for the same reason: the
+    caller has to tell one refusal from another. Since v4.03.2 a POST runs through
+    ``validateHAMutationTargets`` (ha_api.go:1903 for this dialect), which answers 400 and
+    mutates nothing as soon as one address in the body is a protected target — so 400 is a
+    verdict on the payload, not a transport failure, and retrying it unchanged is pointless.
+
+    These mutations do not pass through the fence: upstream returns from the temporaries
+    branch before ``withLegacyMutation``. Only the legacy dialect carries fence codes.
+    """
+    try:
+        response = session.request(method, f"{peer}/ha/sync", json={"bans": bans}, timeout=timeout, allow_redirects=False)
+    except Exception as e:
+        return False, 0, f"{method} {peer}/ha/sync failed: {e}"
+    if response.status_code != 200:
+        return False, response.status_code, f"{method} {peer}/ha/sync returned status {response.status_code}"
+    return True, 200, ""
+
+
 def call(
     session: Session,
     peer: str,

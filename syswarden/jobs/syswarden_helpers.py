@@ -32,15 +32,61 @@ SYSWARDEN_MAX_SOURCE_BYTES = 64
 SYSWARDEN_MAX_BANS_PER_REQUEST = 500
 SYSWARDEN_MAX_IPS_PER_REQUEST = 1024
 
+# IANA special-purpose blocks SysWarden refuses as a firewall mutation target, copied
+# verbatim from deniedFirewallTargetPrefixes in syswarden-core/utils/target_policy.go
+# (v4.03.2). Sources upstream cites: iana-ipv4-special-registry, iana-ipv6-special-registry.
+# Mirrored rather than approximated with ipaddress' own is_private/is_reserved, which draw
+# the line in a different place: being stricter than the peer would silently stop bans it
+# would have accepted, being looser would put the batch-killing 400 back.
+SYSWARDEN_DENIED_TARGET_PREFIXES = (
+    "0.0.0.0/8",
+    "10.0.0.0/8",
+    "100.64.0.0/10",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "172.16.0.0/12",
+    "192.0.0.0/24",
+    "192.0.2.0/24",
+    "192.31.196.0/24",
+    "192.52.193.0/24",
+    "192.88.99.0/24",
+    "192.168.0.0/16",
+    "192.175.48.0/24",
+    "198.18.0.0/15",
+    "198.51.100.0/24",
+    "203.0.113.0/24",
+    "224.0.0.0/4",
+    "240.0.0.0/4",
+    "::/128",
+    "::/96",
+    "::1/128",
+    "64:ff9b::/96",
+    "64:ff9b:1::/48",
+    "100::/64",
+    "100:0:0:1::/64",
+    "2001::/23",
+    "2001:db8::/32",
+    "2002::/16",
+    "2620:4f:8000::/48",
+    "3fff::/20",
+    "5f00::/16",
+    "fc00::/7",
+    "fec0::/10",
+    "fe80::/10",
+    "ff00::/8",
+)
+
+_DENIED_TARGET_NETWORKS = tuple(ip_network(prefix) for prefix in SYSWARDEN_DENIED_TARGET_PREFIXES)
+
 # How long an address must stay absent from every peer before the plugin drops its claim.
 # SysWarden replicates the static blocklist between peers on its own cron, roughly every
 # 30 minutes, and that run can also be started by hand or already be in flight. A single
 # clean pass is convergence, not proof, so the claim is held well past one such period.
-# Upstream plans a verifiable local fence (`native_sync_fence_v1`) for v4.03.0; until a peer
-# can attest to it, no finite window here proves the migration is over.
+# Upstream shipped the verifiable local fence (`native_sync_fence_v1`) in v4.03.2; until a
+# peer can attest to it, no finite window here proves the migration is over.
 SYSWARDEN_LEGACY_GRACE = 3600
 
-# The local cluster fence of v4.03.0 (ha_fence.go). `native_sync_fence_v1` is the capability
+# The local cluster fence of v4.03.2 (ha_fence.go). `native_sync_fence_v1` is the capability
 # a peer advertises on /ha/status; the proof itself is the dynamic `native_sync_fence` object.
 # The two scopes are different strings and are not interchangeable: the status object is scoped
 # to the mutations it fences, the manifest to what the operator asserts he enumerated.
@@ -175,6 +221,67 @@ def canonical_address(value: Optional[str]) -> str:
     if address.version == 6 and (address.ipv4_mapped or "%" in text):
         return ""
     return str(address)
+
+
+def firewall_target(value: Optional[str]) -> str:
+    """Render an address SysWarden will accept as a ban target, or ``""`` if it refuses it.
+
+    Mirrors ``CanonicalFirewallMutationTarget`` (utils/target_policy.go), added in v4.03.2
+    and run over every ``POST /ha/sync`` by ``validateHAMutationTargets``. This is a
+    different and stricter question than :func:`canonical_address`, which only asks how
+    SysWarden *stores* an address: a CIDR or an RFC1918 host is storable but is no longer a
+    legal mutation target, so the two must not be merged. The pull direction still needs the
+    permissive one, since a downloaded blocklist is full of CIDRs.
+
+    Why it has to happen before the wire: ``validateHAMutationTargets`` returns on the first
+    refusal, before any mutation, so **one** refused address answers the whole batch of up to
+    500 with a 400. Since v4.03.2 that is reachable from ordinary traffic — BunkerWeb behind
+    a proxy bans RFC1918 addresses routinely.
+
+    Three of upstream's rules are deliberately not mirrored, because they depend on state
+    only the peer has: its own interface addresses, its configured HA peer prefixes, and its
+    whitelist. A 400 therefore stays possible and the caller must still isolate on it.
+    """
+    text = value or ""
+    # Upstream refuses surrounding whitespace outright rather than trimming it, and refuses
+    # anything carrying a prefix length: a mutation target is one host, never a network.
+    if not text or text.strip() != text or "/" in text:
+        return ""
+    try:
+        address = ip_address(text)
+    except ValueError:
+        return ""
+    if address.version == 6 and (address.ipv4_mapped or address.scope_id or "%" in text):
+        return ""
+    # netip.Addr.IsGlobalUnicast() is false only for the unspecified, loopback and multicast
+    # forms. Private and link-local unicast stay "global unicast" there and are caught by the
+    # table instead, so reproducing the table is what makes this faithful.
+    if address.is_unspecified or address.is_loopback or address.is_multicast:
+        return ""
+    if any(address in network for network in _DENIED_TARGET_NETWORKS):
+        return ""
+    return str(address)
+
+
+def split_push_targets(details: Dict[str, Dict]) -> Tuple[Dict[str, Dict], List[str]]:
+    """Split a ban set into ``(pushable, refused)`` against :func:`firewall_target`.
+
+    Keys are already canonical here, so this only removes entries; it never rewrites one.
+    A refused address is dropped from the ban set entirely rather than merely skipped at
+    send time, which is what lets the ordinary diff clean up after an upgrade: an address we
+    pushed before v4.03.2 is still on the peer, no longer counts as banned, and so becomes a
+    plain ``to_remove``. DELETE is not validated upstream, so that cleanup lands — and it is
+    what the v4.03.2 notes ask for, "keep unsafe historical entries detectable and removable
+    without allowing them to be reintroduced".
+    """
+    pushable: Dict[str, Dict] = {}
+    refused: List[str] = []
+    for ip, detail in details.items():
+        if firewall_target(ip):
+            pushable[ip] = detail
+        else:
+            refused.append(ip)
+    return pushable, sorted(refused)
 
 
 def normalize_ban(record: Dict) -> Optional[Dict]:
@@ -467,6 +574,45 @@ def chunked(items: Sequence[str], size: int) -> List[List[str]]:
     # islice rather than a slice expression: black formats `items[i : i + size]` with the
     # space flake8 then flags as E203.
     return [list(islice(items, index, index + size)) for index in range(0, len(items), size)]
+
+
+def isolate_refused(items: Sequence[str], send) -> Tuple[List[str], List[str], Optional[Tuple[int, str]]]:
+    """Send ``items`` through ``send``, halving on a 400 to find what the peer refuses.
+
+    ``send(chunk)`` returns ``(ok, status_code, error)``. Returns ``(landed, rejected,
+    failure)``, where ``failure`` is the ``(code, error)`` of the first refusal that is *not*
+    a target rejection — that one stops the walk, since it says nothing about the payload.
+
+    Since v4.03.2 a ``POST /ha/sync`` runs through ``validateHAMutationTargets``, which
+    returns on the first protected address and mutates nothing. A 400 therefore condemns the
+    whole body while naming none of it, and resending the same bytes can only fail the same
+    way. Bisecting costs O(k log n) requests for k refused addresses where sending them one
+    at a time would spend O(n) on every pass, forever, since a refused address stays banned
+    in BunkerWeb and comes back next minute.
+    """
+    landed: List[str] = []
+    rejected: List[str] = []
+    failure: Optional[Tuple[int, str]] = None
+    pending: List[List[str]] = [list(items)]
+    while pending:
+        chunk = pending.pop()
+        if not chunk:
+            continue
+        ok, code, error = send(chunk)
+        if ok:
+            landed.extend(chunk)
+            continue
+        if code != 400:
+            failure = (code, error)
+            break
+        if len(chunk) == 1:
+            rejected.extend(chunk)
+            continue
+        middle = len(chunk) // 2
+        # Second half first: pending is a stack, so pushing it first keeps the walk in the
+        # original order, which keeps the logs and the tests deterministic.
+        pending.extend((chunk[middle:], chunk[:middle]))
+    return landed, rejected, failure
 
 
 def check_line(line: bytes) -> Tuple[bool, bytes]:
