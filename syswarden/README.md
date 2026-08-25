@@ -76,6 +76,7 @@ SysWarden stays the only owner of its own state.
 - [Table of contents](#table-of-contents)
 - [How it works](#how-it-works)
   - [Ownership: what the plugin will and will not delete](#ownership-what-the-plugin-will-and-will-not-delete)
+- [Known SysWarden defect: do not enable ban push on v4.03.2 yet](#known-syswarden-defect-do-not-enable-ban-push-on-v4032-yet)
 - [Which bans reach SysWarden, and which stay local](#which-bans-reach-syswarden-and-which-stay-local)
 - [Prerequisites](#prerequisites)
   - [SysWarden side](#syswarden-side)
@@ -112,6 +113,23 @@ hooks in the BunkerWeb instance.
 
 Both halves are independent: you can push bans without ever downloading a list, and the
 other way round.
+
+## Known SysWarden defect: do not enable ban push on v4.03.2 yet
+
+> [!CAUTION]
+> On SysWarden **v4.03.2** a banned address is not enforced as that single address, so bans can
+> block considerably more traffic than intended — including traffic that has nothing to do with
+> the banned host. This affects SysWarden's own bans as much as pushed ones, and it is a SysWarden
+> defect rather than a plugin one.
+>
+> Until it is fixed upstream, leave `USE_SYSWARDEN_BAN_PUSH` off on v4.03.2, or run it with
+> `SYSWARDEN_ENFORCEMENT: "audit"` so the plugin logs what it would push without sending anything.
+> The pull direction (blocklist and whitelist download) and telemetry are unaffected and safe to
+> use.
+>
+> To check a peer: `nft list set netdev syswarden_hw_drop banned_ips`. A healthy set lists single
+> addresses; entries of the form `a.b.c.d-w.x.y.z` are this defect. Clearing that set is a
+> temporary mitigation — it repopulates as soon as SysWarden bans anything again.
 
 ## Which bans reach SysWarden, and which stay local
 
@@ -259,6 +277,14 @@ SysWarden documents its own side of this integration in
 [its wiki](https://github.com/duggytuxy/syswarden/wiki/BunkerWeb-Integration); read it
 alongside this page, since it is the authority on what the peer accepts.
 
+> [!IMPORTANT]
+> On v4.03.2 the settings below belong in `/etc/syswarden/config/modules/40-integrations.toml`,
+> **not** in `/etc/syswarden/config/config.toml`. `syswarden install` writes a full set of module
+> files with explicit defaults (`enabled = false`, `peer_ips = []`, `token = ''`), and modules are
+> merged _after_ `config.toml` — so anything you put in `config.toml` is silently overridden and
+> the HA API never starts, with nothing logged to say why. Check what actually took effect with
+> `syswarden config-get integrations.ha.enabled`.
+
 > [!NOTE]
 > This plugin is developed and tested against SysWarden **v4.03.2**, the release the HA API
 > contract here was verified against. Note that v4.03.0 and v4.03.1 were never published —
@@ -377,7 +403,14 @@ services:
 Same settings, in `/etc/bunkerweb/variables.env`, then `systemctl restart bunkerweb-scheduler`.
 
 On a Linux integration BunkerWeb and SysWarden usually share the host, so `SYSWARDEN_PEERS`
-is typically `127.0.0.1` and `peer_ips` contains `127.0.0.1`.
+is typically `127.0.0.1`.
+
+> [!WARNING]
+> Do **not** put `127.0.0.1` in SysWarden's `peer_ips` on v4.03.2. The installer auto-whitelists
+> every peer address, and loopback is in the special-use table its firewall validation refuses,
+> so `syswarden install` aborts with
+> `failed to auto-whitelist HA peer 127.0.0.1/32: exit status 1` and leaves the package
+> unconfigured. Verified on v4.03.2. Use the host's own LAN or public address instead.
 
 # Secrets
 
