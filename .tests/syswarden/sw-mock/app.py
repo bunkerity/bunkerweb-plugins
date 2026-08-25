@@ -56,6 +56,86 @@ OPERATOR_IPS = set(getenv("SW_MOCK_OPERATOR_IPS", "").split())
 # Extra addresses served in the blocklist so the pull direction has something to deny on.
 SEEDED_IPS = set(getenv("SW_MOCK_SEEDED_IPS", "").split())
 WHITELIST_IPS = [entry for entry in getenv("SW_MOCK_WHITELIST_IPS", "").split() if entry]
+# Addresses this peer refuses as a *firewall mutation target* for a reason the plugin has
+# no way to see: upstream's rule reads the peer's own interface addresses, its configured HA
+# peers and its whitelist. Modelling that separately from SW_MOCK_WHITELIST_IPS keeps the two
+# roles apart — that one is the whitelist the plugin *pulls* — and gives the e2e a target the
+# local filter legitimately lets through, which is the only way to exercise the isolation walk.
+REFUSED_TARGETS = {entry for entry in getenv("SW_MOCK_REFUSED_TARGETS", "").split() if entry}
+
+# deniedFirewallTargetPrefixes from syswarden-core/utils/target_policy.go (v4.03.2), which
+# validateHAMutationTargets runs over every POSTed address. Deliberately written out here
+# instead of importing the plugin's own copy: a mock that shares the table with the code
+# under test agrees with it by construction and proves nothing. Two independent
+# transcriptions of the same upstream source is the point.
+DENIED_TARGETS = tuple(
+    ip_network(prefix)
+    for prefix in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.0.0.0/24",
+        "192.0.2.0/24",
+        "192.31.196.0/24",
+        "192.52.193.0/24",
+        "192.88.99.0/24",
+        "192.168.0.0/16",
+        "192.175.48.0/24",
+        "198.18.0.0/15",
+        "198.51.100.0/24",
+        "203.0.113.0/24",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+        "::/128",
+        "::/96",
+        "::1/128",
+        "64:ff9b::/96",
+        "64:ff9b:1::/48",
+        "100::/64",
+        "100:0:0:1::/64",
+        "2001::/23",
+        "2001:db8::/32",
+        "2002::/16",
+        "2620:4f:8000::/48",
+        "3fff::/20",
+        "5f00::/16",
+        "fc00::/7",
+        "fec0::/10",
+        "fe80::/10",
+        "ff00::/8",
+    )
+)
+
+
+def mutation_target(value):
+    """Mirror CanonicalFirewallMutationTarget: the canonical target, or "" if refused.
+
+    The whitelist and the configured HA peers are part of it upstream, and they are
+    modelled here too: those two rules read state only the peer has, so they are the ones
+    the plugin cannot preempt locally. Keeping them is what lets the e2e exercise the
+    isolation path rather than only the local filter.
+    """
+    if not isinstance(value, str) or not value or value.strip() != value or "/" in value:
+        return ""
+    try:
+        address = ip_address(value)
+    except ValueError:
+        return ""
+    if address.version == 6 and (address.ipv4_mapped or address.scope_id or "%" in value):
+        return ""
+    if address.is_unspecified or address.is_loopback or address.is_multicast:
+        return ""
+    if any(address in network for network in DENIED_TARGETS):
+        return ""
+    if any(address in peer for peer in PEERS):
+        return ""
+    if str(address) in WHITELIST_IPS or str(address) in REFUSED_TARGETS:
+        return ""
+    return str(address)
+
 
 # (ip, source) -> expiry timestamp, the ledger the provenance view reports on.
 _ledger = {}
@@ -154,8 +234,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _error(self, code, message):
-        print(f"MOCK REFUSED {self.command} {self.path} -> {code} {message}", flush=True)
+    def _error(self, code, message, marker="MOCK REFUSED"):
+        # `marker` exists so a *policy* verdict can be told apart from a protocol refusal.
+        # MOCK REFUSED means the plugin sent something this peer could not accept and the
+        # e2e treats every occurrence as a failure; a target rejection is upstream working
+        # as designed, so it gets its own marker and is asserted on positively instead.
+        print(f"{marker} {self.command} {self.path} -> {code} {message}", flush=True)
         body = f"{message}\n".encode()
         # A refusal can happen before the request body was read, which would leave the
         # keep-alive connection desynchronized for the next request on it.
@@ -262,7 +346,7 @@ class Handler(BaseHTTPRequestHandler):
         with _lock:
             banned = len(active_ledger(now)) + len(_static)
         return {
-            "github_release": "v4.03.0",
+            "github_release": "v4.03.2",
             "system": {"hostname": "sw-mock", "os": "linux", "services": [], "ports": []},
             "layer3": {"global_blocked": 42, "geoip_blocked": 7, "asn_blocked": 3, "l7_banned": banned},
             "waf": {"total_banned": banned, "total_detected": 12, "active_signatures": 99, "top_attackers": [], "targeted_ports": []},
@@ -290,6 +374,25 @@ class Handler(BaseHTTPRequestHandler):
                     return None
             decoded.append((ip, source, ttl, reason))
         return decoded
+
+    def _refused_target(self, body):
+        """The first address v4.03.2 would refuse in this body, or None.
+
+        Upstream validates the decoded payload before it splits the two dialects and before
+        the fence (ha_api.go:689), and returns on the first refusal having mutated nothing —
+        so one protected address answers the entire batch with a 400.
+        """
+        candidates = []
+        ips = body.get("ips")
+        if isinstance(ips, list):
+            candidates += [entry for entry in ips if isinstance(entry, str)]
+        bans = body.get("bans")
+        if isinstance(bans, list):
+            candidates += [item.get("ip") for item in bans if isinstance(item, dict) and isinstance(item.get("ip"), str)]
+        for value in candidates:
+            if not mutation_target(value):
+                return value
+        return None
 
     def _fence_blocks(self, method):
         """Mirror withLegacyMutation: the codes are the contract, not the wording.
@@ -366,6 +469,13 @@ class Handler(BaseHTTPRequestHandler):
         body = self._payload()
         if body is None:
             return self._error(400, "Invalid JSON")
+
+        # POST only: upstream leaves DELETE unvalidated, so an entry that predates v4.03.2
+        # stays removable even though it could no longer be added.
+        refused = self._refused_target(body)
+        if refused is not None:
+            print(f"MOCK REJECT-TARGET {refused}", flush=True)
+            return self._error(400, "Rejected firewall target", marker="MOCK REJECT")
 
         if "bans" in body:
             if LEGACY:

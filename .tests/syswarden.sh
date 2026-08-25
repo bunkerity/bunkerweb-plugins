@@ -190,15 +190,33 @@ done
 wait_for 60 "bad-behavior to ban evil-client" answers evil-client 403
 echo "✅ evil-client is banned by BunkerWeb (403)"
 
+# refused-client is banned exactly the same way and is, as far as this plugin can tell, just
+# as pushable: an ordinary public address that passes the local target filter. The mock
+# refuses it for a reason only a peer can know (upstream's rule reads the peer's own
+# interfaces, its HA peers and its whitelist), which is what forces the isolation walk.
+echo "ℹ️ Getting refused-client banned by bad-behavior ..."
+for _ in 1 2 3 4 5 ; do
+	http_code refused-client /this-page-does-not-exist >/dev/null
+done
+wait_for 60 "bad-behavior to ban refused-client" answers refused-client 403
+echo "✅ refused-client is banned by BunkerWeb (403)"
+
+# An address SysWarden refuses as a firewall target on rules the plugin *can* evaluate must
+# never reach the wire at all: since v4.03.2 one of them in the body makes the peer answer
+# the whole batch with a 400 and mutate nothing, so a single RFC1918 ban — routine for
+# BunkerWeb behind a proxy — would otherwise stop every push, every minute.
+echo "ℹ️ Banning an RFC1918 address that must stay local to BunkerWeb ..."
+do_and_check_cmd docker compose exec -T bw-scheduler bwcli ban 10.11.12.13 -exp 3600 -reason e2e-local-only
+
 echo "ℹ️ Waiting for the ban to reach the SysWarden peer ..."
-wait_for 180 "the ban push to reach the mock" mock_saw '"ip": "192.0.2.10"'
+wait_for 180 "the ban push to reach the mock" mock_saw '"ip": "203.0.114.10"'
 echo "✅ The BunkerWeb ban reached SysWarden's HA API"
 
 # The payload shape is the contract: an expiring ban carries a lifetime, the reason and the
 # provenance tag. Asserting on the body the mock logged, not on what the job says it did.
-pushed="$(mock_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '192.0.2.10' | tail -n 1)"
+pushed="$(mock_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '203.0.114.10' | tail -n 1)"
 [ -n "$pushed" ] || fail "no POST /ha/sync body carrying the banned address"
-entry="$(entry_for "$pushed" 192.0.2.10)"
+entry="$(entry_for "$pushed" 203.0.114.10)"
 [ -n "$entry" ] || fail "no ban entry for the banned address in: $pushed"
 echo "$entry" | grep -F '"source": "e2e-cluster"' >/dev/null || fail "the pushed ban carries no explicit cluster provenance tag: $entry"
 echo "$entry" | grep -F '"ttl":' >/dev/null || fail "the pushed ban carries no lifetime: $entry"
@@ -209,8 +227,8 @@ echo "✅ The ban was pushed with a lifetime, a reason and the explicit cluster 
 # only published SysWarden generation understands nothing but {"ips"}, so a pass that
 # speaks provenance to everyone would leave it unprotected. This is the assertion a
 # v4.03-only plugin cannot pass.
-wait_for 180 "the ban push to reach the older peer" mock_saw_legacy '192.0.2.10'
-legacy_pushed="$(legacy_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '192.0.2.10' | tail -n 1)"
+wait_for 180 "the ban push to reach the older peer" mock_saw_legacy '203.0.114.10'
+legacy_pushed="$(legacy_logs | grep -F 'MOCK BODY POST /ha/sync' | grep -F '203.0.114.10' | tail -n 1)"
 [ -n "$legacy_pushed" ] || fail "the older peer never received the ban"
 echo "$legacy_pushed" | grep -F '"ips"' >/dev/null \
 	|| fail "the older peer did not get the legacy payload: $legacy_pushed"
@@ -218,12 +236,40 @@ echo "$legacy_pushed" | grep -F '"bans"' >/dev/null \
 	&& fail "the older peer got a provenance payload it cannot parse: $legacy_pushed"
 echo "✅ The same pass spoke the legacy payload to the older peer"
 
+# The local filter: the RFC1918 ban is dropped before the wire and named in the log, and no
+# peer ever sees it. Asserting on all three mocks, since the filter is peer-independent.
+wait_for 180 "the local target filter to drop the RFC1918 ban" sched_saw "10.11.12.13"
+sched_saw "not legal SysWarden firewall targets" \
+	|| fail "the RFC1918 ban was not reported as an illegal SysWarden firewall target"
+for peer in sw-mock sw-mock-legacy sw-mock-fenced; do
+	mock_logs "$peer" | grep -F "10.11.12.13" >/dev/null \
+		&& fail "$peer was sent 10.11.12.13, which SysWarden refuses as a firewall target"
+done
+echo "✅ An address SysWarden would refuse never reaches any peer"
+
+# The isolation walk: the peer refuses refused-client, the plugin bisects the batch, drops
+# it, and the addresses it shares the batch with still land.
+wait_for 180 "the peer to refuse the protected target" mock_saw "MOCK REJECT-TARGET 203.0.114.11"
+wait_for 180 "the plugin to isolate the refused target" sched_saw "refuses 1 address(es) as a firewall target"
+sched_saw "203.0.114.11" || fail "the isolated address was not named in the scheduler log"
+echo "✅ A target only the peer can refuse is isolated out of the batch"
+
+# ... and the refusal is not treated as a failure of ours: a red job every minute over an
+# address the peer will never accept would bury the failures that matter.
+sched_saw "Exception while running syswarden" && fail "the ban push raised on a refused target"
+mock_saw '"ip": "203.0.114.10"' || fail "the batch-mate of the refused address never landed"
+echo "✅ The refused target neither failed the job nor stopped its batch-mates"
+
+# Put the stack back the way the rest of the suite expects it: only evil-client banned.
+do_and_check_cmd docker compose exec -T bw-scheduler bwcli unban 203.0.114.11
+do_and_check_cmd docker compose exec -T bw-scheduler bwcli unban 10.11.12.13
+
 # --- Unban ---------------------------------------------------------------------------
 # A ban that simply runs out needs no DELETE on a peer that tracks expiry: the lifetime the
 # plugin pushed is the ban's own remaining time, so the peer drops it by itself. The case
 # that does need a DELETE is an operator lifting a ban early, so that is what is tested.
 echo "ℹ️ Unbanning evil-client from BunkerWeb ..."
-unban_output="$(docker compose exec -T bw-scheduler bwcli unban 192.0.2.10 2>&1)" \
+unban_output="$(docker compose exec -T bw-scheduler bwcli unban 203.0.114.10 2>&1)" \
 	|| fail "bwcli unban failed: $unban_output"
 wait_for 60 "BunkerWeb to serve evil-client again" answers evil-client 200
 echo "✅ evil-client is unbanned in BunkerWeb (200)"
@@ -231,7 +277,7 @@ echo "✅ evil-client is unbanned in BunkerWeb (200)"
 echo "ℹ️ Waiting for the removal to reach the peer ..."
 wait_for 180 "the unban to reach the current peer" mock_saw 'MOCK BODY DELETE /ha/sync'
 removed="$(mock_logs | grep -F 'MOCK BODY DELETE /ha/sync' | tail -n 1)"
-entry="$(entry_for "$removed" 192.0.2.10)"
+entry="$(entry_for "$removed" 203.0.114.10)"
 [ -n "$entry" ] || fail "the delete does not carry the lifted ban: $removed"
 echo "$entry" | grep -F '"source": "e2e-cluster"' >/dev/null || fail "the delete carries no explicit cluster provenance tag: $entry"
 echo "$entry" | grep -F '"ttl"' >/dev/null && fail "a delete must carry only ip and source: $entry"
@@ -240,7 +286,7 @@ echo "✅ The current peer got a provenance-keyed delete (ip and source only)"
 # The older peer has no ledger, so its own removal must ride the legacy dialect, keyed on
 # the durable registry rather than on anything the peer reports.
 wait_for 180 "the unban to reach the older peer" mock_saw_legacy 'MOCK BODY DELETE /ha/sync'
-legacy_removed="$(legacy_logs | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '192.0.2.10' | tail -n 1)"
+legacy_removed="$(legacy_logs | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '203.0.114.10' | tail -n 1)"
 [ -n "$legacy_removed" ] || fail "the older peer never got the compensating delete"
 echo "$legacy_removed" | grep -F '"ips"' >/dev/null \
 	|| fail "the older peer got a non-legacy delete: $legacy_removed"
@@ -337,7 +383,7 @@ echo "✅ Every status read carries a fresh 43-character fence challenge"
 # Pinning is per member now: reaching this peer at all proves the plugin verified the exact
 # leaf certificate the manifest records, not a CA and not the global fingerprint.
 wait_for 180 "the fenced peer to receive the legacy push" fenced_saw "MOCK BODY POST /ha/sync"
-fenced_pushed="$(fenced_logs | grep -F "MOCK BODY POST /ha/sync" | grep -F "192.0.2.10" | tail -n 1)"
+fenced_pushed="$(fenced_logs | grep -F "MOCK BODY POST /ha/sync" | grep -F "203.0.114.10" | tail -n 1)"
 [ -n "$fenced_pushed" ] || fail "the fenced peer never received the ban"
 echo "$fenced_pushed" | grep -F '"ips"' >/dev/null \
 	|| fail "the peer without the provenance capabilities got a non-legacy payload: $fenced_pushed"
@@ -370,9 +416,9 @@ echo "ℹ️ The fence is engaged on sw-mock-fenced"
 # the SAME pass, which is why a fresh ban is created while another is lifted. A version that
 # treated a hold as a failed addition would skip the delete below and fail here.
 echo "ℹ️ Creating an addition and a removal for the same fenced pass ..."
-ban_output="$(docker compose exec -T bw-scheduler bwcli ban 198.51.100.90 -exp 3600 -reason fence-e2e 2>&1)" \
+ban_output="$(docker compose exec -T bw-scheduler bwcli ban 198.20.0.90 -exp 3600 -reason fence-e2e 2>&1)" \
 	|| fail "bwcli ban failed under the fence: $ban_output"
-unban_output="$(docker compose exec -T bw-scheduler bwcli unban 192.0.2.10 2>&1)" \
+unban_output="$(docker compose exec -T bw-scheduler bwcli unban 203.0.114.10 2>&1)" \
 	|| fail "bwcli unban failed under the fence: $unban_output"
 
 wait_for 240 "the plugin to hold its legacy additions" sched_saw "is fenced, holding"
@@ -384,7 +430,7 @@ echo "✅ One fenced pass both holds the additions and sends the conditional cle
 
 held_pushes="$(fenced_logs | grep -cF "MOCK FENCE POST state=active_drained" || true)"
 [ "$held_pushes" = "0" ] || fail "the plugin sent $held_pushes legacy addition(s) to a drained fence instead of holding them"
-fenced_logs | grep -F "MOCK BODY POST /ha/sync" | grep -F "198.51.100.90" >/dev/null \
+fenced_logs | grep -F "MOCK BODY POST /ha/sync" | grep -F "198.20.0.90" >/dev/null \
 	&& fail "a held addition was pushed to the fenced peer anyway"
 echo "✅ The held address never reached the fenced peer, which refused nothing"
 

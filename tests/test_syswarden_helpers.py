@@ -927,3 +927,182 @@ class TestInactiveProofShape:
         del body["native_sync_fence"][missing]
         verdict, _, _ = helpers.fence_proof(body, helpers.load_manifest(_manifest()), CHALLENGE)
         assert verdict == "unusable"
+
+
+# --- v4.03.2 firewall mutation targets ------------------------------------------------
+#
+# Mirrors CanonicalFirewallMutationTarget (syswarden-core/utils/target_policy.go), which
+# validateHAMutationTargets runs over every POSTed address since v4.03.2. The cases below
+# were cross-checked against the real Go function over a 253-value corpus covering every
+# denied prefix's network address, broadcast address, midpoint and both boundary
+# neighbours: 253/253 agreement, 64 accepted and 189 refused.
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "1.1.1.1",
+        "8.8.8.8",
+        "9.9.9.9",
+        "203.0.114.1",  # one past the end of TEST-NET-3
+        "198.20.0.1",  # one past the end of the benchmarking range
+        "2606:4700:4700::1111",
+        "2001:4860:4860::8888",
+        "4000::1",
+        "fe00::",  # one past fc00::/7, which spans fc00:: through fdff:ffff:...
+        "fe7f::1",  # just below fe80::/10
+    ],
+)
+def test_firewall_target_accepts_public_addresses(value):
+    assert helpers.firewall_target(value) == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "10.0.0.1",  # RFC1918 — the routine BunkerWeb-behind-a-proxy case
+        "172.16.0.1",
+        "192.168.1.1",
+        "127.0.0.1",
+        "169.254.0.1",
+        "100.64.0.1",  # CGNAT
+        "192.0.2.1",  # TEST-NET-1, which the e2e networks live in
+        "198.51.100.1",
+        "203.0.113.1",
+        "224.0.0.1",
+        "240.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "::",
+        "fe80::1",
+        "fc00::1",
+        "fd00::1",
+        "2001:db8::1",
+        "ff02::1",
+        "2002::1",
+    ],
+)
+def test_firewall_target_refuses_protected_addresses(value):
+    assert helpers.firewall_target(value) == ""
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        " ",
+        " 1.1.1.1",
+        "1.1.1.1 ",
+        "1.1.1.1\t",
+        "1.1.1.1/32",  # a mutation target is one host, never a network
+        "8.8.8.0/24",
+        "::ffff:8.8.8.8",  # IPv4-mapped
+        "fe80::1%eth0",  # zoned
+        "not-an-ip",
+        "1.1.1.256",
+        "1.1.1.1:80",
+    ],
+)
+def test_firewall_target_refuses_malformed_shapes(value):
+    assert helpers.firewall_target(value) == ""
+
+
+def test_firewall_target_is_stricter_than_canonical_address():
+    """The two questions are different and must not be merged.
+
+    canonical_address() asks how SysWarden *stores* an address, and the pull direction needs
+    it to keep accepting CIDRs and private hosts. firewall_target() asks whether v4.03.2 will
+    accept it as a ban target, which is strictly narrower.
+    """
+    for value in ("10.0.0.1", "8.8.8.0/24", "192.0.2.7"):
+        assert helpers.canonical_address(value)
+        assert helpers.firewall_target(value) == ""
+
+
+def test_split_push_targets_keeps_details_and_sorts_refusals():
+    details = {
+        "8.8.8.8": {"ttl": 60, "reason": "a"},
+        "10.0.0.1": {"ttl": None, "reason": "b"},
+        "1.1.1.1": {"ttl": 30, "reason": "c"},
+        "192.168.1.1": {"ttl": 10, "reason": "d"},
+    }
+    pushable, refused = helpers.split_push_targets(details)
+    assert pushable == {"8.8.8.8": {"ttl": 60, "reason": "a"}, "1.1.1.1": {"ttl": 30, "reason": "c"}}
+    assert refused == ["10.0.0.1", "192.168.1.1"]
+
+
+def test_split_push_targets_drops_refusals_so_the_diff_can_clean_them_up():
+    """A refused address must leave the ban set, not merely be skipped at send time.
+
+    That is what turns an entry pushed before the upgrade into a plain to_remove: it is no
+    longer banned, so plan_peer() emits the DELETE, which upstream does not validate. The
+    v4.03.2 notes ask for exactly this — unsafe historical entries stay removable.
+    """
+    pushable, _ = helpers.split_push_targets({"10.0.0.1": {"ttl": None, "reason": ""}})
+    to_add, to_remove, _ = helpers.plan_peer(set(pushable), remote={"10.0.0.1"}, ours=(), owned={"10.0.0.1"}, provenance=False)
+    assert to_add == []
+    assert to_remove == ["10.0.0.1"]
+
+
+# --- isolating a refused batch --------------------------------------------------------
+
+
+def _recording_sender(refused):
+    """A send() that refuses any chunk containing a refused address, like upstream does."""
+    calls = []
+
+    def send(chunk):
+        calls.append(list(chunk))
+        bad = [ip for ip in chunk if ip in refused]
+        if bad:
+            return False, 400, "returned status 400"
+        return True, 200, ""
+
+    return send, calls
+
+
+def test_isolate_refused_finds_the_single_offender():
+    items = [f"1.1.1.{index}" for index in range(1, 9)]
+    send, calls = _recording_sender({"1.1.1.5"})
+    landed, rejected, failure = helpers.isolate_refused(items, send)
+    assert rejected == ["1.1.1.5"]
+    assert sorted(landed) == sorted(ip for ip in items if ip != "1.1.1.5")
+    assert failure is None
+    # Bisection, not a one-at-a-time walk: 8 items with one offender must cost well under
+    # the 8 requests the naive version would spend on every pass.
+    assert len(calls) < len(items)
+
+
+def test_isolate_refused_handles_every_address_being_refused():
+    items = ["1.1.1.1", "1.1.1.2"]
+    send, _ = _recording_sender(set(items))
+    landed, rejected, failure = helpers.isolate_refused(items, send)
+    assert landed == []
+    assert sorted(rejected) == items
+    assert failure is None
+
+
+def test_isolate_refused_reports_a_single_refused_item_without_resending():
+    send, calls = _recording_sender({"1.1.1.1"})
+    landed, rejected, failure = helpers.isolate_refused(["1.1.1.1"], send)
+    assert (landed, rejected, failure) == ([], ["1.1.1.1"], None)
+    assert calls == [["1.1.1.1"]]
+
+
+def test_isolate_refused_stops_on_a_failure_that_is_not_a_target_refusal():
+    """A 503 says nothing about the payload, so the walk must stop instead of bisecting."""
+
+    def send(chunk):
+        return False, 503, "returned status 503"
+
+    landed, rejected, failure = helpers.isolate_refused(["1.1.1.1", "1.1.1.2"], send)
+    assert (landed, rejected) == ([], [])
+    assert failure == (503, "returned status 503")
+
+
+def test_isolate_refused_preserves_order():
+    items = [f"1.1.1.{index}" for index in range(1, 17)]
+    send, _ = _recording_sender({"1.1.1.9"})
+    landed, rejected, _ = helpers.isolate_refused(items, send)
+    assert landed == [ip for ip in items if ip != "1.1.1.9"]
+    assert rejected == ["1.1.1.9"]

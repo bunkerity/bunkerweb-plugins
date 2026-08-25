@@ -125,6 +125,7 @@ services:
       - SW_MOCK_SEEDED_IPS=203.0.113.0/24
       # The same address is blocklisted and whitelisted: the whitelist must win.
       - SW_MOCK_WHITELIST_IPS=203.0.113.20
+      - SW_MOCK_REFUSED_TARGETS=203.0.114.11
     networks:
       - bw-services
 
@@ -172,7 +173,19 @@ services:
     command: ["sleep", "infinity"]
     networks:
       evil-net:
-        ipv4_address: 192.0.2.10
+        ipv4_address: 203.0.114.10
+
+  # Banned exactly like evil-client and just as pushable as far as this plugin can tell, but
+  # the mock refuses it as a firewall target. That is the half of upstream's rule the plugin
+  # cannot preempt (the peer's own interfaces, its HA peers, its whitelist), so this is what
+  # drives the isolation walk: one POST carrying both addresses is refused whole, and only
+  # the bisection can work out which one to drop.
+  refused-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      evil-net:
+        ipv4_address: 203.0.114.11
 
   # Inside the range the mock serves, so it is denied by the pulled blocklist alone.
   pulled-client:
@@ -198,12 +211,21 @@ networks:
   bw-universe:
   bw-services:
   # These two MUST stay pinned: the whole point is the source IP each client presents, and
-  # TEST-NET-1 / TEST-NET-3 never overlap the runner's private host addresses.
+  # neither range overlaps the runner's private host addresses.
+  #
+  # evil-net deliberately is NOT a TEST-NET range. Since v4.03.2 SysWarden validates every
+  # POSTed address against deniedFirewallTargetPrefixes, which lists 192.0.2.0/24,
+  # 198.51.100.0/24 and 203.0.113.0/24 among the rest — so an attacker sitting in one of them
+  # is refused as a ban target and the push direction could never be tested from there.
+  # 203.0.114.0/24 is the neighbouring block, outside every special-use range, and matches
+  # what .tests/cloudflare.sh already does with a real 173.245.48.0/20.
+  # pulled-net stays on TEST-NET-3: those addresses are only ever *served* in a blocklist and
+  # matched at Layer 7, never pushed, so the mutation policy does not apply to them.
   evil-net:
     ipam:
       driver: default
       config:
-        - subnet: 192.0.2.0/24
+        - subnet: 203.0.114.0/24
   pulled-net:
     ipam:
       driver: default
