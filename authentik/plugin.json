@@ -17,7 +17,7 @@
     "AUTHENTIK_URL": {
       "context": "multisite",
       "default": "",
-      "help": "Base URL of the Authentik outpost (e.g. http://authentik:9000 for the embedded outpost or http://outpost:9000 for a standalone one). The plugin calls this base URL followed by /outpost.goauthentik.io/auth/nginx for the auth check and uses the same base for the outpost proxy. Required when USE_AUTHENTIK is yes.",
+      "help": "Base URL of the Authentik outpost; required when USE_AUTHENTIK is enabled.",
       "id": "authentik-url",
       "label": "Authentik outpost URL",
       "regex": "^(https?://[^ ]+)?$",
@@ -26,7 +26,7 @@
     "AUTHENTIK_OUTPOST_PATH": {
       "context": "multisite",
       "default": "/outpost.goauthentik.io",
-      "help": "Local URL path under which the Authentik outpost endpoints (auth, start, callback, sign_out, ...) are exposed on this site. Must start with /.",
+      "help": "Local path exposing Authentik outpost endpoints; must start with /.",
       "id": "authentik-outpost-path",
       "label": "Outpost local path",
       "regex": "^/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$",
@@ -35,7 +35,7 @@
     "AUTHENTIK_SSL_VERIFY": {
       "context": "multisite",
       "default": "yes",
-      "help": "Verify the TLS certificate of the Authentik outpost (used both by the Lua auth subrequest and the outpost proxy_pass).",
+      "help": "Verify the Authentik outpost TLS certificate for auth checks and SSO proxying.",
       "id": "authentik-ssl-verify",
       "label": "Verify Authentik TLS certificate",
       "regex": "^(yes|no)$",
@@ -53,7 +53,7 @@
     "AUTHENTIK_PROXY_BUFFER_SIZE": {
       "context": "multisite",
       "default": "32k",
-      "help": "Value used for proxy_buffer_size on this server. Authentik sets large response headers that may overflow the default buffer.",
+      "help": "NGINX proxy_buffer_size value for large Authentik response headers.",
       "id": "authentik-proxy-buffer-size",
       "label": "proxy_buffer_size",
       "regex": "^[0-9]+[kKmM]?$",
@@ -62,7 +62,7 @@
     "AUTHENTIK_PROXY_BUFFERS": {
       "context": "multisite",
       "default": "8 16k",
-      "help": "Value used for proxy_buffers on this server. Authentik sets large response headers that may overflow the default buffers.",
+      "help": "NGINX proxy_buffers value for large Authentik response headers.",
       "id": "authentik-proxy-buffers",
       "label": "proxy_buffers",
       "regex": "^[0-9]+ +[0-9]+[kKmM]?$",
@@ -71,7 +71,7 @@
     "AUTHENTIK_PASS_IDENTITY_HEADERS": {
       "context": "multisite",
       "default": "no",
-      "help": "Forward Authentik's identity headers (X-authentik-username, -groups, -email, ...) from the auth response to the upstream. Every client-supplied X-authentik-* request header is always stripped before the request reaches the upstream, regardless of this setting, so a client can never spoof an identity. Enable only if your backend uses trusted-header authentication.",
+      "help": "Forward Authentik identity headers to upstreams that use trusted-header authentication.",
       "id": "authentik-pass-identity-headers",
       "label": "Forward identity headers to upstream",
       "regex": "^(yes|no)$",
@@ -80,7 +80,7 @@
     "AUTHENTIK_IDENTITY_HEADERS": {
       "context": "multisite",
       "default": "X-authentik-username X-authentik-groups X-authentik-entitlements X-authentik-email X-authentik-name X-authentik-uid",
-      "help": "Space/comma-separated list of identity headers to forward from Authentik's auth response when AUTHENTIK_PASS_IDENTITY_HEADERS is yes. Every X-authentik-* request header from the client is always stripped regardless of this list, to prevent spoofing; this list only selects which Authentik response headers are passed to the upstream. Defaults match Authentik's nginx forward-auth header set.",
+      "help": "Space- or comma-separated identity headers to forward when AUTHENTIK_PASS_IDENTITY_HEADERS is enabled.",
       "id": "authentik-identity-headers",
       "label": "Identity headers to forward",
       "regex": "^X-authentik-[A-Za-z0-9-]+([ ,]+X-authentik-[A-Za-z0-9-]+)*$",
