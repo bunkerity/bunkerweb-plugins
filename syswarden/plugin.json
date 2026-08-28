@@ -17,7 +17,7 @@
     "SYSWARDEN_PEERS": {
       "context": "global",
       "default": "",
-      "help": "SysWarden HA API endpoints, space-separated, as host or host:port (default port 62026). Bracket an IPv6 literal to give it a port: [2001:db8::1]:62026.",
+      "help": "SysWarden HA API endpoints, space-separated, as host or host:port (default port 62026).",
       "id": "syswarden-peers",
       "label": "SysWarden peers",
       "regex": "^(?! )( *[A-Za-z0-9\\.\\-\\[\\]:_]+ *)*$",
@@ -27,7 +27,7 @@
     "SYSWARDEN_API_TOKEN": {
       "context": "global",
       "default": "",
-      "help": "Bearer token of the SysWarden HA API ([integrations.ha] token). Required: a peer with an empty token authenticates on the peer IP alone. Supports the SYSWARDEN_API_TOKEN_FILE Docker-secret convention.",
+      "help": "Bearer token of the SysWarden HA API ([integrations.ha] token). Required. Supports the SYSWARDEN_API_TOKEN_FILE Docker-secret convention.",
       "id": "syswarden-api-token",
       "label": "SysWarden API token",
       "regex": "^.*$",
@@ -36,7 +36,7 @@
     "SYSWARDEN_CA_BUNDLE": {
       "context": "global",
       "default": "",
-      "help": "Path to a mounted CA bundle used to verify the peer's certificate, for example /etc/syswarden/ha-ca.pem.",
+      "help": "Path to a mounted CA bundle that verifies the peer's certificate, e.g. /etc/syswarden/ha-ca.pem.",
       "id": "syswarden-ca-bundle",
       "label": "SysWarden CA bundle",
       "regex": "^(/[^\\0]*)?$",
@@ -45,7 +45,7 @@
     "SYSWARDEN_SSL_FINGERPRINT": {
       "context": "global",
       "default": "",
-      "help": "SHA-256 fingerprint of the peer's certificate to pin, when no CA bundle is available. One pin applies to every configured peer; use a CA bundle when peers have distinct certificates. Read it with: openssl x509 -in /var/lib/syswarden/ha/server.crt -noout -fingerprint -sha256",
+      "help": "SHA-256 fingerprint pinning the peer's certificate, when no CA bundle is available. One pin applies to every peer.",
       "id": "syswarden-ssl-fingerprint",
       "label": "SysWarden certificate fingerprint (SHA-256)",
       "regex": "^([Ss][Hh][Aa]-?256([ _-]?[Ff][Ii][Nn][Gg][Ee][Rr][Pp][Rr][Ii][Nn][Tt])?[ =:]*)?([A-Fa-f0-9]{2}:?){0,32}$",
@@ -54,7 +54,7 @@
     "SYSWARDEN_SSL_INSECURE": {
       "context": "global",
       "default": "no",
-      "help": "Talk to the peer without verifying its certificate. Explicit opt-out: without a CA bundle or a fingerprint, the jobs refuse to run instead of degrading silently.",
+      "help": "Talk to the peer without verifying its certificate. Without it, a CA bundle or a fingerprint is required.",
       "id": "syswarden-ssl-insecure",
       "label": "Skip SysWarden certificate verification",
       "regex": "^(yes|no)$",
@@ -63,7 +63,7 @@
     "SYSWARDEN_FENCE_MANIFEST": {
       "context": "global",
       "default": "",
-      "help": "Path to the mounted HA fence manifest produced by 'syswarden ha-fence manifest create --assert-complete'. It governs the ban push job only: its members list replaces SYSWARDEN_PEERS there, and every member is pinned to the exact leaf certificate the manifest records. The read-only jobs keep using SYSWARDEN_PEERS.",
+      "help": "Path to a mounted HA fence manifest. Ban push only: its members replace SYSWARDEN_PEERS and are pinned to the certificates it records.",
       "id": "syswarden-fence-manifest",
       "label": "SysWarden fence manifest",
       "regex": "^(/[^\\0]*)?$",
@@ -81,7 +81,7 @@
     "USE_SYSWARDEN_BAN_PUSH": {
       "context": "global",
       "default": "no",
-      "help": "Push BunkerWeb's active bans to the SysWarden blocklist, so the attacker is dropped in the kernel for every service on the host, containers included. The dialect is detected per peer: provenance-aware temporary bans on v4.03+, the historical payload on older ones.",
+      "help": "Push BunkerWeb's active bans to SysWarden, so the attacker is dropped in the kernel for every service on the host, containers included.",
       "id": "use-syswarden-ban-push",
       "label": "Push bans to SysWarden",
       "regex": "^(yes|no)$",
@@ -90,7 +90,7 @@
     "SYSWARDEN_ENFORCEMENT": {
       "context": "global",
       "default": "enforcing",
-      "help": "'enforcing' pushes and removes bans; 'audit' logs every add and remove it would have made without sending anything. Start in audit.",
+      "help": "'enforcing' pushes and removes bans; 'audit' only logs what it would send. Start in audit.",
       "id": "syswarden-enforcement",
       "label": "Ban push enforcement mode",
       "regex": "^(enforcing|audit)$",
@@ -100,7 +100,7 @@
     "SYSWARDEN_BAN_MAX_ITEMS": {
       "context": "global",
       "default": "10000",
-      "help": "Maximum number of missing bans added to each peer per pass, 0 meaning no limit. A larger backlog drains deterministically over later passes; existing bans and removals are unaffected.",
+      "help": "Maximum bans added to each peer per pass, 0 meaning no limit. A larger backlog drains over later passes.",
       "id": "syswarden-ban-max-items",
       "label": "Maximum bans pushed",
       "regex": "^[0-9]+$",
@@ -109,7 +109,7 @@
     "SYSWARDEN_BAN_CHUNK_SIZE": {
       "context": "global",
       "default": "500",
-      "help": "Number of entries per POST/DELETE request to /ha/sync. A peer refuses an oversized batch outright (500 entries with ban provenance, 1024 without), so a higher value is lowered to whichever ceiling applies to that peer.",
+      "help": "Entries per POST/DELETE to /ha/sync. Lowered automatically to whichever ceiling the peer enforces.",
       "id": "syswarden-ban-chunk-size",
       "label": "Ban push batch size",
       "regex": "^[1-9][0-9]*$",
@@ -118,7 +118,7 @@
     "SYSWARDEN_BAN_SCOPE_FILTER": {
       "context": "global",
       "default": "",
-      "help": "Space-separated list of services whose bans are propagated. Empty means every service. Global bans are always propagated: they are not tied to a service.",
+      "help": "Space-separated services whose bans are propagated. Empty means every service; global bans always are.",
       "id": "syswarden-ban-scope-filter",
       "label": "Services whose bans are pushed",
       "regex": "^(?! )( *[^ ]+ *)*$",
@@ -128,7 +128,7 @@
     "SYSWARDEN_BAN_MIN_TTL": {
       "context": "global",
       "default": "0",
-      "help": "Skip bans with less than N seconds left, so rate-limit noise does not churn the nftables set. Permanent bans are never skipped.",
+      "help": "Skip bans with less than N seconds left, so rate-limit noise does not churn the nftables set.",
       "id": "syswarden-ban-min-ttl",
       "label": "Minimum ban TTL to push (s)",
       "regex": "^[0-9]+$",
@@ -137,7 +137,7 @@
     "SYSWARDEN_BAN_SOURCE": {
       "context": "global",
       "default": "",
-      "help": "Required when ban push is enabled: a cluster-unique provenance tag written on every ban pushed to a peer that tracks provenance. Two BunkerWeb clusters pushing from the same allowed peer scope must never share it, or each would read the other's bans as its own.",
+      "help": "Cluster-unique provenance tag written on every pushed ban. Required with ban push; two clusters must never share one.",
       "id": "syswarden-ban-source",
       "label": "Ban provenance tag",
       "regex": "^$|^[A-Za-z0-9._:/-]{1,64}$",
@@ -146,7 +146,7 @@
     "USE_SYSWARDEN_BLOCKLIST": {
       "context": "multisite",
       "default": "no",
-      "help": "Download SysWarden's blocklist and deny those IPs at Layer 7 as well. Useful when BunkerWeb and SysWarden do not run on the same host.",
+      "help": "Download SysWarden's blocklist and deny those IPs at Layer 7 too, for when the two run on different hosts.",
       "id": "use-syswarden-blocklist",
       "label": "Use SysWarden blocklist",
       "regex": "^(yes|no)$",
@@ -155,7 +155,7 @@
     "USE_SYSWARDEN_WHITELIST": {
       "context": "multisite",
       "default": "no",
-      "help": "Download SysWarden's whitelist and let it win over the blocklist, so an operator's explicit allow keeps working at Layer 7 too.",
+      "help": "Download SysWarden's whitelist and let it win over the blocklist at Layer 7.",
       "id": "use-syswarden-whitelist",
       "label": "Use SysWarden whitelist",
       "regex": "^(yes|no)$",
@@ -174,7 +174,7 @@
     "SYSWARDEN_BLOCKLIST_EXCLUDE_OWN": {
       "context": "global",
       "default": "yes",
-      "help": "Subtract the IPs this plugin pushed from the downloaded blocklist: BunkerWeb already bans them at Layer 7, denying them twice adds nothing.",
+      "help": "Subtract the IPs this plugin pushed from the downloaded blocklist: BunkerWeb already bans them at Layer 7.",
       "id": "syswarden-blocklist-exclude-own",
       "label": "Exclude our own pushed bans",
       "regex": "^(yes|no)$",
