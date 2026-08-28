@@ -28,7 +28,9 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 - [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 - [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
 - [Matrix](https://github.com/bunkerity/bunkerweb-plugins/tree/main/matrix)
+- [SentinelOne](https://github.com/bunkerity/bunkerweb-plugins/tree/main/sentinelone)
 - [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
+- [SysWarden](https://github.com/bunkerity/bunkerweb-plugins/tree/main/syswarden)
 - [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 - [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)
 
