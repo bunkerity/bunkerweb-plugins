@@ -49,13 +49,18 @@ def pre_render(**kwargs):
 
     try:
         peers = _peers(db)
+        # The key prefix is what makes a card render at all: plugin_page.html only draws
+        # keys starting with ping_, info_, date_, count_, counter_, top_ or list_, and
+        # silently drops everything else. A counter_ card is passed through
+        # human_readable_number(), which calls int() on the value, so the "reachable out of
+        # total" ratio has to be an info_ card instead.
         counters = (
-            ("peers_reachable", "PEERS REACHABLE", f"{sum(1 for peer in peers if peer.get('reachable'))}/{len(peers)}"),
-            ("kernel_blocked", "BLOCKED (LAYER 3)", _total(peers, "global_blocked")),
-            ("geoip_blocked", "GEOIP BLOCKED", _total(peers, "geoip_blocked")),
-            ("asn_blocked", "ASN BLOCKED", _total(peers, "asn_blocked")),
-            ("waf_banned", "SYSWARDEN WAAP BANS", _total(peers, "waf_total_banned")),
-            ("whitelisted", "WHITELISTED IPS", _total(peers, "whitelist_active_ips")),
+            ("info_peers_reachable", "PEERS REACHABLE", f"{sum(1 for peer in peers if peer.get('reachable'))}/{len(peers)}"),
+            ("counter_kernel_blocked", "BLOCKED (LAYER 3)", _total(peers, "global_blocked")),
+            ("counter_geoip_blocked", "GEOIP BLOCKED", _total(peers, "geoip_blocked")),
+            ("counter_asn_blocked", "ASN BLOCKED", _total(peers, "asn_blocked")),
+            ("counter_waf_banned", "SYSWARDEN WAAP BANS", _total(peers, "waf_total_banned")),
+            ("counter_whitelisted", "WHITELISTED IPS", _total(peers, "whitelist_active_ips")),
         )
         for key, title, value in counters:
             ret[key] = {"title": title, "value": value, "col-size": "col-12 col-md-4", "card-classes": "h-100"}

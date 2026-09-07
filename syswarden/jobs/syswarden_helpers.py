@@ -363,6 +363,16 @@ def extract_instance_bans(responses: Any, expected: int) -> Optional[List[Dict]]
         instance_bans = response.get("msg")
         if not isinstance(instance_bans, list):
             instance_bans = response.get("data")
+        # An empty ban list never arrives as one. BunkerWeb normalises the envelope in
+        # api.lua's do_api_call() before it reaches the wire: a non-empty list moves to
+        # `data` and `msg` keeps the status word, but an empty list collapses to `msg: ""`
+        # with no `data` at all. Reading that envelope as a partial inventory made the job
+        # refuse to reconcile at exactly the moment the last ban was lifted, so the peer
+        # kept that address forever. Only the successful empty envelope is translated:
+        # anything else is a payload this job does not understand, and guessing at it would
+        # delete bans it cannot see.
+        if instance_bans is None and response.get("status") == "success" and response.get("msg") == "":
+            instance_bans = []
         if not isinstance(instance_bans, list) or any(not isinstance(entry, dict) for entry in instance_bans):
             return None
         records.extend(instance_bans)

@@ -12,7 +12,6 @@ local ERR = ngx.ERR
 local HTTP_OK = ngx.HTTP_OK
 local get_deny_status = utils.get_deny_status
 local get_phase = ngx.get_phase
-local has_variable = utils.has_variable
 local ipmatcher_new = ipmatcher.new
 local decide = syswarden_helpers.decide
 local list_sizes = syswarden_helpers.list_sizes
@@ -119,12 +118,12 @@ function syswarden:is_needed()
 			self.variables["USE_SYSWARDEN_WHITELIST"]
 		)
 	end
-	-- Other cases : the integration is enabled at all
-	local is_needed, err = has_variable("USE_SYSWARDEN", "yes")
-	if is_needed == nil then
-		self.logger:log(ERR, "can't check USE_SYSWARDEN variable : " .. err)
-	end
-	return is_needed
+	-- Other cases : the integration is enabled at all. USE_SYSWARDEN is a global setting, so
+	-- it is read off self.variables and never through utils.has_variable(): that helper only
+	-- looks at the per-service tables once MULTISITE is on, and load_variables() fills those
+	-- from `<server>_`-prefixed entries alone. A global setting never lands in one, so it
+	-- would answer "no" on every multisite instance and switch the plugin off.
+	return self.variables["USE_SYSWARDEN"] == "yes"
 end
 
 function syswarden:init()
@@ -162,11 +161,7 @@ function syswarden:init_workers()
 	if self.is_loading then
 		return self:ret(true, "init_workers not needed")
 	end
-	local is_needed, err = has_variable("USE_SYSWARDEN", "yes")
-	if is_needed == nil then
-		return self:ret(false, "can't check USE_SYSWARDEN variable : " .. err)
-	end
-	if not is_needed then
+	if self.variables["USE_SYSWARDEN"] ~= "yes" then
 		return self:ret(true, "syswarden is not used")
 	end
 	-- Compiling once per worker matters because a high-cardinality request stream must
@@ -220,11 +215,7 @@ end
 
 function syswarden:api()
 	if self.ctx.bw.uri == "/syswarden/ping" and self.ctx.bw.request_method == "POST" then
-		local check, err = has_variable("USE_SYSWARDEN", "yes")
-		if check == nil then
-			return self:ret(true, "error while checking variable USE_SYSWARDEN (" .. err .. ")")
-		end
-		if not check then
+		if self.variables["USE_SYSWARDEN"] ~= "yes" then
 			return self:ret(true, "SysWarden plugin not enabled")
 		end
 		-- Report this instance only, and never call the HA API here: the ping then costs

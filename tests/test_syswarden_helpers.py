@@ -205,6 +205,23 @@ class TestExtractInstanceBans:
     def test_the_older_data_field_is_still_accepted(self):
         assert helpers.extract_instance_bans({"one": {"data": [{"ip": "1.1.1.1"}]}}, expected=1) == [{"ip": "1.1.1.1"}]
 
+    def test_an_empty_ban_set_is_an_empty_inventory_not_a_partial_one(self):
+        # The envelope BunkerWeb 1.6.14 actually puts on the wire for an instance holding no
+        # ban: do_api_call() collapses an empty list to `msg: ""` and adds no `data` at all.
+        # Reading that as "the inventory is incomplete" makes the job refuse to reconcile at
+        # exactly the moment the last ban was lifted, so the peer keeps that address forever.
+        assert helpers.extract_instance_bans({"one": {"status": "success", "msg": ""}}, expected=1) == []
+
+    def test_a_populated_ban_set_keeps_the_status_word_in_msg(self):
+        # The other half of the same normalisation: a non-empty list moves to `data`.
+        response = {"status": "success", "msg": "success", "data": [{"ip": "1.1.1.1"}]}
+        assert helpers.extract_instance_bans({"one": response}, expected=1) == [{"ip": "1.1.1.1"}]
+
+    @pytest.mark.parametrize("response", ({"status": "error", "msg": ""}, {"status": "success", "msg": {}}))
+    def test_only_a_successful_empty_envelope_is_an_empty_inventory(self, response):
+        # Guessing at any other empty-looking payload would delete bans this job cannot see.
+        assert helpers.extract_instance_bans({"one": response}, expected=1) is None
+
 
 class TestCapItems:
     def test_under_the_cap_is_sorted_and_untouched(self):

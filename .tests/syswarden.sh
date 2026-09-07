@@ -181,6 +181,18 @@ docker compose logs bunkerweb 2>/dev/null | grep -F "203.0.113.20 is in the SysW
 	|| fail "no whitelist log for the client present in both lists"
 echo "✅ The whitelist wins over the blocklist (200)"
 
+# --- Web UI ping ---------------------------------------------------------------------
+# The card on the plugin page is painted from POST /syswarden/ping, answered by api(). This
+# is the only assertion that reaches the enablement gate outside a request phase, which is
+# exactly where a multisite instance used to answer "not enabled": api.lua then assigns a
+# nil status to ngx.status and the ping 500s instead of reporting the plugin up.
+ping_reports_up() {
+	docker compose exec -T bw-scheduler curl -s -X POST -H "Host: bwapi" \
+		"http://bunkerweb:5000/syswarden/ping" 2>/dev/null | grep -F '"status":"success"' >/dev/null
+}
+wait_for 60 "the syswarden ping to report the plugin up" ping_reports_up
+echo "✅ POST /syswarden/ping reports the plugin up (the web UI status card)"
+
 # --- Push direction ------------------------------------------------------------------
 # Get evil-client banned by bad-behavior, then let the minute-ly job propagate it.
 echo "ℹ️ Getting evil-client banned by bad-behavior ..."
@@ -268,6 +280,7 @@ do_and_check_cmd docker compose exec -T bw-scheduler bwcli unban 10.11.12.13
 # A ban that simply runs out needs no DELETE on a peer that tracks expiry: the lifetime the
 # plugin pushed is the ban's own remaining time, so the peer drops it by itself. The case
 # that does need a DELETE is an operator lifting a ban early, so that is what is tested.
+ZERO_BANS_SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "ℹ️ Unbanning evil-client from BunkerWeb ..."
 unban_output="$(docker compose exec -T bw-scheduler bwcli unban 203.0.114.10 2>&1)" \
 	|| fail "bwcli unban failed: $unban_output"
@@ -291,6 +304,29 @@ legacy_removed="$(legacy_logs | grep -F 'MOCK BODY DELETE /ha/sync' | grep -F '2
 echo "$legacy_removed" | grep -F '"ips"' >/dev/null \
 	|| fail "the older peer got a non-legacy delete: $legacy_removed"
 echo "✅ The older peer got the legacy compensating delete"
+
+# This unban was the last one, so every pass from here on reads an empty ban set — and an
+# empty ban set is exactly where BunkerWeb's payload stops looking like a list. The Lua
+# side builds it as a table and cjson encodes an empty table as `{}`, so an instance
+# holding no ban answers with an object. Reading that as "the inventory is incomplete"
+# costs a peer nothing here, where Redis is authoritative and the job only warns, and costs
+# an operator running without Redis every reconciliation: the job exits 2 and the address
+# just lifted stays on the peer forever. Assert on the warning, since it is the one symptom
+# this stack can still show.
+sched_saw_since "$ZERO_BANS_SINCE" "using the authoritative Redis inventory only" \
+	&& fail "an empty ban set was read as a partial instance inventory"
+sched_saw_since "$ZERO_BANS_SINCE" "refusing to reconcile peers" \
+	&& fail "the push job refused to reconcile once the last ban was lifted"
+echo "✅ An empty ban set reads as an empty inventory, not a partial one"
+
+# Same pass, with Redis taken out from under it. Redis is authoritative in this stack, so a
+# misread instance inventory only ever warns here — while an operator running without it
+# gets sys_exit(2) and no reconciliation at all, which is how this defect reached a user.
+# Running the job once with USE_REDIS=no keeps that branch honest without a second stack.
+noredis="$(docker compose exec -T -e USE_REDIS=no bw-scheduler \
+	python3 /data/plugins/syswarden/jobs/syswarden-ban-push.py 2>&1)" \
+	|| fail "the push job fails on an empty ban set when Redis is not authoritative: $noredis"
+echo "✅ The push job reconciles an empty ban set with no Redis to fall back on"
 
 # --- Ownership -----------------------------------------------------------------------
 # Provenance-only mutation must never send the shared-static-store body at all.

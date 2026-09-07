@@ -58,18 +58,32 @@ class FakePing:
 
 def test_counters_are_summed_over_peers(actions):
     ret = actions.pre_render(bw_instances_utils=FakePing(), db=FakeDB(TELEMETRY))
-    assert ret["peers_reachable"]["value"] == "1/2"
-    assert ret["kernel_blocked"]["value"] == 12
-    assert ret["waf_banned"]["value"] == 7
+    assert ret["info_peers_reachable"]["value"] == "1/2"
+    assert ret["counter_kernel_blocked"]["value"] == 12
+    assert ret["counter_waf_banned"]["value"] == 7
     assert "error" not in ret
+
+
+def test_every_counter_card_is_one_the_ui_renders(actions):
+    # plugin_page.html draws a card only when its key carries one of these prefixes and
+    # drops the rest without a word, so a counter under a bare name is invisible on the
+    # page while every unit test around it still passes. All six shipped that way once.
+    ret = actions.pre_render(bw_instances_utils=FakePing(), db=FakeDB(TELEMETRY))
+    unrendered = sorted(k for k in ret if k != "error" and not k.startswith(("ping_", "info_", "date_", "count_", "counter_", "top_", "list_")))
+    assert not unrendered, f"plugin_page.html drops {unrendered}"
+    # A counter_ card goes through human_readable_number(), which calls int() on the value:
+    # the reachable-out-of-total ratio is a string, so it has to stay an info_ card.
+    for key, card in ret.items():
+        if key.startswith(("count_", "counter_")):
+            int(card["value"])
 
 
 def test_no_telemetry_yet_degrades_to_zero(actions):
     # The poll job has not run: the cards show zeros rather than an error, because
     # nothing is wrong yet.
     ret = actions.pre_render(bw_instances_utils=FakePing(), db=FakeDB(None))
-    assert ret["peers_reachable"]["value"] == "0/0"
-    assert ret["kernel_blocked"]["value"] == 0
+    assert ret["info_peers_reachable"]["value"] == "0/0"
+    assert ret["counter_kernel_blocked"]["value"] == 0
     assert "error" not in ret
 
 

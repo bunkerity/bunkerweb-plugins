@@ -52,6 +52,25 @@ def test_pre_render_error_path(plugin, fake_ping_utils):
     assert ret["ping_status"]["value"] == "error"
 
 
+# plugin_page.html draws a card only when its key carries one of these prefixes, and drops
+# every other key without a word. syswarden shipped six counters under bare names once and
+# none of them ever reached the page.
+CARD_PREFIXES = ("ping_", "info_", "date_", "count_", "counter_", "top_", "list_")
+
+
+@pytest.mark.parametrize("plugin", PLUGINS)
+def test_every_card_key_is_one_the_ui_renders(plugin, fake_ping_utils):
+    module = load_actions(plugin)
+    ret = module.pre_render(bw_instances_utils=fake_ping_utils(status="up"))
+    unrendered = sorted(key for key in ret if key != "error" and not key.startswith(CARD_PREFIXES))
+    assert not unrendered, f"{plugin}/ui/actions.py returns {unrendered}, which plugin_page.html drops"
+    # A counter card is rendered through human_readable_number(), which calls int() on the
+    # value: a string there is a 500 on the plugin page, not a badly formatted number.
+    for key, card in ret.items():
+        if key.startswith(("count_", "counter_")):
+            int(card["value"])
+
+
 @pytest.mark.parametrize("plugin", PLUGINS)
 def test_plugin_stub_is_noop(plugin):
     module = load_actions(plugin)
