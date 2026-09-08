@@ -9,7 +9,7 @@
       "context": "multisite",
       "default": "no",
       "help": "Activate the Coraza WAF (OWASP Core Rule Set evaluation) for this site.",
-      "id": "use coraza library",
+      "id": "use-coraza",
       "label": "Use coraza",
       "regex": "^(no|yes)$",
       "type": "check"

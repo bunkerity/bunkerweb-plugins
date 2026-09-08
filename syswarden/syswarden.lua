@@ -9,6 +9,7 @@ local syswarden = class("syswarden", plugin)
 local ngx = ngx
 local INFO = ngx.INFO
 local ERR = ngx.ERR
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local get_deny_status = utils.get_deny_status
 local get_phase = ngx.get_phase
@@ -216,7 +217,7 @@ end
 function syswarden:api()
 	if self.ctx.bw.uri == "/syswarden/ping" and self.ctx.bw.request_method == "POST" then
 		if self.variables["USE_SYSWARDEN"] ~= "yes" then
-			return self:ret(true, "SysWarden plugin not enabled")
+			return self:ret(true, "SysWarden plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 		-- Report this instance only, and never call the HA API here: the ping then costs
 		-- no extra entry in the peer's IP allowlist, and a slow or dead peer can't stall

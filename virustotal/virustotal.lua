@@ -15,6 +15,7 @@ local ngx_req = ngx.req
 local ERR = ngx.ERR
 local WARN = ngx.WARN
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local to_hex = str.to_hex
 local concat = table.concat
@@ -411,10 +412,14 @@ function virustotal:api()
 		-- Check virustotal connection
 		local check, err = has_variable("USE_VIRUSTOTAL", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_VIRUSTOTAL (" .. err .. ")")
+			return self:ret(
+				true,
+				"error while checking variable USE_VIRUSTOTAL (" .. err .. ")",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
 		end
 		if not check then
-			return self:ret(true, "Virustotal plugin not enabled")
+			return self:ret(true, "Virustotal plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 
 		-- Send test data to virustotal virustotal

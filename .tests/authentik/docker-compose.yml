@@ -3,12 +3,11 @@ version: "3"
 services:
   bunkerweb:
     image: bunkerity/bunkerweb:1.6.0
-    ports:
-      - 80:8080/tcp
-      - 443:8443/tcp
-      - 443:8443/udp
+    # No host port mapping: the tests reach BunkerWeb in-network from the client
+    # container (bunkerweb:8080), so publishing 80/443 only risks an "address already
+    # in use" clash with anything else on the host or CI runner.
     environment:
-      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     networks:
       - bw-universe
       - bw-services
@@ -23,7 +22,7 @@ services:
       - BUNKERWEB_INSTANCES=bunkerweb
       - MULTISITE=yes
       - SERVER_NAME=app.example.com noheaders.example.com
-      - API_WHITELIST_IP=127.0.0.0/8 10.20.30.0/24
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
       - USE_LIMIT_REQ=no
@@ -74,12 +73,17 @@ services:
     networks:
       - bw-services
 
+  # Every assertion is driven from here rather than from a published host port, so the
+  # suite needs nothing from the host and can run beside the other suites.
+  client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      - bw-services
+
 networks:
+  # Deliberately unnamed and unpinned: a `name:` makes the network global to the Docker
+  # daemon, so two of these suites (or a developer's own BunkerWeb stack) collide on one
+  # bw-universe and its hardcoded subnet. Compose prefixes them per project instead.
   bw-universe:
-    name: bw-universe
-    ipam:
-      driver: default
-      config:
-        - subnet: 10.20.30.0/24
   bw-services:
-    name: bw-services

@@ -15,6 +15,7 @@ local INFO = ngx.INFO
 local ngx_timer = ngx.timer
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_TOO_MANY_REQUESTS = ngx.HTTP_TOO_MANY_REQUESTS
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
@@ -132,10 +133,10 @@ function slack:api()
 		-- Check slack connection
 		local check, err = has_variable("USE_SLACK", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_SLACK (" .. err .. ")")
+			return self:ret(true, "error while checking variable USE_SLACK (" .. err .. ")", HTTP_INTERNAL_SERVER_ERROR)
 		end
 		if not check then
-			return self:ret(true, "Slack plugin not enabled")
+			return self:ret(true, "Slack plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 
 		-- Send test data to slack webhook

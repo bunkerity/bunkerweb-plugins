@@ -41,7 +41,7 @@ echo "ℹ️ Waiting for BW (plugin live) ..."
 success="ko"
 retry=0
 while [ $retry -lt 120 ] ; do
-	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: app.example.com" http://localhost 2>/dev/null)"
+	code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: app.example.com" http://bunkerweb:8080 2>/dev/null)"
 	if [ "$code" = "302" ] ; then
 		success="ok"
 		break
@@ -60,7 +60,7 @@ fail=0
 
 # T1: unauthenticated -> 302 to the outpost sign-in
 echo "ℹ️ T1: unauthenticated request is redirected to the outpost ..."
-loc="$(curl -s -D - -o /dev/null -H "Host: app.example.com" http://localhost | tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}')"
+loc="$(docker compose exec -T client curl -s -D - -o /dev/null -H "Host: app.example.com" http://bunkerweb:8080 | tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}')"
 if echo "$loc" | grep -q "/outpost.goauthentik.io/start?rd=" ; then
 	echo "✔️ T1 ok ($loc)"
 else
@@ -69,7 +69,7 @@ fi
 
 # T2: authenticated -> 200 and identity header forwarded upstream (PASS=yes)
 echo "ℹ️ T2: authenticated request reaches upstream with identity header ..."
-body="$(curl -s -H "Host: app.example.com" -b "mock_session=valid" http://localhost)"
+body="$(docker compose exec -T client curl -s -H "Host: app.example.com" -b "mock_session=valid" http://bunkerweb:8080)"
 if echo "$body" | grep -qi '"x-authentik-username": *"alice"' ; then
 	echo "✔️ T2 ok"
 else
@@ -78,7 +78,7 @@ fi
 
 # T3: spoofed X-authentik-* are stripped (security); only Authentik's values survive
 echo "ℹ️ T3: spoofed identity headers are stripped ..."
-body="$(curl -s -H "Host: app.example.com" -b "mock_session=valid" -H "X-authentik-username: hacker" -H "X-authentik-uid: 0" http://localhost)"
+body="$(docker compose exec -T client curl -s -H "Host: app.example.com" -b "mock_session=valid" -H "X-authentik-username: hacker" -H "X-authentik-uid: 0" http://bunkerweb:8080)"
 if echo "$body" | grep -qi '"x-authentik-username": *"alice"' \
 	&& ! echo "$body" | grep -qi '"x-authentik-username": *"hacker"' \
 	&& ! echo "$body" | grep -qi '"x-authentik-uid"' ; then
@@ -89,7 +89,7 @@ fi
 
 # T4: PASS=no site strips spoofed identity headers and forwards none
 echo "ℹ️ T4: PASS=no site forwards no identity header ..."
-body="$(curl -s -H "Host: noheaders.example.com" -b "mock_session=valid" -H "X-authentik-username: hacker" http://localhost)"
+body="$(docker compose exec -T client curl -s -H "Host: noheaders.example.com" -b "mock_session=valid" -H "X-authentik-username: hacker" http://bunkerweb:8080)"
 if ! echo "$body" | grep -qi "x-authentik-username" ; then
 	echo "✔️ T4 ok"
 else
@@ -98,7 +98,7 @@ fi
 
 # T5: outpost path is proxied (not gated)
 echo "ℹ️ T5: outpost path is proxied to the outpost ..."
-body="$(curl -s -H "Host: app.example.com" http://localhost/outpost.goauthentik.io/start)"
+body="$(docker compose exec -T client curl -s -H "Host: app.example.com" http://bunkerweb:8080/outpost.goauthentik.io/start)"
 if echo "$body" | grep -q "MOCK AUTHENTIK OUTPOST" ; then
 	echo "✔️ T5 ok"
 else
@@ -107,7 +107,7 @@ fi
 
 # T6: trailing-slash AUTHENTIK_URL still proxies the outpost (rstrip fix)
 echo "ℹ️ T6: trailing-slash AUTHENTIK_URL still proxies ..."
-body="$(curl -s -H "Host: noheaders.example.com" http://localhost/outpost.goauthentik.io/start)"
+body="$(docker compose exec -T client curl -s -H "Host: noheaders.example.com" http://bunkerweb:8080/outpost.goauthentik.io/start)"
 if echo "$body" | grep -q "MOCK AUTHENTIK OUTPOST" ; then
 	echo "✔️ T6 ok"
 else

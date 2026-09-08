@@ -54,7 +54,7 @@ Runs on push to `dev` and `main`. A `tag` job resolves the **latest stable Bunke
 2. **codeql** — `.github/workflows/codeql.yml` (also runs weekly on a cron), matrix `[python, go]`.
 3. **lint** — `pre-commit run --all-files`.
 4. **unit** — matrix `[go, python, lua]` (the unit tests above).
-5. **integration** — `needs: [tag, lint, unit]`, matrix `plugin: [clamav, coraza, virustotal, authentik, notifier]`; each runs `.tests/bw.sh <tag>` then `.tests/<plugin>.sh`.
+5. **integration** — `needs: [tag, lint, unit]`, matrix `plugin: [clamav, cloudflare, coraza, virustotal, authentik, notifier, sentinelone, syswarden]` — every per-plugin script above, none excluded; each runs `.tests/bw.sh <tag>` then `.tests/<plugin>.sh`.
 6. **build-push** — `main` only, `needs: [plumber, tag, integration]` so a failing supply-chain scan blocks publishing: `./.tests/build-push.sh <tag>` builds and pushes the `bunkerweb-coraza` image.
 
 There is **no pinned BW version** — the `tag` job always resolves the latest stable release, so the tests track upstream automatically (`COMPATIBILITY.json` is not consulted here). The resolved tag flows into `bw.sh` (pulls `bunkerity/bunkerweb[-scheduler]:<tag>`) and, on `main`, into `build-push.sh` (which also tags the pushed `bunkerweb-coraza` image with it). The job fails fast if the API returns an empty or pre-release (hyphenated) tag.
@@ -70,7 +70,7 @@ Releases are cut automatically from `main`. After `Tests` succeeds there, a `Rel
 `.pre-commit-config.yaml` pins every linter to a frozen SHA. Install once with `pre-commit install`, then `pre-commit run --all-files` before committing. The stack:
 
 - `black` (Python, py3.9) — configured in `pyproject.toml` with `line-length = 160`
-- `flake8` — `--max-line-length=250 --ignore=E266,E402,E722,W503`
+- `flake8` — `--max-line-length=160 --ignore=E266,E402,E501,E722,W503` (E203 is **not** ignored, so let black's slice spacing decide: bind a complex slice bound to a name instead of writing `x[a : b - 1]`)
 - `stylua` — config in `stylua.toml`
 - `luacheck` — config in `.luacheckrc`, run with `--std min --codes --ranges --no-cache`
 - `prettier`, `shellcheck`, `codespell`, `gitleaks`, standard pre-commit hygiene hooks

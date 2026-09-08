@@ -10,6 +10,7 @@ local ngx = ngx
 local ngx_req = ngx.req
 local ERR = ngx.ERR
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
@@ -212,10 +213,14 @@ function coraza:api()
 		-- Check coraza connection
 		local check, err = has_variable("USE_CORAZA", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_CORAZA (" .. err .. ")")
+			return self:ret(
+				true,
+				"error while checking variable USE_CORAZA (" .. err .. ")",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
 		end
 		if not check then
-			return self:ret(true, "Coraza plugin not enabled")
+			return self:ret(true, "Coraza plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 
 		-- Send ping request

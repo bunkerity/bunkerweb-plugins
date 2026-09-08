@@ -41,7 +41,7 @@ echo "ℹ️ Waiting for BW ..."
 success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
-	ret="$(curl -s -H "Host: www.example.com" http://localhost | grep -i "hello")"
+	ret="$(docker compose exec -T client curl -s -H "Host: www.example.com" http://bunkerweb:8080 | grep -i "hello")"
 	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
 		success="ok"
@@ -70,7 +70,7 @@ echo "ℹ️ Testing BW ..."
 success="ko"
 retry=0
 while [ $retry -lt 60 ] ; do
-	ret="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" http://localhost)"
+	ret="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/work/eicar.com" http://bunkerweb:8080)"
 	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
 		success="ok"
@@ -100,7 +100,7 @@ fi
 # regression must not hide behind "not 403").
 echo "ℹ️ Testing that a clean file is not blocked ..."
 printf 'just a clean file\n' > /tmp/bunkerweb-plugins/clamav/clean.txt
-code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/clean.txt" http://localhost)"
+code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/work/clean.txt" http://bunkerweb:8080)"
 case "$code" in
 403) clean_err="should not be denied by ClamAV" ;;
 000 | 5??) clean_err="caused an upstream error/crash" ;;
@@ -116,7 +116,7 @@ fi
 # Upload EICAR a second time: it must still be denied. This re-hits the same
 # SHA-512, exercising the result cache (is_in_cache) rather than a fresh scan.
 echo "ℹ️ Testing repeated EICAR is still denied (cache path) ..."
-code="$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" http://localhost)"
+code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -X POST -H "Host: www.example.com" -F "file=@/work/eicar.com" http://bunkerweb:8080)"
 if [ "$code" != "403" ] ; then
 	docker compose logs
 	docker compose down -v
@@ -134,7 +134,7 @@ success="ko"
 h2ok="ko"
 retry=0
 while [ $retry -lt 30 ] ; do
-	out="$(curl -s -k --http2 --resolve www.example.com:443:127.0.0.1 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" https://www.example.com/)"
+	out="$(docker compose exec -T client curl -s -k --http2 --connect-to www.example.com:443:bunkerweb:8443 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/work/eicar.com" https://www.example.com/)"
 	h2_code="${out% *}"
 	h2_ver="${out#* }"
 	if [ "$h2_ver" = "2" ] ; then
@@ -166,7 +166,7 @@ fi
 # clamd INSTREAM -> clean -> allow.
 echo "ℹ️ Testing a fresh clean file over HTTP/2 is not blocked ..."
 printf 'fresh clean file over http2\n' > /tmp/bunkerweb-plugins/clamav/h2clean.txt
-out="$(curl -s -k --http2 --resolve www.example.com:443:127.0.0.1 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/tmp/bunkerweb-plugins/clamav/h2clean.txt" https://www.example.com/)"
+out="$(docker compose exec -T client curl -s -k --http2 --connect-to www.example.com:443:bunkerweb:8443 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/work/h2clean.txt" https://www.example.com/)"
 h2_code="${out% *}"
 h2_ver="${out#* }"
 if [ "$h2_ver" != "2" ] ; then
@@ -192,7 +192,7 @@ fi
 # iterations of scan_buffer's 4096-byte INSTREAM chunk loop. Must not be denied/crash.
 echo "ℹ️ Testing a large clean file over HTTP/2 (temp-file + chunk loop) ..."
 dd if=/dev/zero bs=4096 count=64 2>/dev/null | tr '\0' 'A' > /tmp/bunkerweb-plugins/clamav/h2big.txt
-out="$(curl -s -k --http2 --resolve www.example.com:443:127.0.0.1 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/tmp/bunkerweb-plugins/clamav/h2big.txt" https://www.example.com/)"
+out="$(docker compose exec -T client curl -s -k --http2 --connect-to www.example.com:443:bunkerweb:8443 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/work/h2big.txt" https://www.example.com/)"
 h2_code="${out% *}"
 h2_ver="${out#* }"
 if [ "$h2_ver" != "2" ] ; then
@@ -217,9 +217,9 @@ fi
 # the same buffered Lua path as HTTP/2, just over QUIC. Non-fatal if h3 can't be
 # negotiated (CI curl/runner often lacks it); fatal only if h3 IS negotiated yet
 # EICAR slips through (a real regression).
-if curl --version 2>/dev/null | grep -qi "HTTP3" ; then
+if docker compose exec -T client curl --version 2>/dev/null | grep -qi "HTTP3" ; then
 	echo "ℹ️ Testing EICAR over HTTP/3 is denied (best-effort) ..."
-	out="$(curl -s -k --http3 --resolve www.example.com:443:127.0.0.1 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/tmp/bunkerweb-plugins/clamav/eicar.com" https://www.example.com/ 2>/dev/null || true)"
+	out="$(docker compose exec -T client curl -s -k --http3 --connect-to www.example.com:443:bunkerweb:8443 -o /dev/null -w "%{http_code} %{http_version}" -X POST -F "file=@/work/eicar.com" https://www.example.com/ 2>/dev/null || true)"
 	h3_code="${out% *}"
 	h3_ver="${out#* }"
 	if [ "$h3_ver" = "3" ] && [ "$h3_code" != "403" ] ; then
