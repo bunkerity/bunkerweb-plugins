@@ -52,7 +52,10 @@ repos:
     hooks:
       - id: refurb
         name: Refurb Python Refactoring Tool
-        exclude: ^tests/
+        # Both unit tests and the e2e scaffolding are out of scope for a refactoring
+        # linter. .tests/ also holds one mock per plugin, each an app.py, and mypy
+        # refuses two modules with the same name in a single run.
+        exclude: ^\.?tests/
         additional_dependencies: ["mypy<1.20"]
 
   - repo: https://github.com/codespell-project/codespell

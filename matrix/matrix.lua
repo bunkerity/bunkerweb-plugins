@@ -14,6 +14,7 @@ local ERR = ngx.ERR
 local INFO = ngx.INFO
 local ngx_timer = ngx.timer
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
@@ -234,10 +235,14 @@ function matrix:api()
 		-- Check matrix connection
 		local check, err = has_variable("USE_MATRIX", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_MATRIX (" .. err .. ")")
+			return self:ret(
+				true,
+				"error while checking variable USE_MATRIX (" .. err .. ")",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
 		end
 		if not check then
-			return self:ret(true, "matrix plugin not enabled")
+			return self:ret(true, "matrix plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 		-- Prepare data
 		local access_token = self.variables["MATRIX_ACCESS_TOKEN"]

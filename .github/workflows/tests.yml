@@ -1,5 +1,9 @@
 name: Tests
 
+# Least privilege by default: every job below is read-only unless it says
+# otherwise, so the GITHUB_TOKEN never inherits the repository-wide scope.
+permissions: read-all
+
 on:
   push:
     branches: [dev, main]
@@ -9,6 +13,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plumber:
+    uses: ./.github/workflows/plumber.yml
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+
   codeql:
     uses: ./.github/workflows/codeql.yml
     permissions:
@@ -44,6 +55,10 @@ jobs:
           esac
           echo "Resolved latest stable BunkerWeb tag: $tag"
           echo "bw_tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Checkout source code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Check the resolved tag is declared compatible
+        run: python3 misc/check_compatibility.py "${{ steps.tag.outputs.bw_tag }}"
 
   lint:
     runs-on: ubuntu-latest
@@ -63,7 +78,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lua5.4 liblua5.4-dev luarocks
       - name: Set up Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: "npm"
@@ -108,7 +123,10 @@ jobs:
       - name: Run Python unit tests
         if: matrix.lang == 'python'
         run: |
-          pip install pytest
+          # requests and urllib3 are needed by tests/test_syswarden_client.py: it loads
+          # syswarden/jobs/syswarden_client.py, the one job module that deliberately owns
+          # the HTTP dependencies so the helper modules stay importable with the stdlib alone.
+          pip install pytest requests urllib3
           pytest tests/ -q
 
       # --- Lua : busted specs ---
@@ -128,12 +146,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: [clamav, cloudflare, coraza, virustotal, authentik, notifier]
+        plugin:
+          [
+            clamav,
+            cloudflare,
+            coraza,
+            virustotal,
+            authentik,
+            notifier,
+            sentinelone,
+            syswarden,
+          ]
     steps:
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -143,14 +171,16 @@ jobs:
         run: bash .tests/${{ matrix.plugin }}.sh
 
   build-push:
-    needs: [tag, integration]
+    # Publishing is gated on Plumber too: a pipeline that fails its own
+    # supply-chain scan must not push an image to Docker Hub.
+    needs: [plumber, tag, integration]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}

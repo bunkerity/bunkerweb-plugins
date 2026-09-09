@@ -1,0 +1,241 @@
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.11 # sed -> bunkerweb:tests
+    # No host port mapping: the tests reach BunkerWeb in-network from the client
+    # containers (bunkerweb:8080), so publishing 80/443 only risks an "address
+    # already in use" clash on the host / CI runner.
+    environment:
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    networks:
+      - bw-universe
+      - bw-services
+      - evil-net
+      - pulled-net
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.11 # sed -> bunkerweb-scheduler:tests
+    depends_on:
+      - bunkerweb
+      - redis
+      - sw-mock
+      - sw-mock-legacy
+    volumes:
+      - ./bw-data/plugins:/data/plugins:ro # plugin/ copied in as ./bw-data/plugins/syswarden
+      # Only so the test can read a peer's blocklist back with a verified TLS connection.
+      # The plugin itself pins the certificate by fingerprint and needs no CA here.
+      - ./certs:/certs:ro
+      # The fence manifest an operator would copy out of `syswarden ha-fence manifest
+      # create`, mounted read-only exactly as the README tells them to.
+      - ./fence:/fence:ro
+    environment:
+      - BUNKERWEB_INSTANCES=bunkerweb
+      # Multisite on purpose, and it is not decoration. It is what every UI-managed
+      # deployment runs, and it changes how the Lua side resolves settings: once it is on,
+      # utils.has_variable() reads the per-service tables only, and load_variables() fills
+      # those from `<server>_`-prefixed entries alone. A plugin that gates itself on a
+      # global setting through that helper silently turns off, and a single-site run cannot
+      # see it. Nothing else here needs prefixing: the scheduler derives every
+      # `<server>_<SETTING>` entry from the global value on its own.
+      - MULTISITE=yes
+      - SERVER_NAME=www.example.com
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      - LOG_LEVEL=info
+      # --- syswarden: both directions, against the two mock generations ---
+      - USE_SYSWARDEN=yes
+      - SYSWARDEN_PEERS=sw-mock sw-mock-legacy
+      - SYSWARDEN_API_TOKEN=e2e-syswarden-token
+      # The mocks self-sign, so the fingerprint is the posture under test. The test script
+      # generates the certificate and exports its SHA-256 before bringing the stack up.
+      - SYSWARDEN_SSL_FINGERPRINT=${SYSWARDEN_SSL_FINGERPRINT}
+      # Empty for the first phase, pointed at the mounted manifest for the fence phase.
+      # A manifest replaces the peer list and the global pin with per-peer pinning, so the
+      # two postures have to be exercised one after the other, not side by side.
+      - SYSWARDEN_FENCE_MANIFEST=${SYSWARDEN_FENCE_MANIFEST:-}
+      - USE_SYSWARDEN_BAN_PUSH=yes
+      - SYSWARDEN_ENFORCEMENT=enforcing
+      - SYSWARDEN_BAN_SOURCE=e2e-cluster
+      - USE_SYSWARDEN_BLOCKLIST=yes
+      - USE_SYSWARDEN_WHITELIST=yes
+      # Not excluding our own pushes keeps the pull assertions independent from the push
+      # ones: the downloaded blocklist is then exactly what the mocks serve.
+      - SYSWARDEN_BLOCKLIST_EXCLUDE_OWN=no
+      # --- bad behavior: the ban source under test, tuned to fire and expire fast ---
+      - USE_BAD_BEHAVIOR=yes
+      # Deliberately without 403: that is what the syswarden deny itself returns, so
+      # keeping it would let a client denied by the pulled blocklist get banned and
+      # pushed back, polluting the assertions on the push payloads.
+      - BAD_BEHAVIOR_STATUS_CODES=400 401 404
+      - BAD_BEHAVIOR_THRESHOLD=3
+      - BAD_BEHAVIOR_COUNT_TIME=60
+      # Long on purpose. The pushed lifetime is the ban's remaining time, so a short ban
+      # would expire on the peer by itself and the deletion path would never be exercised.
+      # The test unbans explicitly instead, which is the case that actually needs a DELETE.
+      - BAD_BEHAVIOR_BAN_TIME=3600
+      # Redis on purpose: the ban-push job reads bans from Redis when it is enabled, and
+      # that ingestion path (key parsing, the TTL call, the merge with the instance API)
+      # has its own failure modes. Running without it leaves that code unexercised.
+      - USE_REDIS=yes
+      - REDIS_HOST=redis
+      # --- isolate the syswarden verdict from every other deny source ---
+      - USE_LIMIT_REQ=no
+      - USE_LIMIT_CONN=no
+      - USE_BUNKERNET=no
+      - USE_BLACKLIST=no
+      - USE_GREYLIST=no
+      - USE_WHITELIST=no
+      - USE_MODSECURITY=no
+      - USE_ANTIBOT=no
+      - USE_REAL_IP=no
+      - USE_MTLS=no
+      - AUTO_LETS_ENCRYPT=no
+      - GENERATE_SELF_SIGNED_SSL=no
+      - USE_CUSTOM_SSL=no
+      - REDIRECT_HTTP_TO_HTTPS=no
+      - DISABLE_DEFAULT_SERVER=no
+      - USE_REVERSE_PROXY=yes
+      - REVERSE_PROXY_HOST=http://hello:8080
+      - REVERSE_PROXY_URL=/
+    networks:
+      - bw-universe
+      - bw-services
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - bw-universe
+
+  # Not nginxdemos/nginx-hello: that one answers 200 on every path, so nothing would
+  # ever feed bad-behavior. See upstream.conf.
+  hello:
+    image: nginx:alpine
+    volumes:
+      - ./upstream.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - bw-services
+
+  # Current SysWarden: expiring bans, provenance, strict query validation.
+  sw-mock:
+    build: ./sw-mock
+    image: sw-mock:tests
+    volumes:
+      - ./certs:/certs:ro
+    environment:
+      - SW_MOCK_TOKEN=e2e-syswarden-token
+      # Exercises the peer allowlist, and its CIDR form specifically: the scheduler's
+      # address on bw-services is allocated by Docker, so an exact-match list could not
+      # be written here at all. This is the check that answers 403 in production.
+      - SW_MOCK_PEERS=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      # An entry an operator added on the SysWarden side. It carries no provenance, so the
+      # plugin must never delete it, and it must still be there at the end of the run.
+      - SW_MOCK_OPERATOR_IPS=198.51.100.77
+      # Served in the blocklist so the pull direction has something to deny on: the /24
+      # covers pulled-client below.
+      - SW_MOCK_SEEDED_IPS=203.0.113.0/24
+      # The same address is blocklisted and whitelisted: the whitelist must win.
+      - SW_MOCK_WHITELIST_IPS=203.0.113.20
+      - SW_MOCK_REFUSED_TARGETS=203.0.114.11
+    networks:
+      - bw-services
+
+  # A v4.03 peer whose integrations.bunkerweb.enabled is off: it carries the native-sync
+  # fence and advertises neither sync_ttl nor sync_provenance, so the plugin speaks the
+  # legacy dialect to it and the fence actually covers what it writes. That combination is
+  # the only one where the fence changes the plugin's behaviour.
+  sw-mock-fenced:
+    image: sw-mock:tests
+    depends_on:
+      - sw-mock
+    volumes:
+      - ./certs:/certs:ro
+    environment:
+      - SW_MOCK_TOKEN=e2e-syswarden-token
+      - SW_MOCK_NO_BUNKERWEB=yes
+      # 127.0.0.1 is here for the test's own fence control calls, which are made from
+      # inside this container; the private ranges are for the scheduler.
+      - SW_MOCK_PEERS=127.0.0.1/32 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    networks:
+      - bw-services
+
+  # The only published SysWarden generation: it ignores the query string and refuses the
+  # ban payloads, which is what the plugin's per-peer detection has to notice.
+  sw-mock-legacy:
+    image: sw-mock:tests
+    depends_on:
+      - sw-mock
+    volumes:
+      - ./certs:/certs:ro
+    environment:
+      - SW_MOCK_TOKEN=e2e-syswarden-token
+      - SW_MOCK_LEGACY=yes
+      - SW_MOCK_PEERS=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      # The operator entry lives on this peer too, in the same provenance-free static store
+      # the legacy dialect writes. This is where "never delete what we did not push" has to
+      # be proven, because here a stray DELETE {"ips"} would actually destroy it.
+      - SW_MOCK_OPERATOR_IPS=198.51.100.77
+    networks:
+      - bw-services
+
+  # Gets itself banned by bad-behavior, which is what the push direction propagates.
+  evil-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      evil-net:
+        ipv4_address: 203.0.114.10
+
+  # Banned exactly like evil-client and just as pushable as far as this plugin can tell, but
+  # the mock refuses it as a firewall target. That is the half of upstream's rule the plugin
+  # cannot preempt (the peer's own interfaces, its HA peers, its whitelist), so this is what
+  # drives the isolation walk: one POST carrying both addresses is refused whole, and only
+  # the bisection can work out which one to drop.
+  refused-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      evil-net:
+        ipv4_address: 203.0.114.11
+
+  # Inside the range the mock serves, so it is denied by the pulled blocklist alone.
+  pulled-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      pulled-net:
+        ipv4_address: 203.0.113.10
+
+  # Blocklisted and whitelisted at once: the whitelist has to win.
+  allowed-client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      pulled-net:
+        ipv4_address: 203.0.113.20
+
+networks:
+  # The BunkerWeb internal API/service networks don't need fixed addressing, so let Docker
+  # allocate their subnets from its default pool. Hardcoding them risks "Address already
+  # in use" at bring-up when the CI runner's host happens to have an interface in that
+  # range. API_WHITELIST_IP above is widened to cover Docker's default bridge pool.
+  bw-universe:
+  bw-services:
+  # These two MUST stay pinned: the whole point is the source IP each client presents, and
+  # neither range overlaps the runner's private host addresses.
+  #
+  # evil-net deliberately is NOT a TEST-NET range. Since v4.03.2 SysWarden validates every
+  # POSTed address against deniedFirewallTargetPrefixes, which lists 192.0.2.0/24,
+  # 198.51.100.0/24 and 203.0.113.0/24 among the rest — so an attacker sitting in one of them
+  # is refused as a ban target and the push direction could never be tested from there.
+  # 203.0.114.0/24 is the neighbouring block, outside every special-use range, and matches
+  # what .tests/cloudflare.sh already does with a real 173.245.48.0/20.
+  # pulled-net stays on TEST-NET-3: those addresses are only ever *served* in a blocklist and
+  # matched at Layer 7, never pushed, so the mutation policy does not apply to them.
+  evil-net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 203.0.114.0/24
+  pulled-net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 203.0.113.0/24

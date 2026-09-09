@@ -18,7 +18,7 @@ from logger import setup_logger  # type: ignore
 from common_utils import bytes_hash  # type: ignore
 from jobs import Job  # type: ignore
 
-from cloudflare_helpers import CF_IPS_V4_DEFAULT_URL, CF_IPS_V6_DEFAULT_URL, check_line  # type: ignore
+from cloudflare_helpers import CF_IPS_V4_DEFAULT_URL, CF_IPS_V6_DEFAULT_URL, check_line, delivery_status  # type: ignore
 
 LOGGER = setup_logger("CLOUDFLARE.TRUSTED-IPS-DOWNLOAD", getenv("LOG_LEVEL", "INFO"))
 try:
@@ -26,6 +26,13 @@ try:
 except ValueError:
     _timeout = 10
 status = 0
+cached_any = False
+
+# A cache file written while a *later* item of the same run fails would make the job
+# exit >=2, and the scheduler ships /var/cache/bunkerweb to the instances only when a job
+# exits 1. This marker carries that pending delivery over to the next run so a refreshed
+# file can never sit in the scheduler's cache forever (see delivery_status()).
+PENDING_MARKER = "pending_delivery"
 
 
 def make_session() -> Session:
@@ -121,6 +128,7 @@ try:
 
             LOGGER.info(f"Downloaded {i} trusted {_type} IPs/nets")
 
+            cached_any = True
             status = status or 1
         except BaseException as e:
             status = 2
@@ -130,5 +138,22 @@ except SystemExit as e:
 except:
     status = 2
     LOGGER.exception("Exception while running cf-trusted-ips-download.py")
+
+# Resolve the pending delivery outside the try/except above so an early sys_exit() — the
+# "still fresh, nothing to do" path — cannot skip it either.
+try:
+    pending = JOB.get_cache(PENDING_MARKER) is not None
+    status, keep_marker = delivery_status(status, cached_any, pending)
+    if keep_marker:
+        LOGGER.warning("A cached file is not delivered to the instances yet, retrying on the next run")
+        if not pending:
+            JOB.cache_file(PENDING_MARKER, b"1")
+    elif pending:
+        JOB.del_cache(PENDING_MARKER)
+except NameError:
+    # JOB was never created (the job failed before that): nothing was cached either.
+    pass
+except BaseException:
+    LOGGER.exception("Exception while resolving the pending cache delivery in cf-trusted-ips-download.py")
 
 sys_exit(status)

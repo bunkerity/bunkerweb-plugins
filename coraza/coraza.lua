@@ -10,6 +10,7 @@ local ngx = ngx
 local ngx_req = ngx.req
 local ERR = ngx.ERR
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
@@ -157,7 +158,13 @@ function coraza:process_request()
 	local res, err = httpc:request_uri(self.variables["CORAZA_API"] .. "/request", {
 		method = "POST",
 		headers = data,
-		body = body,
+		-- Not `body`: a request with no body at all (any GET, most HEADs) leaves it nil, and
+		-- lua-resty-http refuses that on a POST since 0.18.0 — "Request body is nil but POST
+		-- method expects a body. Use an empty string" — which failed *every* such request with
+		-- a 500 from access(). BunkerWeb shipped 0.17.2 up to 1.6.13 and 0.18.0 from 1.6.14,
+		-- so this only surfaced when the CI tag rolled forward. A file-backed body is a reader
+		-- function here, not a string, and `or` leaves it alone.
+		body = body or "",
 	})
 	if not res then
 		return false, err
@@ -206,10 +213,14 @@ function coraza:api()
 		-- Check coraza connection
 		local check, err = has_variable("USE_CORAZA", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_CORAZA (" .. err .. ")")
+			return self:ret(
+				true,
+				"error while checking variable USE_CORAZA (" .. err .. ")",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
 		end
 		if not check then
-			return self:ret(true, "Coraza plugin not enabled")
+			return self:ret(true, "Coraza plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 
 		-- Send ping request

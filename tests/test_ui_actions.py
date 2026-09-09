@@ -8,12 +8,13 @@ us test a single plugin many times. (authentik is excluded: it ships no
 """
 
 import importlib.util
+from json import dumps
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLUGINS = ["clamav", "cloudflare", "coraza", "discord", "matrix", "slack", "virustotal", "webhook"]
+PLUGINS = ["clamav", "cloudflare", "coraza", "discord", "matrix", "sentinelone", "slack", "syswarden", "virustotal", "webhook"]
 
 
 def load_actions(plugin):
@@ -43,9 +44,31 @@ def test_pre_render_error_path(plugin, fake_ping_utils):
     ret = module.pre_render(bw_instances_utils=fake)
     # A generic marker is shown; the raw exception text is not leaked to the UI.
     assert ret["error"] == "Could not retrieve the plugin status"
-    assert "boom" not in ret["error"]
-    assert "internal" not in ret["error"]
+    # Scan the whole payload, not just the field pinned above: a leak would surface in
+    # some other card's value, where nothing is asserting on it.
+    rendered = dumps(ret, default=str)
+    assert "boom" not in rendered
+    assert "internal.scheduler" not in rendered
     assert ret["ping_status"]["value"] == "error"
+
+
+# plugin_page.html draws a card only when its key carries one of these prefixes, and drops
+# every other key without a word. syswarden shipped six counters under bare names once and
+# none of them ever reached the page.
+CARD_PREFIXES = ("ping_", "info_", "date_", "count_", "counter_", "top_", "list_")
+
+
+@pytest.mark.parametrize("plugin", PLUGINS)
+def test_every_card_key_is_one_the_ui_renders(plugin, fake_ping_utils):
+    module = load_actions(plugin)
+    ret = module.pre_render(bw_instances_utils=fake_ping_utils(status="up"))
+    unrendered = sorted(key for key in ret if key != "error" and not key.startswith(CARD_PREFIXES))
+    assert not unrendered, f"{plugin}/ui/actions.py returns {unrendered}, which plugin_page.html drops"
+    # A counter card is rendered through human_readable_number(), which calls int() on the
+    # value: a string there is a 500 on the plugin page, not a badly formatted number.
+    for key, card in ret.items():
+        if key.startswith(("count_", "counter_")):
+            int(card["value"])
 
 
 @pytest.mark.parametrize("plugin", PLUGINS)

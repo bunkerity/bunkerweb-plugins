@@ -1,6 +1,6 @@
 # Coraza plugin
 
-![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.11-blue)
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.12-blue)
 
 ```mermaid
 flowchart TD
@@ -80,9 +80,11 @@ disrupting verdict denies the request with BunkerWeb's deny status.
 1. BunkerWeb's access-phase checks run (rate limit, bad behavior, antibot,
    DNSBL, blacklist, ...). If any of them deny, the request stops here and
    Coraza is never consulted.
-2. At worker startup, `init_worker` sends `GET <CORAZA_API>/ping` as a health
-   check. If the sidecar does not answer with a valid `pong` JSON, the failure
-   is logged.
+2. Once per BunkerWeb instance at startup, `init_worker` sends
+   `GET <CORAZA_API>/ping` as a health check. If the sidecar does not answer with
+   a valid `pong` JSON, the failure is logged. BunkerWeb runs that phase in a
+   single worker, which is what a one-off health check wants; the per-request
+   path opens its own connection, so nothing depends on which worker ran it.
 3. On each request, `coraza.lua` reads the full request body and builds the
    metadata headers `X-Coraza-Version`, `X-Coraza-Method`, `X-Coraza-Ip`,
    `X-Coraza-Id` (a random transaction id) and `X-Coraza-Uri`, plus every

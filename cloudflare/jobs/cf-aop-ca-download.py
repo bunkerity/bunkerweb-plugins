@@ -20,10 +20,19 @@ from logger import setup_logger  # type: ignore
 from common_utils import bytes_hash  # type: ignore
 from jobs import Job  # type: ignore
 
-from cloudflare_helpers import CF_AOP_CA_DEFAULT_URL  # type: ignore
+from cloudflare_helpers import CF_AOP_CA_DEFAULT_URL, delivery_status  # type: ignore
 
 LOGGER = setup_logger("CLOUDFLARE.AOP-CA-DOWNLOAD", getenv("LOG_LEVEL", "INFO"))
 status = 0
+cached_any = False
+
+# The scheduler ships /var/cache/bunkerweb to the instances only when a job exits 1, and
+# the "still fresh" path below exits 0 for a whole week. So a CA that was cached but never
+# delivered would sit scheduler-side while the rendered conf on the instance already points
+# at /var/cache/bunkerweb/cloudflare/aop_ca.pem — configs are generated scheduler-side and
+# shipped, so the {% if ca_path.is_file() %} guard tests the scheduler's copy, not theirs.
+# This marker carries the pending delivery across runs (see delivery_status()).
+PENDING_MARKER = "pending_delivery"
 
 
 def aop_enabled() -> bool:
@@ -85,6 +94,7 @@ try:
     if not cached:
         LOGGER.error(f"Error while caching the AOP CA : {err}")
         sys_exit(2)
+    cached_any = True
 
     LOGGER.info("🔒 Successfully downloaded the Cloudflare Authenticated Origin Pull CA ✅")
     status = 1
@@ -93,5 +103,22 @@ except SystemExit as e:
 except:
     status = 2
     LOGGER.exception("Exception while running cf-aop-ca-download.py")
+
+# Outside the try above on purpose: the early sys_exit() taken when the cached CA is still
+# fresh must not be able to skip the pending-delivery resolution.
+try:
+    pending = JOB.get_cache(PENDING_MARKER) is not None
+    status, keep_marker = delivery_status(status, cached_any, pending)
+    if keep_marker:
+        LOGGER.warning("The AOP CA is not delivered to the instances yet, retrying on the next run")
+        if not pending:
+            JOB.cache_file(PENDING_MARKER, b"1")
+    elif pending:
+        JOB.del_cache(PENDING_MARKER)
+except NameError:
+    # JOB was never created (the job exited before that): nothing was cached either.
+    pass
+except BaseException:
+    LOGGER.exception("Exception while resolving the pending cache delivery in cf-aop-ca-download.py")
 
 sys_exit(status)

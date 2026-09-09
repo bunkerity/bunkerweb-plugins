@@ -13,6 +13,8 @@ local ngx_req = ngx.req
 local INFO = ngx.INFO
 local WARN = ngx.WARN
 local ERR = ngx.ERR
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
+local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_OK = ngx.HTTP_OK
 local get_deny_status = utils.get_deny_status
 local get_phase = ngx.get_phase
@@ -427,10 +429,14 @@ function cloudflare:api()
 	if self.ctx.bw.uri == "/cloudflare/ping" and self.ctx.bw.request_method == "POST" then
 		local check, err = has_variable("USE_CLOUDFLARE", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_CLOUDFLARE (" .. err .. ")")
+			return self:ret(
+				true,
+				"error while checking variable USE_CLOUDFLARE (" .. err .. ")",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
 		end
 		if not check then
-			return self:ret(true, "Cloudflare plugin not enabled")
+			return self:ret(true, "Cloudflare plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 		-- Report how many trusted Cloudflare ranges are loaded (proves the download
 		-- job ran and the lists made it into the datastore).

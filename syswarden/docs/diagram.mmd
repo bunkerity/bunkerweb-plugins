@@ -1,0 +1,51 @@
+flowchart TD
+    accTitle: BunkerWeb SysWarden plugin
+    accDescr: BunkerWeb inspects traffic at Layer 7 and bans attackers. The scheduler pushes those bans to SysWarden's HA API, which loads them into an nftables set so the same attacker is dropped in the kernel for every service on the host, containers included. In the other direction the scheduler downloads SysWarden's blocklist and whitelist so BunkerWeb can also deny those peers at Layer 7, and polls status and telemetry for the web UI.
+
+    visitor([Visitor])
+
+    subgraph host[Docker host]
+        direction TB
+        nft{"nftables inet syswarden<br/>docker_protect, hook forward<br/>saddr or daddr in @banned_ips<br/>or @syswarden_blacklist?"}
+        subgraph bw[BunkerWeb]
+            direction TB
+            l7["Core checks, then syswarden.lua<br/>access / preread:<br/>whitelist first, then blocklist"]
+        end
+    end
+
+    drop["Dropped in the kernel<br/>no packet reaches nginx"]
+    deny["403 or connection closed"]
+    upstream([Upstream app])
+
+    subgraph sched[BunkerWeb scheduler jobs]
+        direction TB
+        push["syswarden-ban-push<br/>every minute"]
+        pull["syswarden-blocklist-download<br/>every hour"]
+        tel["syswarden-telemetry-poll<br/>every minute"]
+    end
+
+    swapi[["SysWarden HA API<br/>TLS 1.3 on :62026"]]
+    ui([BunkerWeb web UI])
+
+    visitor -->|packet| nft
+    nft -->|in blacklist| drop
+    nft -->|not in blacklist| l7
+    l7 -->|allowed| upstream
+    l7 -->|blocked| deny
+
+    l7 -.->|ban recorded| push
+    push -.->|"POST and DELETE /ha/sync"| swapi
+    swapi -.->|loads the nft set| nft
+    pull -.->|"GET /ha/sync and /ha/telemetry"| swapi
+    pull -.->|blocklist.list, whitelist.list| l7
+    tel -.->|"GET /ha/status and /ha/telemetry"| swapi
+    tel -.->|telemetry.json| ui
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef swc fill:#eef2ff,stroke:#4f46e5,color:#312e81;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class upstream ok;
+    class drop,deny deny;
+    class swapi swc;
+    class visitor,nft,l7,push,pull,tel,ui app;

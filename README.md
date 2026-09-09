@@ -3,12 +3,13 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.11-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.12-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=dev&label=CI%2FCD%20dev" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=main&label=CI%2FCD%20main" />
 	<img src="https://img.shields.io/github/issues/bunkerity/bunkerweb-plugins">
 	<img src="https://img.shields.io/github/issues-pr/bunkerity/bunkerweb-plugins">
+	<a href="https://score.getplumber.io/github.com/bunkerity/bunkerweb-plugins"><img src="https://score.getplumber.io/github.com/bunkerity/bunkerweb-plugins.svg" alt="Plumber CI/CD security score" /></a>
 </p>
 
 This repository contains "official" plugins for the [BunkerWeb solution](https://github.com/bunkerity/bunkerweb). If you don't already know BunkerWeb, you should first read the [documentation](https://docs.bunkerweb.io/?utm_campaign=self&utm_source=github).
@@ -27,9 +28,34 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 - [Coraza](https://github.com/bunkerity/bunkerweb-plugins/tree/main/coraza)
 - [Discord](https://github.com/bunkerity/bunkerweb-plugins/tree/main/discord)
 - [Matrix](https://github.com/bunkerity/bunkerweb-plugins/tree/main/matrix)
+- [SentinelOne](https://github.com/bunkerity/bunkerweb-plugins/tree/main/sentinelone)
 - [Slack](https://github.com/bunkerity/bunkerweb-plugins/tree/main/slack)
+- [SysWarden](https://github.com/bunkerity/bunkerweb-plugins/tree/main/syswarden)
 - [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 - [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)
+
+# Compatibility and releases
+
+Release **1.12** supports **BunkerWeb 1.6.14**. The compatibility declaration
+applies to all 11 plugins listed above. Historical declarations are preserved in
+[COMPATIBILITY.json](COMPATIBILITY.json); older BunkerWeb versions have not been
+revalidated for 1.12.
+
+To prepare a release, run `bash misc/update_version.sh <version>` from the repository
+root and add the matching version to `COMPATIBILITY.json`, listing the BunkerWeb
+versions validated by the integration suite. CI checks that every plugin uses the
+same version and that its compatibility entry includes the resolved BunkerWeb tag.
+
+After `Tests` succeeds on `main`, a maintainer creates and pushes a signed annotated
+tag matching the plugin version (for example, `v1.12`). The signing key must be
+registered with the maintainer's GitHub account so GitHub can verify the signature.
+CI holds no private signing key.
+
+The tag push triggers the release workflow. It requires the tag to match the version
+and current `main` commit, a verified signature targeting that commit, and a successful
+`Tests` push run on `main` for that exact commit. Lightweight, unsigned, and mismatched
+tags are rejected. An existing release or draft is left alone; otherwise the workflow
+creates a draft with generated release notes for a maintainer to review and publish.
 
 # Support
 

@@ -15,6 +15,7 @@ local INFO = ngx.INFO
 local ngx_timer = ngx.timer
 local HTTP_INTERNAL_SERVER_ERROR = ngx.HTTP_INTERNAL_SERVER_ERROR
 local HTTP_TOO_MANY_REQUESTS = ngx.HTTP_TOO_MANY_REQUESTS
+local HTTP_SERVICE_UNAVAILABLE = ngx.HTTP_SERVICE_UNAVAILABLE
 local HTTP_OK = ngx.HTTP_OK
 local http_new = http.new
 local has_variable = utils.has_variable
@@ -187,10 +188,14 @@ function discord:api()
 		-- Check discord connection
 		local check, err = has_variable("USE_DISCORD", "yes")
 		if check == nil then
-			return self:ret(true, "error while checking variable USE_DISCORD (" .. err .. ")")
+			return self:ret(
+				true,
+				"error while checking variable USE_DISCORD (" .. err .. ")",
+				HTTP_INTERNAL_SERVER_ERROR
+			)
 		end
 		if not check then
-			return self:ret(true, "Discord plugin not enabled")
+			return self:ret(true, "Discord plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
 		end
 
 		-- Send test data to discord webhook

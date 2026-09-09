@@ -5,9 +5,10 @@
 
 echo "ℹ️ Starting Notifier (discord/slack/webhook/matrix) tests ..."
 
-# Create working directory
+# Create working directory (plugin data may be owned by uid 101 from a prior run, so
+# prefer sudo when available — but fall back to a plain rm for sudo-less local runs).
 if [ -d /tmp/bunkerweb-plugins ] ; then
-	do_and_check_cmd sudo rm -rf /tmp/bunkerweb-plugins
+	sudo -n rm -rf /tmp/bunkerweb-plugins 2>/dev/null || do_and_check_cmd rm -rf /tmp/bunkerweb-plugins
 fi
 do_and_check_cmd mkdir -p /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 
@@ -16,7 +17,14 @@ do_and_check_cmd cp -r ./discord /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd cp -r ./slack /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd cp -r ./webhook /tmp/bunkerweb-plugins/notifier/bw-data/plugins
 do_and_check_cmd cp -r ./matrix /tmp/bunkerweb-plugins/notifier/bw-data/plugins
-do_and_check_cmd sudo chown -R 101:101 /tmp/bunkerweb-plugins/notifier/bw-data
+# BunkerWeb runs as uid 101 and only needs to READ the mounted plugin. Prefer the
+# canonical chown; fall back to world-readable when passwordless sudo isn't available.
+if sudo -n chown -R 101:101 /tmp/bunkerweb-plugins/notifier/bw-data 2>/dev/null ; then
+	echo "ℹ️ chowned plugin data to 101:101"
+else
+	echo "ℹ️ sudo unavailable, making plugin data world-readable instead"
+	do_and_check_cmd chmod -R a+rX /tmp/bunkerweb-plugins/notifier/bw-data
+fi
 
 # Copy compose + the rate-limit mock config
 do_and_check_cmd cp .tests/notifier/docker-compose.yml /tmp/bunkerweb-plugins/notifier
@@ -37,7 +45,7 @@ echo "ℹ️ Waiting for BW ..."
 success="ko"
 retry=0
 while [ $retry -lt 120 ] ; do
-	ret="$(curl -s -H "Host: discord.example.com" http://localhost | grep -i "hello")"
+	ret="$(docker compose exec -T client curl -s -H "Host: discord.example.com" http://bunkerweb:8080 | grep -i "hello")"
 	# shellcheck disable=SC2181
 	if [ $? -eq 0 ] && [ "$ret" != "" ] ; then
 		success="ok"
@@ -60,7 +68,7 @@ fail=0
 # URL (proxied to hello, 200) and confirm no POST reaches the mock. Runs BEFORE
 # any deny so the echo mock log is still empty of notifier POSTs.
 echo "ℹ️ Negative test: a non-denied request must not notify ..."
-code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: slack.example.com" http://localhost/)"
+code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: slack.example.com" http://bunkerweb:8080/)"
 if [ "$code" != "200" ] ; then
 	echo "❌ benign request to slack vhost expected 200, got $code"
 	fail=1
@@ -84,7 +92,7 @@ check_echo_notifier() {
 	echo "ℹ️ [$plugin] provoking deny on http://$site/blocked ..."
 	# Send a credential header: the notifier must redact it (see redact_header in
 	# each plugin's *_helpers.lua) before forwarding the request to the sink.
-	code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $site" -H "Cookie: redactme-supersecret" http://localhost/blocked)"
+	code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: $site" -H "Cookie: redactme-supersecret" http://bunkerweb:8080/blocked)"
 	if [ "$code" != "403" ] ; then
 		echo "❌ [$plugin] expected 403 on /blocked, got $code"
 		fail=1
@@ -122,7 +130,7 @@ check_echo_notifier matrix "/_matrix/client" '"formatted_body"'
 # DISCORD_RETRY_IF_LIMITED=yes the plugin retries once, so the mock should see
 # two requests to /discord.
 echo "ℹ️ [discord] provoking deny (retry path) ..."
-code="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: discord.example.com" -H "Cookie: redactme-supersecret" http://localhost/blocked)"
+code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: discord.example.com" -H "Cookie: redactme-supersecret" http://bunkerweb:8080/blocked)"
 if [ "$code" != "403" ] ; then
 	echo "❌ [discord] expected 403 on /blocked, got $code"
 	fail=1

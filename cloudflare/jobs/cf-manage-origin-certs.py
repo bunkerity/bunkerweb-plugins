@@ -26,6 +26,7 @@ from jobs import Job  # type: ignore
 from cloudflare_helpers import (  # type: ignore
     CF_API_DEFAULT_URL,
     build_csr_config,
+    delivery_status,
     find_matching_cert,
     get_env_secret,
     is_expired,
@@ -42,6 +43,13 @@ except ValueError:
     CLOUDFLARE_API_TIMEOUT = 10.0
 CACHE_PATH = Path(sep, "var", "cache", "bunkerweb", "cloudflare")
 status = 0
+cached_any = False
+
+# A cache file written while a *later* item of the same run fails would make the job
+# exit >=2, and the scheduler ships /var/cache/bunkerweb to the instances only when a job
+# exits 1. This marker carries that pending delivery over to the next run so a refreshed
+# file can never sit in the scheduler's cache forever (see delivery_status()).
+PENDING_MARKER = "pending_delivery"
 
 # Cache one SDK client per token (multisite services may use distinct tokens).
 _clients: Dict[str, Cloudflare] = {}
@@ -394,11 +402,29 @@ try:
             continue
 
         LOGGER.info(f"📜 Successfully generated origin certificate for {','.join(data['domains'])} ✅")
+        cached_any = True
         status = status or 1
 except SystemExit as e:
     status = e.code
 except:
     status = 2
     LOGGER.exception("Exception while running cf-manage-origin-certs.py")
+
+# Resolve the pending delivery outside the try/except above so an early sys_exit() — the
+# "still fresh, nothing to do" path — cannot skip it either.
+try:
+    pending = JOB.get_cache(PENDING_MARKER) is not None
+    status, keep_marker = delivery_status(status, cached_any, pending)
+    if keep_marker:
+        LOGGER.warning("A cached file is not delivered to the instances yet, retrying on the next run")
+        if not pending:
+            JOB.cache_file(PENDING_MARKER, b"1")
+    elif pending:
+        JOB.del_cache(PENDING_MARKER)
+except NameError:
+    # JOB was never created (the job failed before that): nothing was cached either.
+    pass
+except BaseException:
+    LOGGER.exception("Exception while resolving the pending cache delivery in cf-manage-origin-certs.py")
 
 sys_exit(status)
