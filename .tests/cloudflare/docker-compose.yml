@@ -119,13 +119,17 @@ networks:
   # cf-net and evil-net MUST stay pinned: cf-client's source IP has to fall inside
   # a real Cloudflare range to be "trusted", and evil-client outside it. Both use
   # public / TEST-NET-1 space that never overlaps the runner's private host IPs.
+  # Keep dynamic allocations outside the fixed client addresses, regardless of
+  # whether BunkerWeb or the clients start first.
   cf-net:
     ipam:
       driver: default
       config:
         - subnet: 173.245.48.0/20
+          ip_range: 173.245.48.128/25
   evil-net:
     ipam:
       driver: default
       config:
         - subnet: 192.0.2.0/24
+          ip_range: 192.0.2.128/25

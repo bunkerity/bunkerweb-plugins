@@ -46,3 +46,5 @@ gh() {
         text=True,
     )
     assert (result.returncode == 0) == (case == "valid"), result.stdout + result.stderr
+    if case == "failed_tests":
+        assert "Rerun this release after Tests succeeds" in result.stdout
