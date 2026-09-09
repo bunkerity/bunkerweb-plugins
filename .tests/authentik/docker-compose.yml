@@ -21,7 +21,7 @@ services:
     environment:
       - BUNKERWEB_INSTANCES=bunkerweb
       - MULTISITE=yes
-      - SERVER_NAME=app.example.com noheaders.example.com
+      - SERVER_NAME=app.example.com noheaders.example.com tls.example.com
       - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
       - LOG_LEVEL=info
       - USE_BAD_BEHAVIOR=no
@@ -54,6 +54,16 @@ services:
       - noheaders.example.com_AUTHENTIK_URL=http://mock-outpost:9000/
       - noheaders.example.com_AUTHENTIK_SSL_VERIFY=no
       - noheaders.example.com_AUTHENTIK_PASS_IDENTITY_HEADERS=no
+      # tls.example.com : HTTPS outpost behind an SNI-only front (issue #220).
+      # USE_REVERSE_PROXY is what pulls in the core conf that disables SNI at
+      # server level, so it has to be on for this to reproduce.
+      - tls.example.com_USE_REVERSE_PROXY=yes
+      - tls.example.com_REVERSE_PROXY_HOST=http://echo:8080
+      - tls.example.com_REVERSE_PROXY_URL=/
+      - tls.example.com_USE_AUTHENTIK=yes
+      - tls.example.com_AUTHENTIK_URL=https://tls-outpost:9443
+      - tls.example.com_AUTHENTIK_SSL_VERIFY=no
+      - tls.example.com_AUTHENTIK_PASS_IDENTITY_HEADERS=no
     networks:
       - bw-universe
 
@@ -62,8 +72,13 @@ services:
     image: nginx:alpine
     volumes:
       - ./mock-outpost.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/certs:ro
     networks:
-      - bw-services
+      bw-services:
+        # The TLS vhost answers on this name, so it is also the SNI the plugin
+        # must send. Same container, second identity.
+        aliases:
+          - tls-outpost
 
   # Echo upstream: reflects request headers as JSON so assertions can inspect them.
   echo:

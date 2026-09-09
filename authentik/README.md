@@ -203,6 +203,12 @@ In the Authentik admin UI:
   domain exactly (scheme included).
 - **`502` from the outpost path.** BunkerWeb can't reach `AUTHENTIK_URL` -
   check the Docker network membership and that the Authentik service is up.
+- **`502` from the outpost path with `SSL_do_handshake() failed ... while SSL
+handshaking to upstream` in the error log.** An HTTPS `AUTHENTIK_URL` whose
+  front terminates TLS (Cloudflare, a shared ingress, ...) needs SNI. The
+  plugin sends it; if you still see this, an `ssl_verify` failure is the more
+  likely cause - the outpost's certificate must chain to a public CA, or set
+  `AUTHENTIK_SSL_VERIFY=no` for a private/self-signed one.
 - **Auth subrequests time out.** Increase `AUTHENTIK_TIMEOUT`, or move the
   Authentik outpost closer to BunkerWeb (ideally same Docker network).
 - **Bots are still hitting Authentik.** They shouldn't be - `bad_behavior`
