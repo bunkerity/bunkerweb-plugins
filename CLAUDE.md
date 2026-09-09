@@ -63,7 +63,7 @@ Two tradeoffs of tracking upstream: (1) the `dev` branch no longer tests against
 
 ## Releasing (`.github/workflows/release.yml`)
 
-Releases are cut automatically from `main`. After `Tests` succeeds there, a `Release` workflow (a `workflow_run` trigger on the `Tests` workflow) reads the plugin version from `plugin.json` and, if no release `v<version>` exists yet (**drafts included** — it matches `tag_name` via `gh api`, since a draft has no git tag), opens a **draft** GitHub release with `softprops/action-gh-release` and auto-generated notes. A maintainer reviews and publishes it; a push that doesn't bump the version is a no-op. Two consequences of the `workflow_run` model: the file only fires once it is on the default branch (`main`), and it can't be tested from `dev`. So **cutting a release = `./misc/update_version.sh <ver>` → merge to `main` → publish the draft** the workflow creates.
+Releases start with a maintainer-signed annotated tag matching the plugin version, pushed after `Tests` succeeds on `main`. Like BunkerWeb, CI verifies the tag through GitHub; it stores no private signing key. The workflow requires the tagged commit to equal current `main`, the tag signature to be GitHub-verified and target that commit, and a successful `Tests` push run on `main` for the same SHA. It creates a draft with generated notes unless a release or draft already exists. A maintainer reviews and publishes the draft. See the root README for the release procedure.
 
 ## Linting — pre-commit is the source of truth
 

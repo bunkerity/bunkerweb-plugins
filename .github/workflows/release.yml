@@ -1,32 +1,25 @@
-name: Release
+name: Release (signed tag)
 
-# Cut a GitHub release once per plugin version bump. Mirrors the release-creation
-# step of bunkerity/bunkerweb (softprops/action-gh-release, pinned SHA, draft for
-# human review) without the heavy build matrix the plugins repo does not need.
-#
-# Fires only after the "Tests" workflow succeeds on main, and only when the
-# version in plugin.json does not already have a release — so a normal push to
-# main that does not bump the version is a no-op.
+# Like BunkerWeb, a maintainer signs and pushes the tag; CI verifies it before
+# creating a draft. No private signing key is stored in this workflow.
 
 on:
-  workflow_run:
-    workflows: [Tests]
-    types: [completed]
-    branches: [main]
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   release:
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the tag + release
+      actions: read # verify Tests succeeded for this commit on main
     steps:
       - name: Checkout main
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -34,14 +27,17 @@ jobs:
           # Use the protected branch, then verify it still matches the tested commit.
           ref: main
           fetch-depth: 0 # full history so generated release notes are complete
+          persist-credentials: false
 
       - name: Verify main is the tested commit
         env:
-          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          TESTED_SHA: ${{ github.sha }}
         run: test "$(git rev-parse HEAD)" = "$TESTED_SHA"
 
       - name: Resolve plugin version
         id: version
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           # All plugin.json carry the same version (kept in lockstep by
           # misc/update_version.sh), so any one of them is the source of truth.
@@ -52,19 +48,37 @@ jobs:
             exit 1
             ;;
           esac
+          test "$TAG" = "v$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify signed tag and successful tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag_ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG")"
+          if ! jq -e '.object.type == "tag"' <<<"$tag_ref" >/dev/null; then
+            echo "::error::$TAG must be an annotated, signed tag"
+            exit 1
+          fi
+          object_sha="$(jq -r '.object.sha' <<<"$tag_ref")"
+          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha")"
+          if ! jq -e --arg sha "$GITHUB_SHA" '.verification.verified == true and .object.type == "commit" and .object.sha == $sha' <<<"$tag_object" >/dev/null; then
+            echo "::error::$TAG must have a GitHub-verified signature and target the triggering commit"
+            exit 1
+          fi
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?branch=main&event=push&head_sha=$GITHUB_SHA&status=success&per_page=100" |
+            jq -e --arg sha "$GITHUB_SHA" 'any(.[].workflow_runs[]; .head_sha == $sha and .head_branch == "main" and .event == "push" and .conclusion == "success")' >/dev/null
 
       - name: Skip if this version is already released
         id: guard
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
-          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          # Match on tag_name across ALL releases, drafts included. A draft has
-          # no git tag until it is published, so `gh release view <tag>` would
-          # miss an unpublished draft and we'd create a duplicate on every push.
+          # Match across ALL releases, including unpublished drafts.
           # The assignment aborts the step if `gh api` fails (no fail-open to
           # "create" on an auth/network error).
           tags="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name')"
@@ -72,14 +86,6 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release $TAG already exists (including drafts) — nothing to do."
           else
-            refs="$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"
-            if [ -n "$refs" ]; then
-              tag_sha="$(awk '/\^\{\}$/ { peeled=$1 } { direct=$1 } END { print peeled ? peeled : direct }' <<<"$refs")"
-              if [ "$tag_sha" != "$TESTED_SHA" ]; then
-                echo "::error::Tag $TAG already points to a different commit"
-                exit 1
-              fi
-            fi
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "No release for $TAG yet — creating a draft."
           fi
@@ -89,7 +95,7 @@ jobs:
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.version.outputs.tag }}
           draft: true # published by a maintainer after a quick review
           generate_release_notes: true # auto-changelog from merged PRs/commits

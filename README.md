@@ -46,10 +46,16 @@ root and add the matching version to `COMPATIBILITY.json`, listing the BunkerWeb
 versions validated by the integration suite. CI checks that every plugin uses the
 same version and that its compatibility entry includes the resolved BunkerWeb tag.
 
-After `Tests` succeeds on `main`, the release workflow creates a draft with generated
-release notes, unless that version already has a release or draft. It verifies that
-the checked-out commit matches the tested commit before reading release metadata.
-A maintainer reviews and publishes the draft.
+After `Tests` succeeds on `main`, a maintainer creates and pushes a signed annotated
+tag matching the plugin version (for example, `v1.12`). The signing key must be
+registered with the maintainer's GitHub account so GitHub can verify the signature.
+CI holds no private signing key.
+
+The tag push triggers the release workflow. It requires the tag to match the version
+and current `main` commit, a verified signature targeting that commit, and a successful
+`Tests` push run on `main` for that exact commit. Lightweight, unsigned, and mismatched
+tags are rejected. An existing release or draft is left alone; otherwise the workflow
+creates a draft with generated release notes for a maintainer to review and publish.
 
 # Support
 
