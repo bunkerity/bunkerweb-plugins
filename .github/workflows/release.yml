@@ -69,8 +69,11 @@ jobs:
             echo "::error::$TAG must have a GitHub-verified signature and target the triggering commit"
             exit 1
           fi
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?branch=main&event=push&head_sha=$GITHUB_SHA&status=success&per_page=100" |
-            jq -e --arg sha "$GITHUB_SHA" 'any(.[].workflow_runs[]; .head_sha == $sha and .head_branch == "main" and .event == "push" and .conclusion == "success")' >/dev/null
+          if ! gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?branch=main&event=push&head_sha=$GITHUB_SHA&status=success&per_page=100" |
+            jq -e --arg sha "$GITHUB_SHA" 'any(.[].workflow_runs[]; .head_sha == $sha and .head_branch == "main" and .event == "push" and .conclusion == "success")' >/dev/null; then
+            echo "::error::Cannot confirm successful Tests on main for $GITHUB_SHA. Rerun this release after Tests succeeds for that commit."
+            exit 1
+          fi
 
       - name: Skip if this version is already released
         id: guard
