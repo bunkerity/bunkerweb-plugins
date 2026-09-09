@@ -18,14 +18,14 @@ Every plugin follows the same BunkerWeb-imposed layout:
 
 Coraza is special: it also ships `coraza/api/` — a standalone Go HTTP service (`main.go`, built by `coraza/api/Dockerfile`) that wraps `corazawaf/coraza/v3` and is called over HTTP by `coraza.lua`. Image is published as `bunkerity/bunkerweb-coraza`. CRS rules are vendored at build time by `crs.sh` (pinned to a commit hash, `.git` stripped).
 
-## Versioning — two different version numbers
+## Versioning and compatibility
 
-There are **two unrelated version streams**, easy to confuse:
+Release metadata lives in two places:
 
-1. **Individual plugin version** in each `plugin.json` (currently `1.11`). Bump with `./misc/update_version.sh <new_version>` **run from the repo root** (it uses `find .` + `README.md` relative paths) — it rewrites every `plugin.json` **and the README badge** to that plugin version (see `misc/update_version.sh:17-18`).
-2. **Plugins-collection version** in `COMPATIBILITY.json`, which maps a collection version (currently `1.8`) to the BunkerWeb versions it supports (e.g. `"1.8": ["1.6.0", ...]`). Controls compatibility gates.
+1. **Individual plugin version** in each `plugin.json` (currently `1.12`). Bump with `./misc/update_version.sh <new_version>` **run from the repo root** (it uses `find .` + `README.md` relative paths) — it rewrites every `plugin.json` **and the README badge** to that plugin version.
+2. **Plugins-collection compatibility** in `COMPATIBILITY.json`. Historical entries used a separate version stream. Starting with `1.12`, add an entry matching the plugin release version and list only validated BunkerWeb versions (`1.6.14` for `1.12`). CI checks the entry for the actual manifest version, not the highest historical key.
 
-These two streams are independent and `update_version.sh` only touches (1) — it now updates the README badge too (the badge's sed pattern was anchored on a leading `"` that never matched the shields.io URL, so the badge silently froze; fixed to anchor on `/badge/`, so it tracks the plugin version automatically). When bumping: run the script for (1), and edit `COMPATIBILITY.json` by hand for (2).
+`update_version.sh` only touches (1) and the README badges. When bumping: run the script for (1), and edit `COMPATIBILITY.json` by hand for (2). Preserve historical compatibility entries.
 
 ## Testing
 
@@ -57,7 +57,7 @@ Runs on push to `dev` and `main`. A `tag` job resolves the **latest stable Bunke
 5. **integration** — `needs: [tag, lint, unit]`, matrix `plugin: [clamav, cloudflare, coraza, virustotal, authentik, notifier, sentinelone, syswarden]` — every per-plugin script above, none excluded; each runs `.tests/bw.sh <tag>` then `.tests/<plugin>.sh`.
 6. **build-push** — `main` only, `needs: [plumber, tag, integration]` so a failing supply-chain scan blocks publishing: `./.tests/build-push.sh <tag>` builds and pushes the `bunkerweb-coraza` image.
 
-There is **no pinned BW version** — the `tag` job always resolves the latest stable release, so the tests track upstream automatically (`COMPATIBILITY.json` is not consulted here). The resolved tag flows into `bw.sh` (pulls `bunkerity/bunkerweb[-scheduler]:<tag>`) and, on `main`, into `build-push.sh` (which also tags the pushed `bunkerweb-coraza` image with it). The job fails fast if the API returns an empty or pre-release (hyphenated) tag.
+There is **no pinned BW version** — the `tag` job always resolves the latest stable release, so the tests track upstream automatically. It then checks that all plugin versions agree and their `COMPATIBILITY.json` entry declares that BunkerWeb tag. The resolved tag flows into `bw.sh` (pulls `bunkerity/bunkerweb[-scheduler]:<tag>`) and, on `main`, into `build-push.sh` (which also tags the pushed `bunkerweb-coraza` image with it). The job fails fast if the API returns an empty or pre-release (hyphenated) tag.
 
 Two tradeoffs of tracking upstream: (1) the `dev` branch no longer tests against BunkerWeb's `dev` build, so a plugin change that relies on an unreleased BW feature gets no CI coverage until BW ships a stable release; (2) every `main` push republishes `bunkerweb-coraza:latest` (and `:<stable>`) — harmless here because that image is a self-contained Go binary + vendored CRS, independent of the BW base tag, so only the extra tag's value moves.
 

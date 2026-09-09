@@ -2,7 +2,7 @@
   "id": "cloudflare",
   "name": "Cloudflare",
   "description": "Effortlessly configure Cloudflare's trusted IPs and manage Origin CA certificates.",
-  "version": "1.11",
+  "version": "1.12",
   "stream": "partial",
   "settings": {
     "USE_CLOUDFLARE": {

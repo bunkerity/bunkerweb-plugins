@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     if: github.event.workflow_run.conclusion == 'success'
@@ -27,16 +31,14 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          # Deliberately NOT `ref: github.event.workflow_run.head_sha`: checking
-          # out an event-supplied ref under a `workflow_run` trigger is the
-          # tj-actions / CVE-2025-30066 pattern (Plumber ISSUE-802), and Plumber
-          # cannot see that "Tests" only ever runs on a push to dev/main and so
-          # is never fork-controlled. `main` is the same commit in practice — the
-          # trigger is already filtered to that branch — and only the version
-          # string is read from the tree. The release stays pinned to the exact
-          # tested commit through `target_commitish` below.
+          # Use the protected branch, then verify it still matches the tested commit.
           ref: main
           fetch-depth: 0 # full history so generated release notes are complete
+
+      - name: Verify main is the tested commit
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: test "$(git rev-parse HEAD)" = "$TESTED_SHA"
 
       - name: Resolve plugin version
         id: version
@@ -58,6 +60,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           # Match on tag_name across ALL releases, drafts included. A draft has
           # no git tag until it is published, so `gh release view <tag>` would
@@ -69,6 +72,14 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release $TAG already exists (including drafts) — nothing to do."
           else
+            refs="$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"
+            if [ -n "$refs" ]; then
+              tag_sha="$(awk '/\^\{\}$/ { peeled=$1 } { direct=$1 } END { print peeled ? peeled : direct }' <<<"$refs")"
+              if [ "$tag_sha" != "$TESTED_SHA" ]; then
+                echo "::error::Tag $TAG already points to a different commit"
+                exit 1
+              fi
+            fi
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "No release for $TAG yet — creating a draft."
           fi

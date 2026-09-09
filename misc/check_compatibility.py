@@ -2,8 +2,8 @@
 """Assert COMPATIBILITY.json declares the BunkerWeb version the tests actually run against.
 
 `COMPATIBILITY.json` is the table users read to decide whether this plugin collection
-supports their BunkerWeb. Nothing in CI consults it, so it drifts in silence: it still
-stopped at 1.6.11 while the integration suite had been green against 1.6.14 for weeks.
+supports their BunkerWeb. CI checks the entry matching the shared manifest version
+so an older collection entry cannot silently validate a new release.
 
 Usage:  check_compatibility.py <bunkerweb-version> [path/to/COMPATIBILITY.json]
 Exits 1 with a GitHub-annotated error when the version is not declared.
@@ -19,9 +19,11 @@ def latest_collection(data):
     return max(data, key=lambda key: [int(part) for part in key.split(".")])
 
 
-def check(data, version):
+def check(data, version, collection=None):
     """Return an error message, or None when the version is declared."""
-    latest = latest_collection(data)
+    latest = collection or latest_collection(data)
+    if latest not in data:
+        return f"COMPATIBILITY.json has no entry for collection {latest}."
     if version in data[latest]:
         return None
     return (
@@ -37,11 +39,17 @@ def main():
     version = argv[1]
     path = Path(argv[2]) if len(argv) == 3 else Path(__file__).resolve().parent.parent / "COMPATIBILITY.json"
     data = loads(path.read_text())
-    problem = check(data, version)
+    manifests = sorted(path.parent.glob("*/plugin.json"))
+    versions = {loads(manifest.read_text())["version"] for manifest in manifests}
+    if len(versions) != 1:
+        print(f"::error::Expected one shared plugin version, got {sorted(versions)}")
+        return 1
+    collection = versions.pop()
+    problem = check(data, version, collection)
     if problem:
         print(f"::error::{problem}")
         return 1
-    print(f"COMPATIBILITY.json collection {latest_collection(data)} declares BunkerWeb {version}")
+    print(f"COMPATIBILITY.json collection {collection} declares BunkerWeb {version}")
     return 0
 
 

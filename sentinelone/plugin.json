@@ -2,7 +2,7 @@
   "id": "sentinelone",
   "name": "SentinelOne",
   "description": "Automatic scan of uploaded files (hash reputation) and client IPs (threat-intelligence IOCs) with the SentinelOne API.",
-  "version": "1.11",
+  "version": "1.12",
   "stream": "partial",
   "settings": {
     "USE_SENTINELONE": {

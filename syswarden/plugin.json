@@ -2,7 +2,7 @@
   "id": "syswarden",
   "name": "SysWarden",
   "description": "Turn BunkerWeb's Layer 7 bans into kernel-level nftables drops with SysWarden, and deny SysWarden's blocklist at Layer 7.",
-  "version": "1.11",
+  "version": "1.12",
   "stream": "partial",
   "settings": {
     "USE_SYSWARDEN": {

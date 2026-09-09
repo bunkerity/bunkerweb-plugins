@@ -162,10 +162,10 @@ reviews:
 
     - path: "COMPATIBILITY.json"
       instructions: |
-        `COMPATIBILITY.json` maps a plugins-collection version to the BunkerWeb versions it supports. This is a different version stream from the per-plugin `plugin.json` version:
+        `COMPATIBILITY.json` maps a plugins-collection version to the BunkerWeb versions it supports. Historical entries used a separate version stream; from 1.12 onward, the key matches the shared `plugin.json` release version:
           - New entries must use ascending collection versions and reference real, released BunkerWeb tags.
           - Do not collapse, reorder, or drop historical mappings — older BunkerWeb deployments rely on them.
-          - When a new collection version is introduced, ensure the README badge and, where relevant, the hardcoded BW tag in `.github/workflows/tests.yml` move together.
+          - When a new collection version is introduced, ensure the plugin manifests and README badges match it. CI resolves the latest stable BunkerWeb tag and checks that the matching compatibility entry declares it.
 
     - path: "coraza/api/**/*.go"
       instructions: |

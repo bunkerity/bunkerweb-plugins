@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.11-blue" />
+	<img src="https://img.shields.io/badge/bunkerweb_plugins-1.12-blue" />
 	<img src="https://img.shields.io/github/last-commit/bunkerity/bunkerweb-plugins" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=dev&label=CI%2FCD%20dev" />
 	<img src="https://img.shields.io/github/actions/workflow/status/bunkerity/bunkerweb-plugins/tests.yml?branch=main&label=CI%2FCD%20main" />
@@ -33,6 +33,23 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 - [SysWarden](https://github.com/bunkerity/bunkerweb-plugins/tree/main/syswarden)
 - [VirusTotal](https://github.com/bunkerity/bunkerweb-plugins/tree/main/virustotal)
 - [WebHook](https://github.com/bunkerity/bunkerweb-plugins/tree/main/webhook)
+
+# Compatibility and releases
+
+Release **1.12** supports **BunkerWeb 1.6.14**. The compatibility declaration
+applies to all 11 plugins listed above. Historical declarations are preserved in
+[COMPATIBILITY.json](COMPATIBILITY.json); older BunkerWeb versions have not been
+revalidated for 1.12.
+
+To prepare a release, run `bash misc/update_version.sh <version>` from the repository
+root and add the matching version to `COMPATIBILITY.json`, listing the BunkerWeb
+versions validated by the integration suite. CI checks that every plugin uses the
+same version and that its compatibility entry includes the resolved BunkerWeb tag.
+
+After `Tests` succeeds on `main`, the release workflow creates a draft with generated
+release notes, unless that version already has a release or draft. It verifies that
+the checked-out commit matches the tested commit before reading release metadata.
+A maintainer reviews and publishes the draft.
 
 # Support
 

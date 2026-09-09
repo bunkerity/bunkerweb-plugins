@@ -2,7 +2,7 @@
   "id": "coraza",
   "name": "Coraza",
   "description": "Inspect and block malicious requests with the Coraza WAF engine running the OWASP Core Rule Set.",
-  "version": "1.11",
+  "version": "1.12",
   "stream": "no",
   "settings": {
     "USE_CORAZA": {
