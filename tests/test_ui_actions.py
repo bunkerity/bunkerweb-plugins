@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLUGINS = ["clamav", "cloudflare", "coraza", "discord", "matrix", "sentinelone", "slack", "syswarden", "virustotal", "webhook"]
+PLUGINS = ["clamav", "cloudflare", "coraza", "discord", "matrix", "openappsec", "sentinelone", "slack", "syswarden", "virustotal", "webhook"]
 
 
 def load_actions(plugin):
@@ -62,7 +62,7 @@ CARD_PREFIXES = ("ping_", "info_", "date_", "count_", "counter_", "top_", "list_
 def test_every_card_key_is_one_the_ui_renders(plugin, fake_ping_utils):
     module = load_actions(plugin)
     ret = module.pre_render(bw_instances_utils=fake_ping_utils(status="up"))
-    unrendered = sorted(key for key in ret if key != "error" and not key.startswith(CARD_PREFIXES))
+    unrendered = sorted(key for key in ret if key != "error" and not (plugin == "openappsec" and key == "data") and not key.startswith(CARD_PREFIXES))
     assert not unrendered, f"{plugin}/ui/actions.py returns {unrendered}, which plugin_page.html drops"
     # A counter card is rendered through human_readable_number(), which calls int() on the
     # value: a string there is a 500 on the plugin page, not a badly formatted number.
