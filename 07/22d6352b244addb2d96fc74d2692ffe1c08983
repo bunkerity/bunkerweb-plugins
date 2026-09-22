@@ -1,0 +1,19 @@
+.tests/openappsec.sh
+  s_5765503030423a::t_61484e30248990 58-80,222,226,230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0722d6352b244addb2d96fc74d2692ffe1c08983",
+  "prompts": {},
+  "sessions": {
+    "s_5765503030423a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8115552a-34c2-4993-ba26-6ba9cf0ff251",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
