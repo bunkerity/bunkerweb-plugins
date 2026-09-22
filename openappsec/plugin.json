@@ -2,7 +2,7 @@
   "id": "openappsec",
   "name": "open-appsec",
   "description": "Inspect and block malicious requests with the open-appsec agent.",
-  "version": "1.12",
+  "version": "1.13",
   "stream": "no",
   "settings": {
     "USE_OPENAPPSEC": {
