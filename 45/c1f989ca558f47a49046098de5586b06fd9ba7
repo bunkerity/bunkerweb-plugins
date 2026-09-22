@@ -1,0 +1,70 @@
+cloudflare/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+slack/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+slack/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+webhook/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+matrix/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+discord/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+virustotal/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+authentik/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+COMPATIBILITY.json
+  s_5765503030423a::t_44020760ea1771 33-34
+coraza/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+virustotal/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+cloudflare/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+syswarden/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+coraza/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+sentinelone/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+clamav/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+README.md
+  s_5765503030423a::t_44020760ea1771 40-41,43,51
+  s_5765503030423a::t_7f4dd66e77a6d0 6
+openappsec/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+clamav/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+openappsec/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+authentik/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+matrix/README.md
+  s_5765503030423a::t_7f4dd66e77a6d0 3
+discord/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+syswarden/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+webhook/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+sentinelone/plugin.json
+  s_5765503030423a::t_7f4dd66e77a6d0 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45c1f989ca558f47a49046098de5586b06fd9ba7",
+  "prompts": {},
+  "sessions": {
+    "s_5765503030423a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8115552a-34c2-4993-ba26-6ba9cf0ff251",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
