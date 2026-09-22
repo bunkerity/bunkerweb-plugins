@@ -1,6 +1,6 @@
 # Authentik plugin
 
-![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.12-blue)
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.13-blue)
 
 ```mermaid
 flowchart TD
