@@ -1,0 +1,125 @@
+services:
+  bunkerweb:
+    image: bunkerity/bunkerweb:1.6.0-rc1
+    # No host port mapping: the tests reach BunkerWeb in-network from the client
+    # container (bunkerweb:8080), so publishing 80/443 only risks an "address already
+    # in use" clash with anything else on the host or CI runner.
+    environment:
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    networks:
+      - bw-universe
+      - bw-services
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.0-rc1
+    depends_on:
+      - bunkerweb
+    volumes:
+      - ./bw-data/plugins:/data/plugins
+    environment:
+      - BUNKERWEB_INSTANCES=bunkerweb
+      # Multisite on purpose, and it is not decoration: it is what every UI-managed
+      # deployment runs, and it changes how the Lua side resolves settings. Once it is on,
+      # utils.has_variable() reads the per-service tables only, and load_variables() fills
+      # those from `<server>_`-prefixed entries alone, so a plugin that gates itself on a
+      # global setting through that helper silently switches off and a single-site run
+      # cannot see it. Nothing else here needs prefixing: the scheduler derives every
+      # `<server>_<SETTING>` entry from the global value on its own.
+      - MULTISITE=yes
+      # www2 overrides the fail mode per service (multisite context) so the suite can
+      # assert both branches of OPENAPPSEC_FAIL_MODE while the judge is stopped.
+      - SERVER_NAME=www.example.com www2.example.com
+      - www2.example.com_OPENAPPSEC_FAIL_MODE=closed
+      # Exclusions are per service too: /healthz and OPTIONS never reach the judge on www.
+      - www.example.com_OPENAPPSEC_EXCLUDED_URIS=^/healthz$
+      - www.example.com_OPENAPPSEC_EXCLUDED_METHODS=OPTIONS
+      - www2.example.com_OPENAPPSEC_EXCLUDED_URIS=^/healthz$
+      - API_WHITELIST_IP=127.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      - USE_OPENAPPSEC=yes
+      - OPENAPPSEC_API=http://bw-openappsec
+      - OPENAPPSEC_CANARY_INTERVAL=10
+      - www2.example.com_OPENAPPSEC_CANARY_FAIL=yes
+      - LOG_LEVEL=info
+      - USE_BAD_BEHAVIOR=no
+      - USE_LIMIT_REQ=no
+      - USE_BUNKERNET=no
+      - USE_BLACKLIST=no
+      - USE_MODSECURITY=no
+      - USE_REVERSE_PROXY=yes
+      - REVERSE_PROXY_HOST=http://hello:8080
+      - REVERSE_PROXY_URL=/
+    networks:
+      - bw-universe
+
+  bw-openappsec:
+    image: ghcr.io/openappsec/agent-unified:1.1.36
+    command: /cp-nano-agent
+    depends_on:
+      - bw-openappsec-echo
+    environment:
+      - autoPolicyLoad=true
+      - registered_server=NGINX
+      - user_email=ci@bunkerity.com
+    volumes:
+      - ./judge/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./appsec-logs:/var/log/nano_agent
+      - ./appsec-localconfig:/ext/appsec:rw
+    healthcheck:
+      # The judge's nginx answers 200 for everything until the attachment registers with the
+      # agent, and keeps answering (or stops answering) if the agent's transaction handler
+      # dies: only a known-bad request coming back 403 proves it is enforcing.
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s -o /dev/null -w '%{http_code}' -H 'Host: healthcheck.invalid' 'http://127.0.0.1/?id=/etc/passwd' | grep -q 403",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    networks:
+      - bw-universe
+
+  bw-openappsec-echo:
+    image: hashicorp/http-echo:1.0.0
+    command: ["-text=ok"]
+    networks:
+      - bw-universe
+
+  bw-openappsec-fake:
+    image: nginx:1.27-alpine
+    profiles: [fake]
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /etc/nginx/conf.d/default.conf <<'EOF'
+        server {
+            listen 80;
+            add_header X-Openappsec-Judge pass always;
+            return 200 "fake judge";
+        }
+        EOF
+        nginx -g 'daemon off;'
+    networks:
+      bw-universe:
+        aliases:
+          - bw-openappsec
+
+  hello:
+    image: nginxdemos/nginx-hello
+    networks:
+      - bw-services
+
+  client:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    networks:
+      - bw-services
+
+networks:
+  # Deliberately unnamed and unpinned: a `name:` makes the network global to the Docker
+  # daemon, so two of these suites (or a developer's own BunkerWeb stack) collide on one
+  # bw-universe and its hardcoded subnet. Compose prefixes them per project instead.
+  bw-universe:
+  bw-services:

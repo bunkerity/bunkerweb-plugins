@@ -156,6 +156,7 @@ jobs:
             notifier,
             sentinelone,
             syswarden,
+            openappsec,
           ]
     steps:
       - name: Checkout source code

@@ -1,0 +1,145 @@
+{
+  "id": "openappsec",
+  "name": "open-appsec",
+  "description": "Inspect and block malicious requests with the open-appsec agent.",
+  "version": "1.12",
+  "stream": "no",
+  "settings": {
+    "USE_OPENAPPSEC": {
+      "context": "multisite",
+      "default": "no",
+      "help": "Activate open-appsec request inspection for this site.",
+      "id": "use-openappsec",
+      "label": "Use open-appsec",
+      "regex": "^(no|yes)$",
+      "type": "check"
+    },
+    "OPENAPPSEC_API": {
+      "context": "global",
+      "default": "http://bw-openappsec",
+      "help": "Base URL (scheme + host[:port]) of the open-appsec judge sidecar, e.g. http://bw-openappsec. The judge listens on port 80 so open-appsec host rules match without a port suffix.",
+      "id": "openappsec-api",
+      "label": "Open-appsec Api",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "OPENAPPSEC_FAIL_MODE": {
+      "context": "multisite",
+      "default": "open",
+      "help": "Choose whether requests are allowed or denied when the open-appsec judge is unreachable.",
+      "id": "openappsec-fail-mode",
+      "label": "Open-appsec Fail Mode",
+      "regex": "^(open|closed)$",
+      "type": "select",
+      "select": ["open", "closed"]
+    },
+    "OPENAPPSEC_CONNECT_TIMEOUT": {
+      "context": "global",
+      "default": "1000",
+      "help": "Milliseconds to wait for a TCP connection to the judge before giving up (then OPENAPPSEC_FAIL_MODE applies).",
+      "id": "openappsec-connect-timeout",
+      "label": "Open-appsec Connect Timeout",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "OPENAPPSEC_READ_TIMEOUT": {
+      "context": "global",
+      "default": "5000",
+      "help": "Milliseconds to wait for the judge's verdict once connected; covers sending the replay and reading the answer.",
+      "id": "openappsec-read-timeout",
+      "label": "Open-appsec Read Timeout",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "OPENAPPSEC_ERROR_COOLDOWN": {
+      "context": "global",
+      "default": "0",
+      "help": "Seconds during which a worker skips the judge after an error (fail mode applied immediately, no timeout per request). 0 disables the cooldown.",
+      "id": "openappsec-error-cooldown",
+      "label": "Open-appsec Error Cooldown",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "OPENAPPSEC_INSPECT_BODY": {
+      "context": "multisite",
+      "default": "yes",
+      "help": "Replay the request body to the judge. Set to no to inspect headers, URI and query string only.",
+      "id": "openappsec-inspect-body",
+      "label": "Open-appsec Inspect Body",
+      "regex": "^(no|yes)$",
+      "type": "check"
+    },
+    "OPENAPPSEC_MAX_BODY_SIZE": {
+      "context": "multisite",
+      "default": "0",
+      "help": "Bodies larger than this many bytes are not replayed (headers only). 0 means no limit.",
+      "id": "openappsec-max-body-size",
+      "label": "Open-appsec Max Body Size",
+      "regex": "^[0-9]+$",
+      "type": "text"
+    },
+    "OPENAPPSEC_EXCLUDED_URIS": {
+      "context": "multisite",
+      "default": "",
+      "help": "Space-separated PCRE regexes matched against the request path (no query string); matching requests skip open-appsec, e.g. ^/healthz$ ^/webhooks/.",
+      "id": "openappsec-excluded-uris",
+      "label": "Open-appsec Excluded Uris",
+      "regex": "^.*$",
+      "type": "text"
+    },
+    "OPENAPPSEC_EXCLUDED_METHODS": {
+      "context": "multisite",
+      "default": "",
+      "help": "Space-separated HTTP methods that skip open-appsec, e.g. OPTIONS HEAD.",
+      "id": "openappsec-excluded-methods",
+      "label": "Open-appsec Excluded Methods",
+      "regex": "^([A-Za-z]+( [A-Za-z]+)*)?$",
+      "type": "text"
+    },
+    "OPENAPPSEC_STRIP_HEADERS": {
+      "context": "multisite",
+      "default": "",
+      "help": "Space-separated request header names removed from the copy sent to the judge, e.g. authorization cookie. Privacy at the cost of detection on those headers.",
+      "id": "openappsec-strip-headers",
+      "label": "Open-appsec Strip Headers",
+      "regex": "^([A-Za-z0-9-]+( [A-Za-z0-9-]+)*)?$",
+      "type": "text"
+    },
+    "OPENAPPSEC_CANARY_INTERVAL": {
+      "context": "global",
+      "default": "60",
+      "help": "Seconds between enforcement canaries: a known-bad request sent to the judge to prove it still blocks. 0 disables the canary.",
+      "id": "openappsec-canary-interval",
+      "label": "Open-appsec Canary Interval",
+      "regex": "^[0-9]+$",
+      "type": "number"
+    },
+    "OPENAPPSEC_CANARY_FAIL": {
+      "context": "multisite",
+      "default": "no",
+      "help": "When the canary reports that the judge is no longer enforcing (it accepted a known-bad request), treat every request as a judge error so OPENAPPSEC_FAIL_MODE applies.",
+      "id": "openappsec-canary-fail",
+      "label": "Open-appsec Canary Fail",
+      "regex": "^(no|yes)$",
+      "type": "check"
+    },
+    "OPENAPPSEC_EVENTS_DIR": {
+      "context": "global",
+      "default": "/var/log/openappsec",
+      "help": "Directory inside the web UI container where the judge's agent log directory (/var/log/nano_agent) is mounted read-only. Feeds the open-appsec events view. Empty disables it.",
+      "id": "openappsec-events-dir",
+      "label": "Open-appsec Events Dir",
+      "regex": "^(/[^\\s]*)?$",
+      "type": "text"
+    },
+    "OPENAPPSEC_POLICY_PATH": {
+      "context": "global",
+      "default": "/etc/openappsec/local_policy.yaml",
+      "help": "Path inside the web UI container of the judge's local_policy.yaml (shared volume, writable by the UI, JSON syntax). Enables exceptions and per-service mode from the web UI. Empty disables it.",
+      "id": "openappsec-policy-path",
+      "label": "Open-appsec Policy Path",
+      "regex": "^(/[^\\s]*)?$",
+      "type": "text"
+    }
+  }
+}

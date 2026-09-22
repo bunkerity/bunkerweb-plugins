@@ -1,0 +1,1263 @@
+{% set cards = pre_render.get("data", {}) if pre_render is mapping else {} %} {%
+set ui_data = cards.get("data", {}) if cards is mapping else {} %} {% set
+policy_edit_info = ui_data.get("policy_editable", {}) %} {% set policy_editable
+= policy_edit_info.get("editable", false) if policy_edit_info is mapping else
+policy_edit_info %} {% set policy_edit_reason = policy_edit_info.get("reason",
+"") if policy_edit_info is mapping else "" %} {% set service_modes = ["inherit",
+"prevent-learn", "detect-learn", "prevent", "detect", "inactive"] %} {% set
+policy_modes = ["prevent-learn", "detect-learn", "prevent", "detect",
+"inactive"] %} {% set policy_mtime = ui_data.get("policy_mtime") %}
+
+<input type="hidden" id="openappsec-csrf" value="{{ csrf_token() }}" />
+<div
+  id="openappsec-alert"
+  class="alert alert-danger{% if not cards.get('error') %} d-none{% endif %}"
+  role="alert"
+>
+  {{ cards.get("error", "") }}
+</div>
+
+{% macro condition_lines(values) %} {% set items = [values] if values is string
+else values|list %}
+<span title="{{ items|join(', ') }}">
+  {% for value in items[:3] %}<span
+    class="d-block text-truncate oas-truncate"
+    title="{{ value }}"
+    >{{ value }}</span
+  >{% else %}—{% endfor %} {% if items|length > 3 %}<span class="d-block"
+    >+{{ items|length - 3 }} more</span
+  >{% endif %}
+</span>
+{% endmacro %} {% macro values_text(values) %}{% if values is string %}{{ values
+}}{% elif values is iterable %}{{ values|join(", ") }}{% else %}{{ values }}{%
+endif %}{% endmacro %} {% macro mode_badge(modes) %}{% set mode = modes[0] if
+modes|length == 1 else 'Mixed modes' if modes else 'unknown' %}{% set color =
+'warning' if mode.startswith('detect') else 'success' if
+mode.startswith('prevent') else 'secondary' %}<span
+  class="badge oas-badge-{{ color }}"
+  >{{ mode }}</span
+>{% endmacro %} {% macro event_buttons() %}
+<div class="d-flex flex-wrap gap-2">
+  <button
+    type="button"
+    class="btn btn-sm btn-outline-danger"
+    data-bs-toggle="modal"
+    data-bs-target="#openappsec-ban-modal"
+  >
+    Ban</button
+  ><button
+    type="button"
+    class="btn btn-sm btn-outline-primary"
+    data-action="prefill-exception"
+    {%
+    if
+    not
+    policy_editable
+    %}disabled{%
+    endif
+    %}
+  >
+    Add exception
+  </button>
+</div>
+{% endmacro %}
+<style>
+  .oas-heatmap-scroll {
+    position: relative;
+    overflow-x: auto;
+  }
+  .oas-incident,
+  #table-list-openappsec-events td:nth-child(5) {
+    min-width: 12rem;
+  }
+  .oas-service-list {
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+  .oas-truncate {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .oas-truncate.d-block {
+    max-width: 14rem;
+  }
+  .oas-heatmap {
+    border-collapse: separate;
+    border-spacing: 4px;
+    min-width: 1100px;
+    width: 100%;
+  }
+  .oas-heatmap th {
+    font-weight: 500;
+  }
+  .oas-heatmap th:first-child {
+    min-width: 150px;
+    max-width: 240px;
+  }
+  /* open-appsec brand tokens: magenta accent (openappsec.io), teal from the logo. */
+  :root {
+    --oas-accent: #ec407a;
+    --oas-accent-deep: #ad1457;
+    --oas-accent-text: #ad1457;
+    --oas-accent-soft: #fce4ec;
+    --oas-teal: #00897b;
+    --oas-teal-soft: #e0f2f1;
+    --oas-amber: #b26a00;
+    --oas-amber-soft: #fff3e0;
+  }
+  [data-bs-theme="dark"] {
+    --oas-accent: #ec407a;
+    --oas-accent-deep: #ad1457;
+    --oas-accent-text: #f48fb1;
+    --oas-accent-soft: #4a1a2e;
+    --oas-teal: #4db6ac;
+    --oas-teal-soft: #103f3a;
+    --oas-amber: #ffb74d;
+    --oas-amber-soft: #4a3410;
+  }
+  .oas-text-danger {
+    color: var(--oas-accent-text);
+  }
+  .oas-text-success {
+    color: var(--oas-teal);
+  }
+  .oas-text-warning {
+    color: var(--oas-amber);
+  }
+  .oas-text-secondary {
+    color: var(--bs-secondary-color);
+  }
+  .oas-bg-danger {
+    background: var(--oas-accent);
+  }
+  .oas-bg-success {
+    background: var(--oas-teal);
+  }
+  .oas-bg-warning {
+    background: var(--oas-amber);
+  }
+  .oas-bg-secondary {
+    background: var(--bs-secondary-bg);
+  }
+  .oas-cell {
+    text-align: center;
+    border-radius: 3px;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    padding: 0.2rem;
+    background: color-mix(
+      in srgb,
+      var(--bs-body-bg) 95%,
+      var(--bs-emphasis-color)
+    );
+    color: var(--bs-emphasis-color);
+  }
+  .oas-level-1 {
+    background: var(--oas-accent-soft);
+    color: var(--bs-emphasis-color);
+  }
+  .oas-level-2 {
+    background: color-mix(
+      in srgb,
+      var(--oas-accent) 45%,
+      var(--oas-accent-soft)
+    );
+    color: var(--bs-emphasis-color);
+  }
+  .oas-level-3 {
+    background: var(--oas-accent);
+    color: #fff;
+  }
+  .oas-level-4 {
+    background: var(--oas-accent-deep);
+    color: #fff;
+  }
+  .oas-badge-warning {
+    background: var(--oas-amber-soft);
+    color: var(--oas-amber);
+  }
+  .oas-badge-danger {
+    background: var(--oas-accent-soft);
+    color: var(--oas-accent-text);
+  }
+  .oas-badge-success {
+    background: var(--oas-teal-soft);
+    color: var(--oas-teal);
+  }
+  .oas-badge-secondary {
+    background: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-text-emphasis);
+  }
+  .oas-outcomes {
+    height: 10px;
+  }
+  .oas-denies td {
+    padding: 0.5rem 0.25rem;
+    border-bottom: 1px solid var(--bs-border-color);
+    vertical-align: top;
+  }
+  #oas-detail {
+    border-top: 3px solid var(--oas-accent);
+  }
+  #table-list-openappsec-events td {
+    padding: 0.5rem 0.75rem;
+  }
+  @media (max-width: 767.98px) {
+    #table-list-openappsec-events,
+    #table-exceptions {
+      table-layout: fixed;
+      font-size: 0.75rem;
+    }
+    #table-list-openappsec-events col,
+    #table-exceptions col {
+      width: auto !important;
+    }
+    #table-list-openappsec-events th,
+    #table-list-openappsec-events td,
+    #table-exceptions th,
+    #table-exceptions td {
+      padding: 0.5rem 0.25rem;
+      overflow-wrap: anywhere;
+    }
+    .oas-incident,
+    #table-list-openappsec-events td:nth-child(5) {
+      min-width: 0;
+    }
+    #table-list-openappsec-events .btn,
+    #table-exceptions .btn {
+      padding: 0.25rem;
+      font-size: 0.75rem;
+    }
+  }
+  @media (min-width: 992px) {
+    .oas-detail-group + .oas-detail-group {
+      border-left: 1px solid var(--bs-border-color);
+    }
+  }
+  @media (min-width: 768px) {
+    .oas-outcome + .oas-outcome {
+      border-left: 1px solid var(--bs-border-color);
+    }
+  }
+</style>
+<ul class="nav nav-tabs mb-4" role="tablist" aria-label="open-appsec">
+  {% for tab in ['overview', 'events', 'policy'] %}
+  <li class="nav-item" role="presentation">
+    <button
+      class="nav-link{% if loop.first %} active{% endif %}"
+      id="oas-tab-{{ tab }}"
+      data-bs-toggle="tab"
+      data-bs-target="#oas-pane-{{ tab }}"
+      type="button"
+      role="tab"
+      aria-controls="oas-pane-{{ tab }}"
+      aria-selected="{{ 'true' if loop.first else 'false' }}"
+    >
+      {{ tab|capitalize }}
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+<div class="tab-content">
+  <section
+    class="tab-pane active show"
+    id="oas-pane-overview"
+    role="tabpanel"
+    aria-labelledby="oas-tab-overview"
+    tabindex="0"
+  >
+    {% set outcomes = ui_data.get('outcomes', {}) %}
+    <div class="card p-4 shadow-md rounded-3 mb-4">
+      <h5 class="don-jose">Request outcomes</h5>
+      <div class="row row-cols-2 row-cols-md-5 g-3 mb-3">
+        <div class="col oas-outcome">
+          <div class="text-muted">Total</div>
+          <strong class="fs-3 text-body-emphasis fw-bold"
+            >{{ outcomes.get('total', 0) }}</strong
+          >
+          <div class="small">
+            {{ '100' if outcomes.get('total', 0) else '0' }}% of counted
+            requests
+          </div>
+        </div>
+        {% for name, color in [('accepted','success'), ('denied','danger'),
+        ('skipped','secondary'), ('errors','warning')] %} {% set item =
+        outcomes.get(name, {}) %}
+        <div class="col oas-outcome">
+          <div
+            class="d-flex justify-content-between gap-2 oas-text-{{ color }}"
+          >
+            <span
+              >{{ "Judge errors" if name == "errors" else name|capitalize
+              }}</span
+            ><span class="small">{{ item.get("pct", 0.0) }}%</span>
+          </div>
+          <strong class="fs-3 oas-text-{{ color }}"
+            >{{ item.get('count', 0) }}</strong
+          >
+          <div class="small text-body-secondary">
+            {{ {"accepted": "Judge accepted", "denied": "Judge denied",
+            "skipped": "Excluded before inspection", "errors": "Fail mode
+            applied"}[name] }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div
+        class="d-flex oas-outcomes rounded overflow-hidden"
+        aria-hidden="true"
+      >
+        {% for name, color in [('accepted','success'), ('denied','danger'),
+        ('skipped','secondary'), ('errors','warning')] %}<span
+          class="oas-bg-{{ color }}"
+          style="flex: {{ outcomes.get(name, {}).get('count', 0) }} 1 0;"
+        ></span
+        >{% endfor %}
+      </div>
+      <p class="small text-muted mt-3 mb-0">
+        BunkerWeb counters · agent event summaries below reflect the loaded log
+        sample.
+      </p>
+    </div>
+    {% set canary = ui_data.get('canary', {}) %}
+    <div class="d-flex flex-wrap align-items-center gap-3 small px-1 mb-3">
+      <strong
+        >Canary
+        <span
+          class="badge oas-badge-{{ 'success' if canary.get('state') == 'enforcing' else 'danger' if canary.get('state') == 'down' else 'warning' }}"
+          >{{ canary.get('state', 'unknown') }}</span
+        ></strong
+      >
+      <span class="text-body-secondary"
+        >{{ canary.get('latency_ms', '—') }} ms · checked
+        <span
+          class="{% if canary.get('checked_at') not in [none, '', '-', 'unknown'] %}date-field{% endif %}"
+          data-date-iso="{{ canary.get('checked_at', '') }}"
+          >{{ canary.get('checked_at') if canary.get('checked_at') not in [none,
+          '', '-'] else 'unknown' }}</span
+        ></span
+      >
+      <span class="text-body-secondary"
+        >Judge: {{ cards.get('ping_status', {}).get('value', 'unknown') }} ·
+        Agent: {{ cards.get('info_agent', {}).get('value', 'unknown') }} · {{
+        cards.get('info_agent', {}).get('events_24h', 0) }} events / 24h</span
+      >
+      <span class="ms-lg-auto text-body-secondary"
+        >Default: {{ ui_data.get('default_mode') or 'unknown' }} · {{
+        cards.get('info_policy', {}).get('host_rule_count', 0) }} host rules ·
+        {{ ui_data.get('exceptions', [])|length }} exceptions</span
+      >
+    </div>
+    {% set hm = ui_data.get('heatmap', {}) %}
+    <div class="card p-4 shadow-md rounded-3 mb-4">
+      <div class="d-flex justify-content-between flex-wrap gap-2">
+        <h5 class="don-jose">Events by hostname · 24 hours</h5>
+        <span
+          ><span class="oas-text-danger"
+            >{{ hm.get('prevent', 0) }} Prevent</span
+          >
+          ·
+          <span class="oas-text-warning"
+            >{{ hm.get('detect', 0) }} Detect</span
+          ></span
+        >
+      </div>
+      <p class="small text-body-secondary">
+        {{ hm.get('start', 'unknown') }} — {{ hm.get('end', 'unknown') }} UTC ·
+        {{ hm.get('columns', [])|sum }} events in window / {{
+        ui_data.get('loaded_event_count', 0) }} loaded · {{ hm.get('rows',
+        [])|length }} hostname rows
+      </p>
+      {% if not hm.get('rows') %}
+      <p class="text-body-secondary mb-2">
+        No agent events in the last 24 hours.
+      </p>
+      {% else %}
+      <div class="oas-heatmap-scroll">
+        <!-- prettier-ignore -->
+        <table class="oas-heatmap small" aria-label="Events by hostname over the rolling 24 hours" ><thead><tr><th scope="col">Hostname</th> {% for hour in hm.get('hours', []) %} <th scope="col" class="text-center">{{ hour }}</th> {% endfor %} <th scope="col">Total</th></tr></thead><tbody> {% for row in hm.get('rows', []) %} <tr><th scope="row" class="text-break" aria-label="{{ row.host or '(unknown)' }}" > {{ row.host or '(unknown)' }} </th> {% for count in row.cells %} <td class="oas-cell oas-level-{{ [count, 4]|min }}"> {% if count %}{{ count }}{% else %}<span class="visually-hidden" >0</span >{% endif %} </td> {% endfor %} <td class="text-center fw-semibold">{{ row.total }}</td></tr> {% endfor %} </tbody><tfoot><tr><th scope="row">Total</th> {% for count in hm.get('columns', []) %} <td class="text-center">{{ count }}</td> {% endfor %} <td class="fw-semibold">{{ hm.get('columns', [])|sum }}</td></tr></tfoot></table>
+      </div>
+      {% endif %} {% if hm.get('hidden_configured', 0) %}
+      <p class="small text-body-secondary mt-2 mb-0">
+        {{ hm.hidden_configured }} configured hostnames had no events
+      </p>
+      {% endif %}
+      <div
+        class="d-flex flex-wrap align-items-center gap-2 small mt-3"
+        aria-label="Events per cell"
+      >
+        <span>Events per cell:</span>{% for level in range(5) %}<span
+          class="oas-cell oas-level-{{ level }}"
+          >{{ '4+' if level == 4 else level }}</span
+        >{% endfor %}
+      </div>
+      <p class="small text-body-secondary mt-2 mb-0">
+        UTC bin starts · one-hour bins over the rolling 24 hours · canary and
+        health checks hidden
+      </p>
+    </div>
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-xl-7">
+        <div class="card p-4 shadow-md rounded-3 h-100">
+          <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+            <h5 class="don-jose">What attracted attention</h5>
+            <a class="btn btn-sm btn-outline-primary" href="#events"
+              >Explore events</a
+            >
+          </div>
+          <div class="row g-4">
+            {% for key, title in [('top_paths', 'Requested paths'),
+            ('top_params', 'Matched parameters')] %}
+            <div class="col-md-6">
+              <h6>{{ title }}</h6>
+              {% if key == 'top_paths' %}
+              <p class="small text-body-secondary">
+                {{ ui_data.get('path_event_count', 0) }} of {{
+                ui_data.get('loaded_event_count', 0) }} events carry a path
+              </p>
+              {% endif %}
+              <ol class="list-unstyled mb-0">
+                {% for item in ui_data.get(key, []) %}
+                <li
+                  class="d-flex justify-content-between gap-2 border-bottom py-2"
+                >
+                  <span
+                    class="d-inline-block text-truncate oas-truncate"
+                    title="{{ item.path if key == 'top_paths' else item.param }}"
+                    >{% if key == 'top_paths' %}<code>{{ item.path }}</code>{%
+                    else %}{{ item.param }}
+                    <span class="small text-body-secondary"
+                      >{{ item.location }}</span
+                    >{% endif %}</span
+                  ><span class="text-nowrap fw-semibold"
+                    >{{ item.count }}{% if key == 'top_paths' %}
+                    <span class="small text-body-secondary"
+                      >· {{ item.pct }}%</span
+                    >{% endif %}</span
+                  >
+                </li>
+                {% else %}
+                <li class="text-body-secondary">No data to show.</li>
+                {% endfor %}
+              </ol>
+              {% if key == 'top_paths' and not ui_data.get('url_path_logging')
+              %}
+              <p class="small text-body-secondary mt-2">
+                Enable <code>extended-logging: url-path: true</code> in the
+                policy to see requested paths.
+              </p>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-5">
+        <div class="card p-4 shadow-md rounded-3 h-100">
+          <div class="d-flex justify-content-between flex-wrap gap-2">
+            <h5 class="don-jose">Recent BunkerWeb denies</h5>
+            <a href="#events">Agent events</a>
+          </div>
+          <div class="table-responsive">
+            <table class="oas-denies w-100 small">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Request evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for event in ui_data.get('denies_recent', [])[:5] %}
+                <tr>
+                  <td
+                    class="text-nowrap date-field text-body-secondary"
+                    data-date-iso="{{ event.date }}"
+                    data-order="{{ event.date }}"
+                  >
+                    {{ event.date }}
+                  </td>
+                  <td class="text-break">
+                    <strong>{{ event.get('server_name', '') }}</strong>
+                    <div class="font-monospace">
+                      {{ event.get('method', '') }} {{ event.get('url', '') }}
+                    </div>
+                    <div class="text-body-secondary">
+                      {{ event.get('ip', '') }}{% if event.get('event_id') %} ·
+                      {{ event.event_id }}{% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="2" class="text-body-secondary">
+                    No recent denies.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section
+    class="tab-pane"
+    id="oas-pane-events"
+    role="tabpanel"
+    aria-labelledby="oas-tab-events"
+    tabindex="0"
+  >
+    <div class="card p-4 shadow-md rounded-3 mb-4">
+      <h5 class="don-jose">open-appsec events</h5>
+      <p id="oas-results" class="small text-body-secondary" role="status">
+        {{ ui_data.get("events", [])|length }} loaded events
+      </p>
+      <p class="small text-body-secondary">
+        Filters apply to the loaded sample · canary and health checks hidden.
+      </p>
+      <div id="oas-filters" class="row g-2 mb-3">
+        <div class="col-12 col-xl-5">
+          <label for="oas-search" class="form-label">Search</label
+          ><input
+            id="oas-search"
+            type="search"
+            class="form-control"
+            placeholder="IP, hostname, path, event ID…"
+          />
+        </div>
+        {% for key, label in [('action','Action'), ('service','Service'),
+        ('incident','Incident'), ('period','Period')] %}
+        <div class="col-6 col-md-3 col-xl">
+          <label for="oas-filter-{{ key }}" class="form-label"
+            >{{ label }}</label
+          ><!-- prettier-ignore -->
+          <select id="oas-filter-{{ key }}" class="form-select"><option value=""> {{ 'All loaded' if key == 'period' else 'All' }} </option> {% if key == 'period' %} <option value="24h" selected>24 hours</option><option value="7d">7 days</option> {% elif key == 'service' %}{% for service in ui_data.get('known_services', []) %} <option value="{{ service }}">{{ service }}</option> {% endfor %}{% else %}{% for value in ui_data.get('events', [])|map(attribute=key)|unique|sort %}{% if value %} <option value="{{ value }}">{{ value }}</option> {% endif %}{% endfor %}{% endif %} </select>
+        </div>
+        {% endfor %}
+      </div>
+
+      <table
+        id="table-list-openappsec-events"
+        class="table table-sm align-middle w-100"
+        data-table-key="list_openappsec_events"
+      >
+        <thead>
+          <tr>
+            <th class="all">Time (UTC)</th>
+            <th class="min-desktop">Source IP</th>
+            <th class="min-tablet-l">Host</th>
+            <th class="none">Method</th>
+            <th class="all text-wrap oas-incident">Incident</th>
+            <th class="min-tablet-l">Action / confidence</th>
+            <th class="all">Actions</th>
+          </tr>
+        </thead>
+        <!-- prettier-ignore -->
+        <tbody> {% for event in ui_data.get('events', []) %} <tr data-url="{{ event.get('url', '') }}" data-location="{{ event.get('location', '') }}" data-param="{{ event.get('param', '') }}" data-sample="{{ event.get('sample', '') }}" data-score="{{ event.get('score', '') }}" data-event-id="{{ event.get('event_id', '') }}" data-request-id="{{ event.get('request_id', '') }}" data-practice="{{ event.get('practice', '') }}" ><td data-order="{{ event.time }}"><div class="small text-body-secondary">{{ event.time[:10] }}</div><div>{{ event.time[11:23] }}</div></td><td>{{ event.ip }}</td><td class="text-nowrap">{{ event.host }}</td><td>{{ event.method }}</td><td class="text-wrap">{{ event.incident }}</td><td><span class="badge oas-badge-{{ 'danger' if event.action == 'Prevent' else 'warning' }}" >{{ event.action }}</span ><div class="small">{{ event.confidence }}</div></td><td><button>Details</button></td></tr> {% endfor %} </tbody>
+      </table>
+
+      <input
+        type="hidden"
+        id="table-list-openappsec-events-length"
+        value="{{ ui_data.get('events', [])|length }}"
+      />
+      <div id="table-list-openappsec-events-types" class="visually-hidden">
+        {{ {'0':'date'}|tojson }}
+      </div>
+    </div>
+    <div
+      id="oas-detail"
+      class="card p-4 shadow-md rounded-3 mb-4 d-none"
+      role="region"
+      aria-labelledby="oas-detail-title"
+      tabindex="-1"
+    >
+      <div class="d-flex justify-content-between">
+        <h5 class="don-jose" id="oas-detail-title">
+          Event details <span id="oas-detail-verdict" class="badge"></span>
+          <span data-detail="incident"></span>
+        </h5>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary"
+          data-action="close-details"
+        >
+          Close
+        </button>
+      </div>
+      <div class="row g-4">
+        {% for title, fields in [('Request',
+        ['ip','host','time','method','url']), ('Matched indicators',
+        ['location','param','sample','confidence','score']), ('Correlation',
+        ['eventId','requestId','practice'])] %}
+        <div class="col-lg-4 oas-detail-group">
+          <h6>{{ title }}</h6>
+          <!-- prettier-ignore -->
+          <dl class="row g-2"> {% for field in fields %} <div class="{{ 'col-12' if field in ['url', 'sample', 'eventId', 'requestId', 'practice'] else 'col-sm-6' }}" ><dt class="small text-body-secondary fw-normal"> {{ {'eventId': 'Event ID', 'requestId': 'BunkerWeb request ID', 'param': 'Parameter', 'time': 'Time (UTC)'}.get(field, field|capitalize) }} </dt><dd class="text-break mb-0{% if field == 'sample' %} p-3 rounded bg-body-tertiary font-monospace{% elif field in ['eventId', 'requestId', 'practice'] %} font-monospace{% endif %}" data-detail="{{ field }}" ></dd></div> {% endfor %} </dl>
+        </div>
+        {% endfor %}
+      </div>
+      <div
+        class="d-flex flex-wrap align-items-center justify-content-between gap-2 border-top pt-3"
+        id="oas-detail-actions"
+      >
+        <p class="small text-body-secondary mb-0">
+          Ban blocks this source IP. Add exception prefills a policy rule for
+          review.
+        </p>
+        {{ event_buttons() }}
+      </div>
+    </div>
+  </section>
+  <section
+    class="tab-pane"
+    id="oas-pane-policy"
+    role="tabpanel"
+    aria-labelledby="oas-tab-policy"
+    tabindex="0"
+  >
+    <div
+      class="d-flex flex-wrap align-items-center gap-2 small border rounded p-3 mb-4"
+    >
+      <span
+        class="badge oas-badge-{{ 'success' if policy_editable else 'warning' }}"
+        >{{ 'Editable' if policy_editable else 'Read-only' }}</span
+      ><code class="text-break"
+        >{{ ui_data.get('policy_path') or 'Policy path unavailable' }}</code
+      ><span
+        >Modified
+        <span
+          class="date-field"
+          data-date-iso="{{ cards.get('info_policy', {}).get('mtime', '') }}"
+          >{{ cards.get('info_policy', {}).get('mtime') or 'unavailable'
+          }}</span
+        ></span
+      >{% if policy_editable %}<span class="text-body-secondary"
+        >Agent typically applies in 20–40 s · previous file kept as .bak</span
+      >{% endif %}
+    </div>
+    {% if not policy_editable %}
+    <div class="alert alert-warning" role="alert">
+      Policy is read-only: {{ policy_edit_reason }}
+    </div>
+    {% endif %}
+    <div class="row g-4">
+      <aside class="col-lg-3">
+        <div class="card p-4 shadow-md rounded-3 mb-4">
+          <h5 class="don-jose">Default policy</h5>
+          <form data-form="default-mode">
+            <label for="default-mode" class="form-label">Default mode</label
+            ><!-- prettier-ignore -->
+            <select id="default-mode" name="mode" class="form-select mb-3" {% if not policy_editable %}disabled{% endif %} > {% for mode in policy_modes %}{% if mode == ui_data.get('default_mode') %} <option value="{{ mode }}" selected>{{ mode }}</option> {% else %} <option value="{{ mode }}">{{ mode }}</option> {% endif %}{% endfor %}</select
+            ><button
+              type="submit"
+              class="btn btn-primary btn-sm w-100"
+              {%
+              if
+              not
+              policy_editable
+              %}disabled{%
+              endif
+              %}
+            >
+              Apply default
+            </button>
+          </form>
+        </div>
+        <div class="card p-4 shadow-md rounded-3">
+          <h5 class="don-jose">Services</h5>
+          <p class="small text-body-secondary">
+            Select a service to edit each hostname.
+          </p>
+          {% set many_services = ui_data.get('known_services', [])|length > 8 %}
+          {% if many_services %}
+          <input
+            type="search"
+            id="oas-service-filter"
+            class="form-control form-control-sm mb-2"
+            aria-label="Filter services"
+            placeholder="Filter services"
+          />
+          {% endif %}
+          <div
+            id="oas-service-list"
+            {%
+            if
+            many_services
+            %}
+            class="oas-service-list"
+            {%
+            endif
+            %}
+          >
+            {% for service in ui_data.get('known_services', []) %}{% set hosts =
+            ui_data.get('services', [])|selectattr('service', 'equalto',
+            service)|list %}{% set modes =
+            hosts|map(attribute='effective_mode')|unique|list %}<button
+              type="button"
+              class="btn btn-outline-primary w-100 flex-column align-items-start text-start mb-2 text-break"
+              data-select-service="{{ service }}"
+              data-service-hostnames="{{ hosts|map(attribute='host')|join(' ') }}"
+              aria-pressed="{{ 'true' if loop.first else 'false' }}"
+            >
+              <strong class="d-block">{{ service }}</strong
+              ><span class="small"
+                >{{ hosts|length }} host{{ '' if hosts|length == 1 else 's' }} ·
+                {{ mode_badge(modes) }}</span
+              ></button
+            >{% else %}
+            <p class="text-muted">No services configured.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </aside>
+      <div class="col-lg-9">
+        {% for service in ui_data.get('known_services', []) %}{% set hosts =
+        ui_data.get('services', [])|selectattr('service', 'equalto',
+        service)|list %}{% set modes =
+        hosts|map(attribute='effective_mode')|unique|list %}
+        <div
+          class="card p-4 shadow-md rounded-3 mb-4{% if not loop.first %} d-none{% endif %}"
+          data-service-panel="{{ service }}"
+        >
+          <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+            <h5 class="don-jose text-break">{{ service }}</h5>
+            <span
+              >{{ hosts|length }} host{{ '' if hosts|length == 1 else 's' }} ·
+              {{ mode_badge(modes) }}</span
+            >
+          </div>
+          {% for host in hosts %}
+          <div
+            class="row g-2 align-items-end mb-3"
+            data-service-host="{{ host.host }}"
+          >
+            <div class="col-12 col-md-6 text-break">
+              {{ host.host }}
+              <div class="small text-muted">
+                Effective: {{ host.effective_mode }}
+              </div>
+            </div>
+            <div class="col-12 col-md">
+              <label
+                class="form-label"
+                for="mode-{{ service }}-{{ loop.index }}"
+                >Hostname mode</label
+              ><select
+                id="mode-{{ service }}-{{ loop.index }}"
+                name="mode"
+                class="form-select"
+                {%
+                if
+                not
+                policy_editable
+                %}disabled{%
+                endif
+                %}
+              >
+                {% for mode in service_modes %}{% if mode == host.mode %}
+                <option value="{{ mode }}" selected>{{ mode }}</option>
+                {% else %}
+                <option value="{{ mode }}">{{ mode }}</option>
+                {% endif %}{% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-auto">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm text-break"
+                data-action="set-service-mode"
+                data-host="{{ host.host }}"
+                {%
+                if
+                not
+                policy_editable
+                %}disabled{%
+                endif
+                %}
+              >
+                Apply to {{ host.host }}
+              </button>
+            </div>
+          </div>
+          {% else %}
+          <p class="text-muted">No hostnames configured.</p>
+          {% endfor %}
+          <p class="alert alert-warning small mb-0">
+            Detect and detect-learn allow requests. A canary using a detect-mode
+            policy reports not enforcing; account for this when choosing a mode.
+          </p>
+        </div>
+        {% endfor %}
+        <div class="card p-4 shadow-md rounded-3 mb-4">
+          <div class="d-flex justify-content-between flex-wrap gap-2">
+            <h5 class="don-jose">Exceptions</h5>
+            <p class="small text-muted">
+              {{ ui_data.get('exceptions', [])|length }} configured · all
+              services
+            </p>
+          </div>
+
+          <table
+            id="table-exceptions"
+            class="table table-sm align-middle w-100"
+          >
+            <thead>
+              <tr>
+                <th class="all">Name</th>
+                <th class="all">Action</th>
+                <th class="min-tablet-l">sourceIp</th>
+                <th class="min-tablet-l">url</th>
+                <th class="none">Other conditions</th>
+                <th class="all">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for exception in ui_data.get('exceptions', []) %}{% set
+              conditions = exception.get('conditions', {}) %}
+              <tr>
+                <td
+                  class="fw-semibold text-nowrap text-truncate"
+                  title="{{ exception.name }}"
+                >
+                  {{ exception.name }}
+                </td>
+                <td>
+                  <span class="badge oas-badge-secondary"
+                    >{{ exception.action }}</span
+                  >
+                </td>
+                <td class="font-monospace">
+                  {{ condition_lines(conditions.get('sourceIp', [])) }}
+                </td>
+                <td class="font-monospace">
+                  {{ condition_lines(conditions.get('url', [])) }}
+                </td>
+                <td>
+                  {% for key, values in conditions.items() %}{% if key not in
+                  ['sourceIp','url'] and values %}
+                  <div class="text-break">
+                    {{ key }}: {{ values_text(values) }}
+                  </div>
+                  {% endif %}{% endfor %}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-danger"
+                    data-action="remove-exception"
+                    data-name="{{ exception.name }}"
+                    {%
+                    if
+                    not
+                    policy_editable
+                    %}disabled{%
+                    endif
+                    %}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <input
+            type="hidden"
+            id="table-exceptions-length"
+            value="{{ ui_data.get('exceptions', [])|length }}"
+          />
+        </div>
+        <div class="card p-4 shadow-md rounded-3 mb-4">
+          <h5 class="don-jose">New exception</h5>
+          <p class="small text-muted">
+            Applies to default policy and all host rules · at least one
+            condition required.
+          </p>
+          <form
+            id="openappsec-exception-form"
+            class="row g-3 mt-0"
+            data-form="exception"
+          >
+            <div class="col-md-6">
+              <label class="form-label" for="exception-action">Action</label>
+              <!-- prettier-ignore -->
+              <select id="exception-action" name="exception_action" class="form-select" {% if not policy_editable %}disabled{% endif %} ><option value="skip">skip</option><option value="accept">accept</option><option value="drop">drop</option><option value="suppressLog">suppressLog</option></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="exception-name"
+                >Name (optional)</label
+              >
+              <input
+                id="exception-name"
+                name="name"
+                class="form-control"
+                maxlength="64"
+                {%
+                if
+                not
+                policy_editable
+                %}disabled{%
+                endif
+                %}
+              />
+            </div>
+            <p id="oas-condition-help" class="form-text col-12 mb-0">
+              Separate multiple values with spaces.
+            </p>
+            {% for key in ["sourceIp", "url", "hostName", "paramName",
+            "paramValue", "protectionName", "countryCode"] %}
+            <div class="col-md-6 col-xl-3">
+              <label class="form-label" for="condition-{{ key }}"
+                >{{ key }}</label
+              >
+              <input
+                id="condition-{{ key }}"
+                name="condition-{{ key }}"
+                aria-describedby="oas-condition-help"
+                placeholder="{{ {'sourceIp': '203.0.113.0/24', 'url': '/login', 'hostName': 'www.example.com', 'paramName': 'id', 'paramValue': 'value', 'protectionName': 'protection name', 'countryCode': 'FR'}[key] }}"
+                class="form-control"
+                {%
+                if
+                not
+                policy_editable
+                %}disabled{%
+                endif
+                %}
+              />
+            </div>
+            {% endfor %}
+            <div class="col-12 d-flex justify-content-end">
+              <button
+                type="submit"
+                class="btn btn-primary"
+                {%
+                if
+                not
+                policy_editable
+                %}disabled{%
+                endif
+                %}
+              >
+                Add exception
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<div
+  class="modal fade"
+  id="openappsec-ban-modal"
+  tabindex="-1"
+  aria-labelledby="openappsec-ban-modal-label"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="openappsec-ban-modal-label">Ban IP</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <form data-form="ban" data-ip="" data-event-id="">
+        <div class="modal-body">
+          <label class="form-label small mb-1" for="openappsec-ban-exp"
+            >Duration</label
+          >
+          <!-- prettier-ignore -->
+          <select id="openappsec-ban-exp" name="exp" class="form-select form-select-sm mb-2" ><option value="3600">1h</option><option value="86400" selected>24h</option><option value="604800">7d</option><option value="2592000">30d</option></select>
+          <label class="form-label small mb-1" for="openappsec-ban-scope"
+            >Scope</label
+          >
+          <!-- prettier-ignore -->
+          <select id="openappsec-ban-scope" name="ban_scope" class="form-select form-select-sm mb-2" ><option value="global">global</option><option value="service">service</option></select>
+          <label class="form-label small mb-1" for="openappsec-ban-service"
+            >Service</label
+          >
+          <!-- prettier-ignore -->
+          <select id="openappsec-ban-service" name="service" class="form-select form-select-sm" ><option value="">global</option> {% for service in ui_data.get("known_services", []) %} <option value="{{ service }}">{{ service }}</option> {% endfor %} </select>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
+          >
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-danger">Confirm ban</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script nonce="{{ script_nonce }}">
+  (() => {
+    const alertBox = document.getElementById("openappsec-alert");
+    const csrf = document.getElementById("openappsec-csrf").value;
+    const policyMtime = {{ policy_mtime|tojson }};
+    const banForm = document.querySelector('[data-form="ban"]');
+
+    function showAlert(message) {
+      alertBox.textContent = message || "Action failed";
+      alertBox.classList.remove("d-none");
+    }
+
+    async function post(payload) {
+      try {
+        const response = await fetch(location.pathname, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (result && result.data && result.data.status === "ok") {
+          location.reload();
+          return;
+        }
+        showAlert(
+          result && result.data ? result.data.message : "Action failed",
+        );
+      } catch (_error) {
+        showAlert("Action failed");
+      }
+    }
+
+    document.querySelectorAll("#table-list-openappsec-events button").forEach(button => {
+      button.type = "button";
+      button.dataset.action = "details";
+      button.className = "btn btn-sm btn-outline-primary";
+      button.setAttribute("aria-controls", "oas-detail");
+      button.setAttribute("aria-expanded", "false");
+    });
+    let selectedRow = null;
+    let detailTrigger = null;
+    let eventTable = null;
+    function eventData(row) {
+      if (!row || row.tagName !== "TR") return row ? {...row.dataset} : {};
+      const cells = row.cells;
+      return {...row.dataset, time: cells[0].dataset.order, ip: cells[1].textContent.trim(),
+        host: cells[2].textContent.trim(), method: cells[3].textContent.trim(),
+        incident: cells[4].textContent.trim(), action: cells[5].querySelector(".badge").textContent.trim(),
+        confidence: cells[5].querySelector(".small").textContent.trim()};
+    }
+    function markSelection() {
+      if (!eventTable) return;
+      eventTable.rows().nodes().toArray().forEach(row => {
+        const selected = row === selectedRow;
+        row.classList.toggle("table-active", selected);
+        const trigger = row.querySelector('[data-action="details"]');
+        trigger.setAttribute("aria-expanded", String(selected));
+        trigger.classList.toggle("btn-primary", selected);
+        trigger.classList.toggle("btn-outline-primary", !selected);
+      });
+    }
+    document.addEventListener("click", (event) => {
+      const origin = event.target.closest("tr[data-event-id], #oas-detail-actions");
+      const rowData = eventData(origin);
+      const serviceButton = event.target.closest("[data-select-service]");
+      if (serviceButton) {
+        location.hash = "policy/" + encodeURIComponent(serviceButton.dataset.selectService);
+        return;
+      }
+      const detailButton = event.target.closest('[data-action="details"]');
+      if (detailButton) {
+        const drawer = document.getElementById("oas-detail");
+        drawer.querySelectorAll("[data-detail]").forEach(node => {
+          node.textContent = rowData[node.dataset.detail] || "—";
+        });
+        const { action, ...detail } = rowData;
+        Object.assign(document.getElementById("oas-detail-actions").dataset, detail);
+        const verdict = document.getElementById("oas-detail-verdict");
+        verdict.textContent = action || "Unknown";
+        verdict.className = "badge oas-badge-" + (action === "Prevent" ? "danger" : "warning");
+        selectedRow = origin;
+        detailTrigger = detailButton;
+        markSelection();
+        drawer.classList.remove("d-none");
+        drawer.focus({preventScroll: true});
+        return;
+      }
+      if (event.target.closest('[data-action="close-details"]')) {
+        document.getElementById("oas-detail").classList.add("d-none");
+        if (eventTable && selectedRow) {
+          let visible = eventTable.rows({search: "applied", order: "applied"}).nodes().toArray();
+          if (!visible.includes(selectedRow)) {
+            document.querySelectorAll("#oas-filters input, #oas-filters select").forEach(input => { input.value = ""; });
+            eventTable.search("").columns().search("");
+            eventTable.draw();
+            visible = eventTable.rows({search: "applied", order: "applied"}).nodes().toArray();
+          }
+          const index = visible.indexOf(selectedRow);
+          const length = eventTable.page.len();
+          if (index >= 0 && length > 0) eventTable.page(Math.floor(index / length)).draw("page");
+        }
+        selectedRow = null;
+        markSelection();
+        detailTrigger?.focus();
+        return;
+      }
+      const banButton = event.target.closest('[data-bs-toggle="modal"]');
+      if (banButton) {
+        banForm.dataset.ip = rowData.ip || "";
+        banForm.dataset.eventId = rowData.eventId || "";
+        return;
+      }
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      if (button.dataset.action === "prefill-exception") {
+        document.getElementById("condition-sourceIp").value =
+          rowData.ip || "";
+        document.getElementById("condition-url").value =
+          rowData.url || "";
+        location.hash = "policy";
+        restoreTab();
+        document
+          .getElementById("openappsec-exception-form")
+          .scrollIntoView({ block: "center" });
+      } else if (button.dataset.action === "remove-exception") {
+        if (window.confirm("Remove this exception?"))
+          post({
+            action: "remove_exception",
+            name: button.dataset.name,
+            policy_mtime: policyMtime,
+          });
+      } else if (button.dataset.action === "set-service-mode") {
+        const row = button.closest("[data-service-host]");
+        post({
+          action: "set_service_mode",
+          host: button.dataset.host,
+          mode: row.querySelector("select[name=mode]").value,
+          policy_mtime: policyMtime,
+        });
+      }
+    });
+
+    document.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (form.dataset.form === "ban") {
+        event.preventDefault();
+        if (!window.confirm("Ban this IP?")) return;
+        post({
+          action: "ban",
+          ip: form.dataset.ip,
+          event_id: form.dataset.eventId,
+          exp: Number(form.querySelector("[name=exp]").value),
+          ban_scope: form.querySelector("[name=ban_scope]").value,
+          service: form.querySelector("[name=service]").value,
+        });
+      } else if (form.dataset.form === "exception") {
+        event.preventDefault();
+        const conditions = {};
+        form.querySelectorAll("[name^=condition-]").forEach((input) => {
+          const values = input.value.trim().split(/\s+/).filter(Boolean);
+          if (values.length) conditions[input.name.substring(10)] = values;
+        });
+        post({
+          action: "add_exception",
+          exception_action: form.querySelector("[name=exception_action]").value,
+          name: form.querySelector("[name=name]").value || undefined,
+          conditions,
+          policy_mtime: policyMtime,
+        });
+      } else if (form.dataset.form === "default-mode") {
+        event.preventDefault();
+        post({
+          action: "set_default_mode",
+          mode: form.querySelector("[name=mode]").value,
+          policy_mtime: policyMtime,
+        });
+      }
+    });
+
+    const tabs = ["overview", "events", "policy"];
+    let selectedService = document.querySelector("[data-select-service]")?.dataset.selectService || "";
+    function restoreTab() {
+      const [requested, encodedService] = location.hash.slice(1).split("/");
+      const tab = tabs.includes(requested) ? requested : "overview";
+      let service;
+      try { service = decodeURIComponent(encodedService || ""); } catch (_) { service = ""; }
+      const buttons = [...document.querySelectorAll("[data-select-service]")];
+      if (buttons.some(button => button.dataset.selectService === service)) selectedService = service;
+      buttons.forEach(button => {
+        const selected = button.dataset.selectService === selectedService;
+        button.setAttribute("aria-pressed", String(selected));
+        button.classList.toggle("active", selected);
+      });
+      document.querySelectorAll("[data-service-panel]").forEach(panel => {
+        panel.classList.toggle("d-none", panel.dataset.servicePanel !== selectedService);
+      });
+      bootstrap.Tab.getOrCreateInstance(document.getElementById("oas-tab-" + tab)).show();
+    }
+    window.addEventListener("hashchange", restoreTab);
+    tabs.forEach(tab => document.getElementById("oas-tab-" + tab).addEventListener("shown.bs.tab", () => {
+      const hash = "#" + tab + (tab === "policy" && selectedService ? "/" + encodeURIComponent(selectedService) : "");
+      if (location.hash !== hash) history.replaceState(null, "", hash);
+      if (window.jQuery?.fn.dataTable) {
+        jQuery.fn.dataTable.tables({visible: true, api: true}).columns.adjust().responsive.recalc();
+      }
+    }));
+    function scrollSelectedService() {
+      document.querySelector('.oas-service-list [aria-pressed="true"]')?.scrollIntoView({block: "nearest"});
+    }
+    function setup() {
+      restoreTab();
+      if (location.hash.startsWith("#policy")) scrollSelectedService();
+      document.getElementById("oas-tab-policy").addEventListener("shown.bs.tab", scrollSelectedService);
+      document.getElementById("oas-service-filter")?.addEventListener("input", (event) => {
+        const search = event.target.value.toLowerCase();
+        document.querySelectorAll("[data-select-service]").forEach(button => {
+          const text = button.textContent + " " + button.dataset.serviceHostnames;
+          button.classList.toggle("d-none", !text.toLowerCase().includes(search));
+        });
+      });
+      const table = document.getElementById("table-list-openappsec-events");
+      const hostsByService = {{ ui_data.get('services', [])|tojson }};
+      function matches(row) {
+        const data = eventData(row);
+        const search = document.getElementById("oas-search").value.toLowerCase();
+        const action = document.getElementById("oas-filter-action").value;
+        const incident = document.getElementById("oas-filter-incident").value;
+        const service = document.getElementById("oas-filter-service").value;
+        const period = document.getElementById("oas-filter-period").value;
+        const timestamp = Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(data.time) ? data.time : data.time + "Z");
+        const now = Date.now();
+        return (!search || Object.values(data).join(" ").toLowerCase().includes(search)) &&
+          (!action || data.action === action) && (!incident || data.incident === incident) &&
+          (!service || data.host === service || hostsByService.some(item => item.service === service && item.host === data.host)) &&
+          (!period || Number.isNaN(timestamp) || (timestamp <= now && timestamp >= now - (period === "24h" ? 24 : 168) * 3600000));
+      }
+      // DataTables owns pagination; filtering its full row set keeps every page consistent.
+      const $ = window.jQuery;
+      $.fn.dataTable.ext.search.push((settings, _data, index) => settings.nTable !== table || matches(settings.aoData[index].nTr));
+      function filter() {
+        if ($.fn.dataTable.isDataTable(table)) $(table).DataTable().draw();
+      }
+      function drawContext() {
+        if (!$.fn.dataTable.isDataTable(table)) return;
+        eventTable = $(table).DataTable();
+        const info = eventTable.page.info();
+        document.getElementById("oas-results").textContent =
+          `Showing ${info.recordsDisplay ? info.start + 1 : 0}–${info.end} of ${info.recordsDisplay} filtered · ${info.recordsTotal} loaded`;
+        markSelection();
+      }
+      $(table).on("draw.dt", drawContext);
+      $(table).on("init.dt", filter);
+      document.getElementById("oas-filters").addEventListener("input", filter);
+      document.getElementById("oas-filters").addEventListener("change", filter);
+      filter();
+    }
+    if (document.readyState === "complete") setup();
+    else window.addEventListener("load", setup, {once: true});
+  })();
+</script>

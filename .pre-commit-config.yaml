@@ -28,6 +28,8 @@ repos:
         language: system
         types: [text]
         files: \.(js|ts|jsx|tsx|css|less|html|json|markdown|md|yaml|yml)$
+        # open-appsec accepts JSON syntax in local_policy.yaml (the UI only edits JSON); prettier's YAML parser would rewrite it
+        exclude: ^\.tests/openappsec/appsec-localconfig/local_policy\.yaml$
 
   - repo: https://github.com/JohnnyMorganz/StyLua
     rev: a6433cd8ed974a1dd769d41a46b5008858e58e94 # frozen: v2.5.2

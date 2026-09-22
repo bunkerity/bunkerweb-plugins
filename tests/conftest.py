@@ -22,6 +22,13 @@ class FakePingUtils:
             raise self._exc
         return {"status": self._status}
 
+    def get_metrics(self, plugin):
+        """Mirror ``bw_instances_utils.get_metrics``: an empty dict on the happy path (no
+        traffic yet), the same exception as ``get_ping`` on the error path."""
+        if self._exc is not None:
+            raise self._exc
+        return {}
+
 
 @pytest.fixture
 def fake_ping_utils():

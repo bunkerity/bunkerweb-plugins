@@ -1,0 +1,42 @@
+flowchart TD
+    accTitle: BunkerWeb open-appsec plugin request flow
+    accDescr: A client request first passes BunkerWeb core checks, then openappsec.lua replays the request headers and body over HTTP to an open-appsec agent-unified sidecar acting as a judge. The sidecar's attachment inspects the request with the open-appsec machine-learning engine; an allowed request comes back as 200 with a marker header and reaches the upstream, any other answer denies the request, and an unreachable sidecar follows the configured fail mode.
+
+    client([Client / Browser])
+
+    subgraph bw[BunkerWeb access phase]
+        direction TB
+        core["1. Core checks first:<br/>rate limit, bad behavior, antibot,<br/>DNSBL, black / whitelist"]
+        lua["2. openappsec.lua:<br/>read body, replay method + URI + headers<br/>to OPENAPPSEC_API (X-Forwarded-For = client IP)"]
+        core --> lua
+    end
+
+    subgraph sidecar[open-appsec agent-unified sidecar]
+        direction TB
+        judge[["nginx judge (openappsec/judge/default.conf):<br/>attachment inspects, then 200 + X-Openappsec-Judge: pass"]]
+        agent[("open-appsec agent:<br/>ML engine, local_policy.yaml or SaaS")]
+        judge --- agent
+    end
+
+    verdict{"Judge answer"}
+    allow["Allow to upstream"]
+    deny["Deny request<br/>(get_deny_status)"]
+    failmode["OPENAPPSEC_FAIL_MODE:<br/>open = allow, closed = 500"]
+    upstream([Upstream app])
+
+    client -->|request| core
+    lua -.->|"replayed request over HTTP"| judge
+    judge -.->|status| verdict
+    verdict -->|"200 + marker"| allow
+    verdict -->|"403 or any other response"| deny
+    verdict -->|"no response (down, timeout)"| failmode
+    allow --> upstream
+
+    classDef ok fill:#eafaf0,stroke:#27ae60,color:#14532d;
+    classDef deny fill:#fdecea,stroke:#e74c3c,color:#7f1d1d;
+    classDef svc fill:#e8f4fd,stroke:#2980b9,color:#0c4a6e;
+    classDef app fill:#ffffff,stroke:#334155,color:#0f172a;
+    class allow,upstream ok;
+    class deny,failmode deny;
+    class judge,agent svc;
+    class client,core,lua app;
