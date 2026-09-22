@@ -55,6 +55,29 @@ http_code() {
 		-H "Host: www.example.com" "$@" 2>/dev/null
 }
 
+# The judge enforces with the agent's default policy first, then hot-loads
+# local_policy.yaml (autoPolicyLoad) 20-40 s after start and answers 200 to everything
+# for a few seconds while it does. A single probe therefore lands inside that window on
+# a fast runner: retry an attack until BunkerWeb denies it, and let a benign request
+# through on the first try.
+expect_403() {
+	local label="$1"
+	shift
+	local ret="" attempt=0
+	while [ "$attempt" -lt 60 ] ; do
+		ret="$(http_code "$@")"
+		if [ "$ret" = "403" ] ; then
+			return 0
+		fi
+		attempt=$((attempt + 1))
+		sleep 1
+	done
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error did not receive 403 code for $label within 60s (last status: $ret)"
+	exit 1
+}
+
 # Do the tests
 cd /tmp/bunkerweb-plugins/openappsec/ || exit 1
 cleanup() {
@@ -196,38 +219,15 @@ fi
 
 # Payload in GET arg
 echo "ℹ️ Testing with GET payload ..."
-success="ko"
-ret="$(http_code "http://bunkerweb:8080/?id=/etc/passwd")"
-# shellcheck disable=SC2181
-if [ $? -eq 0 ] && [ "$ret" -eq 403 ] ; then
-	success="ok"
-fi
-if [ "$success" == "ko" ] ; then
-	docker compose logs
-	docker compose down -v
-	echo "❌ Error did not receive 403 code for GET /etc/passwd"
-	exit 1
-fi
+expect_403 "GET /etc/passwd" "http://bunkerweb:8080/?id=/etc/passwd"
 
 # SQL-like GET arg
 echo "ℹ️ Testing with SQL-like GET payload ..."
-ret="$(http_code "http://bunkerweb:8080/?id=%27%20OR%201%3D1--")"
-if [ "$ret" != "403" ] ; then
-	docker compose logs
-	docker compose down -v
-	echo "❌ Error did not receive 403 code for SQL-like GET payload (got $ret)"
-	exit 1
-fi
+expect_403 "SQL-like GET payload" "http://bunkerweb:8080/?id=%27%20OR%201%3D1--"
 
 # Payload in POST arg
 echo "ℹ️ Testing with POST payload ..."
-ret="$(http_code -X POST "http://bunkerweb:8080/" -d 'id=/etc/passwd')"
-if [ "$ret" != "403" ] ; then
-	docker compose logs
-	docker compose down -v
-	echo "❌ Error did not receive 403 code for POST /etc/passwd (got $ret)"
-	exit 1
-fi
+expect_403 "POST /etc/passwd" -X POST "http://bunkerweb:8080/" -d 'id=/etc/passwd'
 
 echo "ℹ️ Waiting for the correlated open-appsec event ..."
 success="ko"
