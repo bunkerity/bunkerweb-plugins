@@ -320,7 +320,8 @@ the same for the judge; the UI then shows it read-only.
     {
       "name": "appsec-default-log-trigger",
       "appsec-logging": { "detect-events": true, "prevent-events": true },
-      "extended-logging": { "http-headers": true }
+      "extended-logging": { "http-headers": true },
+      "log-destination": { "cloud": false, "stdout": { "format": "json" } }
     }
   ],
   "custom-responses": [
@@ -336,8 +337,10 @@ the same for the judge; the UI then shows it read-only.
 
 `extended-logging.http-headers: true` makes each event carry the request
 headers, including the `x-request-id` BunkerWeb adds, which is what links an
-event to a BunkerWeb report. The agent re-reads the file about 20-40 seconds
-after it changes (`autoPolicyLoad=true`); during the reload itself the judge
+event to a BunkerWeb report. `log-destination.stdout.format: json` makes the
+agent write one event per line; the events view also reads pretty-printed
+events and skips a malformed or truncated record instead of failing. The agent
+re-reads the file about 20-40 seconds after it changes (`autoPolicyLoad=true`); during the reload itself the judge
 briefly answers `200` to everything (a few seconds, observed), so batch policy
 edits rather than saving in a loop. `log-destination: file:` is not
 implemented upstream: the events only exist in the agent's log directory

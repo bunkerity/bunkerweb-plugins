@@ -93,8 +93,40 @@ def _project_event(raw, skip_hosts):
     }
 
 
-def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS):
-    """Read recent request events from the agent's rotated JSON-lines logs."""
+def _json_records(text):
+    """Return (records, skipped) from NDJSON or concatenated pretty-printed JSON objects.
+
+    A malformed record (torn tail, cut head) is skipped and counted; decoding resumes
+    at the next line that starts a top-level object.
+    """
+    decoder = json.JSONDecoder()
+    records = []
+    skipped = 0
+    pos = 0
+    size = len(text)
+    while True:
+        while pos < size and text[pos].isspace():
+            pos += 1
+        if pos >= size:
+            break
+        try:
+            record, pos = decoder.raw_decode(text, pos)
+        except ValueError:
+            skipped += 1
+            pos = text.find("\n{", pos + 1)
+            if pos < 0:
+                break
+            pos += 1
+            continue
+        records.append(record)
+    return records, skipped
+
+
+def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS, stats=None):
+    """Read recent request events from the agent's rotated JSON logs (one object per line or pretty-printed).
+
+    When a dict is passed as stats, its "skipped" key receives the number of malformed records dropped.
+    """
     if not events_dir or not os.path.isdir(events_dir):
         return [], "events directory not found"
     try:
@@ -103,6 +135,7 @@ def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS):
         limit = 200
 
     events = []
+    skipped = 0
     try:
         paths = glob.glob(os.path.join(events_dir, "cp-nano-http-transaction-handler.log*"))
         for path in paths:
@@ -116,15 +149,20 @@ def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS):
                     text = handle.read().decode("utf-8", errors="replace")
             except (OSError, UnicodeError):
                 return [], "could not read event logs"
-            for line in text.splitlines():
+            records, bad = _json_records(text)
+            skipped += bad
+            for record in records:
                 try:
-                    projected = _project_event(json.loads(line), skip_hosts)
+                    projected = _project_event(record, skip_hosts)
                 except (TypeError, ValueError):
+                    skipped += 1
                     continue
                 if projected is not None:
                     events.append(projected)
     except (OSError, TypeError):
         return [], "could not read event logs"
+    if stats is not None:
+        stats["skipped"] = skipped
 
     events.sort(key=lambda event: event.get("time", ""), reverse=True)
     return events[:limit], None
