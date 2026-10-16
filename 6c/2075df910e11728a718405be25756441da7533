@@ -1,0 +1,21 @@
+coraza/api/coraza.conf
+  s_d380857cdba580::t_ef130e6e9a9cac 141-152
+coraza/api/go.mod
+  s_d380857cdba580::t_4eab1f582e31a0 6,12,15,26-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6c2075df910e11728a718405be25756441da7533",
+  "prompts": {},
+  "sessions": {
+    "s_d380857cdba580": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "060acccb-4441-4320-8a03-265da75ff52f",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
