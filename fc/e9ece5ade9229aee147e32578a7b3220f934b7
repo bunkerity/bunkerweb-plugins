@@ -1,0 +1,23 @@
+openappsec/ui/openappsec_ui.py
+  s_d8d761ae59658c::t_82f0892243d9f2 96-129,138,152-154,164-165
+  s_d8d761ae59658c::t_a6edad2c009aa7 156,158
+openappsec/README.md
+  s_d8d761ae59658c::t_e5bc58a935f66d 342-343
+  s_d8d761ae59658c::t_9d266dd06dc6e1 323-324,340-341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fce9ece5ade9229aee147e32578a7b3220f934b7",
+  "prompts": {},
+  "sessions": {
+    "s_d8d761ae59658c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4c18ce4d-3858-4466-bda8-b6d911dc0a1b",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
