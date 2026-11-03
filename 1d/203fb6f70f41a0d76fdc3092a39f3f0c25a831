@@ -1,0 +1,20 @@
+.tests/openappsec.sh
+  s_e0d0e79ca93fb2::t_ab7907015adf8f 251-253,258
+  s_e0d0e79ca93fb2::t_99114a90be396f 232-236,242,254-257,267,270
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1d203fb6f70f41a0d76fdc3092a39f3f0c25a831",
+  "prompts": {},
+  "sessions": {
+    "s_e0d0e79ca93fb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b2bde903-aa33-4d47-9f6d-9dbd4fa5e1fa",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
