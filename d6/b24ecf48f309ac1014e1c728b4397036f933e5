@@ -1,0 +1,21 @@
+.github/workflows/tests.yml
+  s_84c3eb7dfc00f0::t_7d2017ef8e5ddc 60-61,70-71,105-106,170-171,191-192
+.github/workflows/codeql.yml
+  s_84c3eb7dfc00f0::t_7d2017ef8e5ddc 23-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d6b24ecf48f309ac1014e1c728b4397036f933e5",
+  "prompts": {},
+  "sessions": {
+    "s_84c3eb7dfc00f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "74cd3549-cfb3-4218-9d12-8e2b2c06bfa9",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
