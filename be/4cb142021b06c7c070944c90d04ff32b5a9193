@@ -1,0 +1,19 @@
+tests/test_syswarden_helpers.py
+  s_8a9bba7c865856::t_4d08f32c130d4b 413-465
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be4cb142021b06c7c070944c90d04ff32b5a9193",
+  "prompts": {},
+  "sessions": {
+    "s_8a9bba7c865856": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cac3d946-807f-478b-8754-59f12aa35146",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
