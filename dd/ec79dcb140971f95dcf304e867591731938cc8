@@ -1,0 +1,50 @@
+.tests/virustotal/vt-mock.conf
+  s_e381a018c9f768::t_812b40b8f0d0c7 37-42
+.tests/virustotal.sh
+  s_e381a018c9f768::t_812b40b8f0d0c7 142-144,155-170,282-321,324-325,327-328
+  s_e381a018c9f768::t_8216ff54d2a5a2 322-323,326
+  s_449d2290d089fe::t_71d26dbb084256 329
+virustotal/virustotal.lua
+  s_448348e685435d::t_607cb6c1925b16 31-34,95-104,173,409,439-442
+  s_449d2290d089fe::t_2b3bc66d2566e9 443
+virustotal/plugin.json
+  s_448348e685435d::t_607cb6c1925b16 20
+  s_449d2290d089fe::t_473c6c6739c5f3 5
+virustotal/README.md
+  s_e381a018c9f768::t_9dbc5893a7f776 187,199-201
+  s_e381a018c9f768::t_1c2104e4b2373c 112-113,202-205
+  s_e381a018c9f768::t_206e9ec6c6ec5c 184-186,188-195
+  s_449d2290d089fe::t_5580d4ed7d772a 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ddec79dcb140971f95dcf304e867591731938cc8",
+  "prompts": {},
+  "sessions": {
+    "s_448348e685435d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ade10dc1-66c8-468a-9f01-07a02da677d2",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    },
+    "s_449d2290d089fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "217097e4-0a53-4729-8723-0492ed6fd44a",
+        "model": "unknown"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    },
+    "s_e381a018c9f768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d84cc736-bd82-4aba-9764-c513ba3877fa",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
