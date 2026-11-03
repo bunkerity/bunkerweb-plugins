@@ -1,0 +1,59 @@
+COMPATIBILITY.json
+  s_20e9f5b001136c::t_2405e026c5f0bb 34-35
+authentik/README.md
+  s_20e9f5b001136c::t_d2eacbb2c419ca 3
+authentik/plugin.json
+  s_20e9f5b001136c::t_511b3ce07aee0a 5
+clamav/README.md
+  s_20e9f5b001136c::t_3861f5af93e464 3
+clamav/plugin.json
+  s_20e9f5b001136c::t_70618a25f378ab 5
+cloudflare/README.md
+  s_20e9f5b001136c::t_6800b2132f1603 3
+cloudflare/plugin.json
+  s_20e9f5b001136c::t_95e3a7f002e7a9 5
+coraza/README.md
+  s_20e9f5b001136c::t_6a3652cd97e8aa 3
+coraza/plugin.json
+  s_20e9f5b001136c::t_0398125eab9bd7 5
+discord/README.md
+  s_20e9f5b001136c::t_983057a88624d5 3
+discord/plugin.json
+  s_20e9f5b001136c::t_e8a871fe604e7f 5
+matrix/README.md
+  s_20e9f5b001136c::t_ca55e7712adf2e 3
+matrix/plugin.json
+  s_20e9f5b001136c::t_547232bd4a980a 5
+openappsec/README.md
+  s_20e9f5b001136c::t_a118d72f5774a3 3
+openappsec/plugin.json
+  s_20e9f5b001136c::t_138e7210422d8f 5
+sentinelone/README.md
+  s_20e9f5b001136c::t_b223e61309939f 3
+sentinelone/plugin.json
+  s_20e9f5b001136c::t_e748791de58c83 5
+slack/README.md
+  s_20e9f5b001136c::t_a7eab896d4dc43 3
+slack/plugin.json
+  s_20e9f5b001136c::t_8ace29d10f78eb 5
+webhook/README.md
+  s_20e9f5b001136c::t_de00fd78398cc5 3
+webhook/plugin.json
+  s_20e9f5b001136c::t_c5a4823b5477fd 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9a79fb689959c7e942014177db02fde506f755e",
+  "prompts": {},
+  "sessions": {
+    "s_20e9f5b001136c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92da8d78-7829-4e76-9ea3-6e08b47895fc",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
