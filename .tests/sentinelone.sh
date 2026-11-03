@@ -152,14 +152,34 @@ fi
 
 # Error paths: a SentinelOne API failure must FAIL OPEN — the request is allowed
 # through, never denied (403) and never leaked as a server error (5xx) to the
-# client. 5.5.5.5 -> mock returns 500 ; 6.6.6.6 -> mock returns unparsable JSON.
-for bad_ip in 5.5.5.5 6.6.6.6 ; do
+# client. 5.5.5.5 -> mock returns 500 with a JSON body ; 6.6.6.6 -> mock returns
+# unparsable JSON ; 7.7.7.7 -> mock returns 403 with a JSON body.
+for bad_ip in 5.5.5.5 6.6.6.6 7.7.7.7 ; do
 	echo "ℹ️ Testing fail-open when the API errors for $bad_ip ..."
 	code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: $bad_ip" http://bunkerweb:8080/)"
 	if [ "$code" != "200" ] ; then
 		docker compose logs
 		docker compose down -v
 		echo "❌ Error: API failure for $bad_ip should fail open (got $code, expected 200)"
+		exit 1
+	fi
+done
+
+# The failed lookups must be logged with the real error, not crash the error path
+# (a nil error used to raise "attempt to concatenate a nil value" in access()).
+echo "ℹ️ Checking the API errors are logged ..."
+bw_logs="$(docker compose logs bunkerweb 2>&1)"
+if echo "$bw_logs" | grep -F "attempt to concatenate" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: a failed IP lookup raised a Lua concatenation error"
+	exit 1
+fi
+for expected in "received status 500 from the SentinelOne API with data" "received status 403 from the SentinelOne API with data" ; do
+	if ! echo "$bw_logs" | grep -F "$expected" >/dev/null 2>&1 ; then
+		docker compose logs
+		docker compose down -v
+		echo "❌ Error: expected the log to carry '$expected'"
 		exit 1
 	fi
 done

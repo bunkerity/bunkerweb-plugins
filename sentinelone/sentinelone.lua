@@ -186,7 +186,7 @@ function sentinelone:check_ip()
 	ok, found, response =
 		self:request("/threat-intelligence/iocs", { type = ioc_type, value = self.ctx.bw.remote_addr })
 	if not ok then
-		return false, response
+		return false, found
 	end
 	local result = "clean"
 	if found and sentinelone_helpers.is_malicious(response) then
