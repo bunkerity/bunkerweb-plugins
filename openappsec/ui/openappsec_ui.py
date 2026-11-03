@@ -122,11 +122,8 @@ def _json_records(text):
     return records, skipped
 
 
-def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS, stats=None):
-    """Read recent request events from the agent's rotated JSON logs (one object per line or pretty-printed).
-
-    When a dict is passed as stats, its "skipped" key receives the number of malformed records dropped.
-    """
+def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS):
+    """Read recent request events from the agent's rotated JSON logs (one object per line or pretty-printed)."""
     if not events_dir or not os.path.isdir(events_dir):
         return [], "events directory not found"
     try:
@@ -135,7 +132,6 @@ def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS, stats=None
         limit = 200
 
     events = []
-    skipped = 0
     try:
         paths = glob.glob(os.path.join(events_dir, "cp-nano-http-transaction-handler.log*"))
         for path in paths:
@@ -149,20 +145,16 @@ def read_events(events_dir, limit=200, skip_hosts=DEFAULT_SKIP_HOSTS, stats=None
                     text = handle.read().decode("utf-8", errors="replace")
             except (OSError, UnicodeError):
                 return [], "could not read event logs"
-            records, bad = _json_records(text)
-            skipped += bad
+            records, _ = _json_records(text)
             for record in records:
                 try:
                     projected = _project_event(record, skip_hosts)
                 except (TypeError, ValueError):
-                    skipped += 1
                     continue
                 if projected is not None:
                     events.append(projected)
     except (OSError, TypeError):
         return [], "could not read event logs"
-    if stats is not None:
-        stats["skipped"] = skipped
 
     events.sort(key=lambda event: event.get("time", ""), reverse=True)
     return events[:limit], None
