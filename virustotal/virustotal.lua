@@ -28,6 +28,10 @@ local decode = cjson.decode
 local encode = cjson.encode
 local open = io.open
 
+-- Set once this worker has logged that the plugin is enabled without an API key, so the
+-- warning is not repeated on every request.
+local missing_key_warned = false
+
 local read_all = function(form)
 	while true do
 		local typ = form:read()
@@ -86,6 +90,16 @@ function virustotal:access()
 		or (self.variables["VIRUSTOTAL_SCAN_IP"] ~= "yes" and self.variables["VIRUSTOTAL_SCAN_FILE"] ~= "yes")
 	then
 		return self:ret(true, "virustotal plugin not enabled")
+	end
+
+	-- Without an API key every lookup would be rejected by VT, so do nothing (fail open)
+	local api_key = self.variables["VIRUSTOTAL_API_KEY"]
+	if api_key == nil or api_key == "" then
+		if not missing_key_warned then
+			missing_key_warned = true
+			self.logger:log(WARN, "virustotal is enabled but VIRUSTOTAL_API_KEY is empty, nothing will be scanned")
+		end
+		return self:ret(true, "virustotal is enabled but VIRUSTOTAL_API_KEY is empty")
 	end
 
 	-- IP check
@@ -156,7 +170,7 @@ function virustotal:check_ip()
 	local found, response
 	ok, found, response = self:request("/ip_addresses/" .. self.ctx.bw.remote_addr)
 	if not ok then
-		return false, response
+		return false, found
 	end
 	local result = "clean"
 	if found then
@@ -392,7 +406,7 @@ function virustotal:request(url)
 		err = "received status " .. tostring(res.status) .. " from VT API"
 		local ok, data = pcall(decode, res.body)
 		if ok then
-			err = err .. " with data " .. data
+			err = err .. " with data " .. encode(data)
 		end
 		return false, err
 	end
@@ -420,6 +434,11 @@ function virustotal:api()
 		end
 		if not check then
 			return self:ret(true, "Virustotal plugin not enabled", HTTP_SERVICE_UNAVAILABLE)
+		end
+
+		local api_key = self.variables["VIRUSTOTAL_API_KEY"]
+		if api_key == nil or api_key == "" then
+			return self:ret(true, "VIRUSTOTAL_API_KEY is not set", HTTP_SERVICE_UNAVAILABLE)
 		end
 
 		-- Send test data to virustotal virustotal
