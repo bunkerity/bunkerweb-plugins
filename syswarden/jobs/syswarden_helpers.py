@@ -649,8 +649,38 @@ def serialize_addresses(entries: Iterable[str]) -> Tuple[bytes, int, int]:
     return (b"\n".join(valid) + (b"\n" if valid else b""), len(valid), invalid)
 
 
-def extract_whitelist_ips(payload: Any) -> Optional[List[str]]:
-    """Read the authoritative whitelist contract, distinguishing empty from malformed."""
+def _is_ip_or_network(text: str, version: int) -> bool:
+    """True when ``text`` is an address or network of the given IP version."""
+    with suppress(ValueError):
+        return (ip_network(text) if "/" in text else ip_address(text)).version == version
+    return False
+
+
+def is_tcp_scoped(entry: str) -> bool:
+    """True for a valid SysWarden TCP-scoped entry: ``v4[/len]:port`` or ``[v6[/len]]:port``.
+
+    A plain address or network is never scoped, which is checked first so ``2001:db8::1:443``
+    stays an IPv6 address. Anything malformed returns False and is left to the validator.
+    """
+    with suppress(ValueError):
+        ip_network(entry) if "/" in entry else ip_address(entry)
+        return False
+    if entry.startswith("["):
+        addr, sep, port = entry[1:].partition("]:")
+        version = 6
+    else:
+        addr, sep, port = entry.partition(":")
+        version = 4
+    return bool(sep) and port.isascii() and port.isdigit() and 1 <= int(port) <= 65535 and _is_ip_or_network(addr, version)
+
+
+def extract_whitelist_ips(payload: Any, scoped: Optional[List[str]] = None) -> Optional[List[str]]:
+    """Read the authoritative whitelist contract, distinguishing empty from malformed.
+
+    TCP-scoped entries restrict an exception to one port, so they cannot join the global
+    Layer 7 whitelist (dropping the port would widen them). They are left out and, when a
+    list is passed as ``scoped``, appended to it for the caller to report.
+    """
     if not isinstance(payload, dict):
         return None
     whitelist = payload.get("whitelist")
@@ -661,7 +691,16 @@ def extract_whitelist_ips(payload: Any) -> Optional[List[str]]:
         return []
     if not isinstance(ips, list) or any(not isinstance(entry, str) for entry in ips):
         return None
-    return [entry.strip() for entry in ips if entry.strip()]
+    entries = []
+    for entry in (entry.strip() for entry in ips):
+        if not entry:
+            continue
+        if is_tcp_scoped(entry):
+            if scoped is not None:
+                scoped.append(entry)
+        else:
+            entries.append(entry)
+    return entries
 
 
 def normalize_fingerprint(value: Optional[str]) -> str:

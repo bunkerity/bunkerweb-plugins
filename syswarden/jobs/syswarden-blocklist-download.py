@@ -64,6 +64,7 @@ try:
 
     blocklist = set()
     whitelist = set()
+    scoped_whitelist = []
     complete = True
 
     for peer in peers:
@@ -80,12 +81,17 @@ try:
             # SysWarden exposes its whitelist only inside the telemetry payload; there is
             # no dedicated route for it yet.
             got, body = call(session, peer, "GET", "/ha/telemetry", timeout=timeout)
-            entries = extract_whitelist_ips(body) if got else None
+            entries = extract_whitelist_ips(body, scoped_whitelist) if got else None
             if entries is None:
                 LOGGER.error(f"Can't read the whitelist of {peer}: {body}")
                 complete = False
             else:
                 whitelist.update(entries)
+
+    if scoped_whitelist:
+        LOGGER.info(
+            f"Left {len(scoped_whitelist)} TCP-scoped SysWarden whitelist entry(ies) out of the global whitelist, SysWarden still enforces them on the host"
+        )
 
     if not complete:
         LOGGER.error("The SysWarden list snapshot is incomplete, keeping every cached list unchanged")
