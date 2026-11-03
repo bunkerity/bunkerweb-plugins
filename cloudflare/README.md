@@ -1,6 +1,6 @@
 # Cloudflare plugin
 
-![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.13-blue)
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.14-blue)
 
 ```mermaid
 flowchart TD
