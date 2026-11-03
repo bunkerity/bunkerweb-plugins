@@ -46,6 +46,14 @@ services:
     networks:
       - bw-universe
 
+  # Stub Coraza API answering 503 with a JSON body, used by the error-path test.
+  coraza-stub:
+    image: nginx:alpine
+    volumes:
+      - ./coraza-stub.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - bw-universe
+
   hello:
     image: nginxdemos/nginx-hello
     networks:

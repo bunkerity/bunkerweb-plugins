@@ -18,6 +18,7 @@ local get_deny_status = utils.get_deny_status
 local rand = utils.rand
 local tostring = tostring
 local decode = cjson.decode
+local encode = cjson.encode
 local open = io.open
 local coroutine_create = coroutine.create
 local coroutine_yield = coroutine.yield
@@ -77,7 +78,7 @@ function coraza:ping()
 		err = "received status " .. tostring(res.status) .. " from Coraza API"
 		local ok, data = pcall(decode, res.body)
 		if ok then
-			err = err .. " with data " .. data
+			err = err .. " with data " .. encode(data)
 		end
 		return false, err
 	end
@@ -175,7 +176,7 @@ function coraza:process_request()
 		local ok
 		ok, data = pcall(decode, res.body)
 		if ok then
-			err = err .. " with data " .. data
+			err = err .. " with data " .. encode(data)
 		end
 		return false, err
 	end
