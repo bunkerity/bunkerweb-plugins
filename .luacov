@@ -1,0 +1,6 @@
+-- Coverage for the plugin modules only (never spec/). Used by `busted --coverage`, then `luacov`.
+statsfile = "luacov.stats.out"
+reportfile = "luacov.report.lcov"
+reporter = "lcov"
+-- Patterns are matched against the module path, relative to the repo root, without ".lua".
+include = { "^[%w_]+/[%w_]+_helpers$" }

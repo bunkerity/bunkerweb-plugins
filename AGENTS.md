@@ -41,6 +41,8 @@ Name Python files `test_*.py`, Lua specs `*_helpers_spec.lua`, and Go tests `*_t
 - **Python (pytest)** — `tests/test_ui_actions.py` parametrizes over every plugin's `ui/actions.py`; `tests/conftest.py` provides a `FakePingUtils` mock for `bw_instances_utils`. Run `pytest tests/ -q`.
 - **Lua (busted)** — `spec/*_helpers_spec.lua` exercises the pure-logic helper module of every plugin that ships a `<plugin>_helpers.lua` (all but `coraza`) against `spec/helpers/fake_ngx.lua`. Run `busted`. This is why upstream-specific logic is factored into `<plugin>_helpers.lua` — so it's testable outside OpenResty.
 
+**Coverage locally** (the `unit` job produces the same files). Go: `cd coraza/api && go mod tidy && go test -tags=coraza.rule.multiphase_evaluation -coverprofile=coverage.out -covermode=atomic ./...`. Python: `pip install pytest-cov`, then `pytest tests/ -q --cov=. --cov-report=` and `coverage xml --include='*/ui/*.py,*/jobs/*.py' -o coverage.xml`. Lua: `luarocks --lua-version=5.4 install luacov` and `luarocks --lua-version=5.4 install luacov-reporter-lcov` (two separate commands), then `busted --coverage && luacov`, which writes `luacov.report.lcov` for the plugin `*_helpers.lua` modules only (config in `.luacov`). All of these outputs are gitignored.
+
 ### Integration tests (Docker, e2e)
 
 - `./.tests/bw.sh <bw_tag>` pulls `bunkerity/bunkerweb:<tag>` + `bunkerweb-scheduler:<tag>` and retags them as `bunkerweb:tests` / `bunkerweb-scheduler:tests`. Must run first.
@@ -57,9 +59,10 @@ Name Python files `test_*.py`, Lua specs `*_helpers_spec.lua`, and Go tests `*_t
 Runs on push to `dev` and `main`. A `tag` job resolves the **latest stable BunkerWeb release** at runtime via the GitHub `releases/latest` API (`gh api repos/bunkerity/bunkerweb/releases/latest`, which excludes drafts and pre-releases; a leading `v` is stripped) and feeds that tag to every downstream job — same version on both branches, never pinned. `tag`, `plumber`, `codeql`, `lint` and `unit` have no `needs:` and run in parallel; only `integration` and `build-push` wait on others. Jobs:
 
 1. **plumber** — `.github/workflows/plumber.yml` (also runs weekly on a cron): [Plumber](https://getplumber.io) scans `.github/workflows/` for CI/CD supply-chain misconfigurations, gated at `min-score: B` with `soft-fail: false`. Policy overlay + rationale in `.github/plumber/` (read its README before touching a workflow — an unpinned action, a missing job `permissions:` block, or an event-supplied `ref:` will fail the run). The **`dev` and `main` branches must both stay protected**: `branchMustBeProtected` is Critical and caps the score at grade E.
-2. **codeql** — `.github/workflows/codeql.yml` (also runs weekly on a cron), matrix `[python, go]`, scoped by `.github/codeql.yml` (a fixed `paths:` list: add every new plugin directory there).
+2. **codeql** — `.github/workflows/codeql.yml` (also runs weekly on a cron), matrix `[python, go, actions]` (`actions` scans `.github/workflows/*.yml`), scoped by `.github/codeql.yml` (a fixed `paths:` list: add every new plugin directory there, and keep `.github/workflows` in it, because a `paths:` list replaces the `actions` extractor's default workflow includes).
 3. **lint** — `pre-commit run --all-files`.
 4. **unit** — matrix `[go, python, lua]` (the unit tests above).
+   Each matrix job uploads its coverage to Codecov with `codecov/codecov-action` (`flags: go|python|lua`, token mode via the `CODECOV_TOKEN` secret). Codecov is reporting only: `.github/codecov.yml` sets project and patch statuses to `informational`, comments are off, there is no coverage floor, and a failed upload (`continue-on-error: true`) never fails the job.
 5. **integration** — `needs: [tag, lint, unit]`, matrix `plugin: [clamav, cloudflare, coraza, virustotal, authentik, notifier, sentinelone, syswarden, openappsec]` — every per-plugin script above, none excluded; each runs `.tests/bw.sh <tag>` then `.tests/<plugin>.sh`.
 6. **build-push** — `main` only, `needs: [plumber, tag, integration]` so a failing supply-chain scan blocks publishing: `./.tests/build-push.sh <tag>` builds and pushes the `bunkerweb-coraza` image.
 
