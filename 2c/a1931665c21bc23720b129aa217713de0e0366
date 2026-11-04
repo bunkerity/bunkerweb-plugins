@@ -1,0 +1,19 @@
+.github/codeql.yml
+  s_f7a4b2542096dd::t_97ac827c73ce1a 4,6,9-11,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ca1931665c21bc23720b129aa217713de0e0366",
+  "prompts": {},
+  "sessions": {
+    "s_f7a4b2542096dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7423b0d1-a0ae-47aa-9084-c85e4ec98b90",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
