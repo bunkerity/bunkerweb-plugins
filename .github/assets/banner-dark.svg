@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" width="1200" height="200" role="img" aria-labelledby="t d">
+  <title id="t">BunkerWeb plugins</title>
+  <desc id="d">Official external plugins for BunkerWeb. Twelve squares stand for the twelve plugins.</desc>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b354a"/><stop offset="1" stop-color="#0b5577"/></linearGradient></defs>
+  <rect width="1200" height="200" rx="14" fill="url(#g)"/>
+  <text x="56" y="96" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff">BunkerWeb <tspan fill="#2eac68">plugins</tspan></text>
+  <text x="58" y="138" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#bfe3f1">Official external plugins for BunkerWeb</text>
+  <rect x="880" y="62" width="34" height="34" rx="6" fill="#2eac68"/>
+  <rect x="924" y="62" width="34" height="34" rx="6" fill="#6ac1e0"/>
+  <rect x="968" y="62" width="34" height="34" rx="6" fill="#0b5577"/>
+  <rect x="1012" y="62" width="34" height="34" rx="6" fill="#2eac68"/>
+  <rect x="1056" y="62" width="34" height="34" rx="6" fill="#6ac1e0"/>
+  <rect x="1100" y="62" width="34" height="34" rx="6" fill="#0b5577"/>
+  <rect x="880" y="106" width="34" height="34" rx="6" fill="#2eac68"/>
+  <rect x="924" y="106" width="34" height="34" rx="6" fill="#6ac1e0"/>
+  <rect x="968" y="106" width="34" height="34" rx="6" fill="#0b5577"/>
+  <rect x="1012" y="106" width="34" height="34" rx="6" fill="#2eac68"/>
+  <rect x="1056" y="106" width="34" height="34" rx="6" fill="#6ac1e0"/>
+  <rect x="1100" y="106" width="34" height="34" rx="6" fill="#0b5577"/>
+</svg>
