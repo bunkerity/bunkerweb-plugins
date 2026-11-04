@@ -1,0 +1,38 @@
+coraza/coraza.lua
+  s_f77c53ded17923::t_6c97e5f6f11331 21,81,179
+.tests/coraza/coraza-stub.conf
+  s_f77c53ded17923::t_7a51d4a29bcbbd 1-12
+.tests/coraza/docker-compose.yml
+  s_f77c53ded17923::t_7a51d4a29bcbbd 49-56
+.tests/coraza.sh
+  s_69c00d28b3cb02::t_6c8e1ec0b7645f 138
+  s_69c00d28b3cb02::t_d00b809ac52fa1 150,153
+  s_f77c53ded17923::t_7a51d4a29bcbbd 27,126-127,130-132,134-135,139-149,151-152,154-155
+  s_69c00d28b3cb02::t_462dbab9f12b4f 133
+  s_f77c53ded17923::t_f6a6ac53c0dba9 128-129,136-137
+  s_f77c53ded17923::t_ea51447fe4770d 156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "917de0a9c316191d5e1ce30018cc1f605bfa9cfc",
+  "prompts": {},
+  "sessions": {
+    "s_69c00d28b3cb02": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353822e7-2f96-4a64-b1e0-af3a437bf27e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    },
+    "s_f77c53ded17923": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59b0250c-c68f-4cf2-8513-91b6891c1013",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}

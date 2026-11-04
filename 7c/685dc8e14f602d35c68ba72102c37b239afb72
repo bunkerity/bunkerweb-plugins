@@ -1,0 +1,25 @@
+sentinelone/sentinelone.lua
+  s_f77c53ded17923::t_6c97e5f6f11331 189
+.tests/sentinelone/s1-mock.conf
+  s_f77c53ded17923::t_f3435ff5dfefa3 37-38,47-48
+  s_f77c53ded17923::t_58127781f41b68 49
+.tests/sentinelone.sh
+  s_f77c53ded17923::t_f3435ff5dfefa3 155-157,168-182
+  s_f77c53ded17923::t_e860625781387c 183-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7c685dc8e14f602d35c68ba72102c37b239afb72",
+  "prompts": {},
+  "sessions": {
+    "s_f77c53ded17923": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59b0250c-c68f-4cf2-8513-91b6891c1013",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
