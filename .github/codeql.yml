@@ -1,10 +1,16 @@
 name: "CodeQL config"
 
 paths:
+  - authentik
   - clamav
+  - cloudflare
   - coraza
   - discord
+  - matrix
+  - openappsec
+  - sentinelone
   - slack
+  - syswarden
   - virustotal
   - webhook
 paths-ignore:
