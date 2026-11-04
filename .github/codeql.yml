@@ -1,10 +1,19 @@
 name: "CodeQL config"
 
 paths:
+  # Needed by the `actions` language: a `paths:` list replaces its default
+  # workflow includes. No python/go files live here.
+  - .github/workflows
+  - authentik
   - clamav
+  - cloudflare
   - coraza
   - discord
+  - matrix
+  - openappsec
+  - sentinelone
   - slack
+  - syswarden
   - virustotal
   - webhook
 paths-ignore:

@@ -410,6 +410,59 @@ class TestExtractWhitelistIPs:
     def test_malformed_entries_reject_the_snapshot(self):
         assert helpers.extract_whitelist_ips({"whitelist": {"ips": ["1.1.1.1", 42]}}) is None
 
+    @staticmethod
+    def _extract(entries):
+        return helpers.extract_whitelist_ips({"whitelist": {"ips": entries}})
+
+    def test_the_reporter_input_keeps_only_the_global_entry(self):
+        # Issue #241: a port-scoped entry must not reach serialize_addresses().
+        entries = self._extract(["192.0.2.17", "198.51.100.0/24:62026"])
+        assert entries == ["192.0.2.17"]
+        assert helpers.serialize_addresses(entries) == (b"192.0.2.17\n", 1, 0)
+
+    def test_a_mixed_list_returns_only_the_global_entries(self):
+        mixed = ["192.0.2.17", "192.0.2.5:443", "2001:db8::/32", "[2001:db8::1]:8443", "[2001:db8::/48]:80", "10.0.0.0/8", "10.1.0.0/16:22"]
+        assert self._extract(mixed) == ["192.0.2.17", "2001:db8::/32", "10.0.0.0/8"]
+
+    @pytest.mark.parametrize("entry", ("2001:db8::1:443", "::1", "2001:db8::/32", "::ffff:192.0.2.1"))
+    def test_plain_ipv6_is_never_read_as_address_and_port(self, entry):
+        assert self._extract([entry]) == [entry]
+
+    @pytest.mark.parametrize(
+        "entry",
+        (
+            "1.2.3.4:0",
+            "1.2.3.4:65536",
+            "1.2.3.4:abc",
+            "1.2.3.4:+80",
+            "1.2.3.4: 80",
+            "[2001:db8::1]:",
+            "2001:db8::/32:443",
+            "bogus:99999",
+            "[]:80",
+            "[1.2.3.4]:80",
+            "1.2.3.4:80:81",
+            "1.2.3.4/33:80",
+            "[2001:db8::1]:0",
+            "[2001:db8::1]80",
+        ),
+    )
+    def test_malformed_scoped_entries_stay_so_the_snapshot_aborts(self, entry):
+        entries = self._extract(["192.0.2.17", entry])
+        assert entry in entries
+        assert helpers.serialize_addresses(entries)[2] == 1
+
+    def test_an_all_scoped_whitelist_serializes_to_an_empty_list(self):
+        entries = self._extract(["198.51.100.0/24:62026", "[2001:db8::1]:443"])
+        assert entries == []
+        assert helpers.serialize_addresses(entries) == (b"", 0, 0)
+
+    def test_scoped_entries_are_reported_to_the_caller(self):
+        scoped = []
+        entries = helpers.extract_whitelist_ips({"whitelist": {"ips": ["192.0.2.17", "192.0.2.5:443", "[2001:db8::1]:80"]}}, scoped)
+        assert entries == ["192.0.2.17"]
+        assert scoped == ["192.0.2.5:443", "[2001:db8::1]:80"]
+
 
 class TestNormalizeFingerprint:
     def test_openssl_output_becomes_a_bare_digest(self):

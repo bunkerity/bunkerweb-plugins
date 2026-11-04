@@ -1,6 +1,6 @@
 # Coraza plugin
 
-![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.13-blue)
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.14-blue)
 
 ```mermaid
 flowchart TD
@@ -99,8 +99,9 @@ disrupting verdict denies the request with BunkerWeb's deny status.
    `block`, `deny`, `drop`, `redirect` or `reject`), the request is denied with
    `utils.get_deny_status()` and the rule message is attached. Otherwise the
    request continues to its normal destination.
-6. If the sidecar is unreachable or returns a non-`200` status, the request is
-   denied with HTTP `500` and the error is logged - Coraza **fails closed**.
+6. If the sidecar is unreachable or returns a non-`200` status, the error is
+   logged and the request continues to its normal destination - Coraza **fails
+   open**.
 
 # Prerequisites
 
@@ -171,10 +172,11 @@ networks:
 
 # Troubleshooting
 
-- **Every request returns HTTP 500.** The sidecar is unreachable or answering
-  with a non-`200` status. Coraza fails closed, so a down sidecar blocks all
-  traffic. Check that `bw-coraza` is running, on the shared network, and that
-  `CORAZA_API` points at it (scheme + host + port `8080`). The scheduler log
+- **Requests are no longer inspected.** The sidecar is unreachable or answering
+  with a non-`200` status. Coraza fails open, so a down sidecar lets all traffic
+  through uninspected and logs `error while processing request` for each one.
+  Check that `bw-coraza` is running, on the shared network, and that
+  `CORAZA_API` points at it (scheme + host + port `8080`). The BunkerWeb log
   shows the underlying error.
 - **HTTP/2 sites misbehave.** The plugin does not support HTTP/2 yet; keep
   `HTTP2: "no"`.
@@ -196,10 +198,11 @@ networks:
   separate service. The `bunkerity/bunkerweb-coraza` container must be deployed
   alongside BunkerWeb and reachable at `CORAZA_API`. There is no in-process
   fallback.
-- **Fail-closed by design.** If the sidecar cannot be reached or returns a
-  non-`200` response, the request is denied (HTTP `500`). This avoids letting
-  traffic through unscanned, at the cost of coupling availability to the
-  sidecar - keep it healthy and close to BunkerWeb (same Docker network is
+- **Fail-open on a sidecar error.** If the sidecar cannot be reached or returns
+  a non-`200` response, `coraza.lua` reports a failure without a status.
+  BunkerWeb only logs that and the request reaches the upstream unscanned, so
+  a broken sidecar removes the protection without blocking traffic - monitor
+  it and keep it healthy and close to BunkerWeb (same Docker network is
   ideal).
 - **CRS is pinned and baked into the image.** The OWASP Core Rule Set is
   vendored at build time by `coraza/api/crs.sh`, pinned to a commit hash with

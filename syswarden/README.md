@@ -1,6 +1,6 @@
 # SysWarden plugin
 
-![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.13-blue)
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.14-blue)
 
 ```mermaid
 flowchart TD
@@ -110,6 +110,9 @@ hooks in the BunkerWeb instance.
 2. In the `access` phase (and `preread` for stream services) the client address is checked
    against the **whitelist first**, then the blocklist. An address in both is allowed: the
    whitelist is the operator's explicit override, a blocklist hit is a policy default.
+
+TCP-scoped SysWarden whitelist entries (`address:port`, `[address]:port`) are not applied to the
+Layer 7 whitelist, because the port cannot be expressed there; SysWarden keeps enforcing them on the host.
 
 Both halves are independent: you can push bans without ever downloading a list, and the
 other way round.

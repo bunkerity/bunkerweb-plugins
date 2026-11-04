@@ -57,6 +57,8 @@ jobs:
           echo "bw_tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Check the resolved tag is declared compatible
         run: python3 misc/check_compatibility.py "${{ steps.tag.outputs.bw_tag }}"
 
@@ -65,8 +67,10 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Install pre-commit
@@ -98,11 +102,13 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       # --- Go : coraza API service ---
       - name: Set up Go
         if: matrix.lang == 'go'
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.25"
       - name: Run Go unit tests
@@ -112,12 +118,12 @@ jobs:
           # No go.sum is committed (the Dockerfile resolves deps at build time),
           # so populate it before testing. Build tag must match the binary.
           go mod tidy
-          go test -tags=coraza.rule.multiphase_evaluation ./...
+          go test -tags=coraza.rule.multiphase_evaluation -coverprofile=coverage.out -covermode=atomic ./...
 
       # --- Python : ui/actions.py ---
       - name: Set up Python
         if: matrix.lang == 'python'
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Run Python unit tests
@@ -127,7 +133,18 @@ jobs:
           # syswarden/jobs/syswarden_client.py, the one job module that deliberately owns
           # the HTTP dependencies so the helper modules stay importable with the stdlib alone.
           pip install pytest requests urllib3
-          pytest tests/ -q
+          # pytest-cov is reporting only: without it the tests still run, as before.
+          if pip install pytest-cov; then
+            pytest tests/ -q --cov=. --cov-report=
+          else
+            echo "::warning::pytest-cov unavailable, running the tests without coverage"
+            pytest tests/ -q
+          fi
+      - name: Write the Python coverage report
+        if: matrix.lang == 'python'
+        continue-on-error: true
+        # Only the plugin sources the tests exercise: each plugin's ui/ and jobs/ Python, never tests/.
+        run: coverage xml --include='*/ui/*.py,*/jobs/*.py' -o coverage.xml
 
       # --- Lua : busted specs ---
       - name: Run Lua unit tests
@@ -138,7 +155,32 @@ jobs:
           # tree to 5.4 so the busted CLI runs against the lua5.4 we installed.
           sudo apt-get install -y lua5.4 liblua5.4-dev luarocks
           sudo luarocks --lua-version=5.4 install busted
-          busted
+          # Coverage is reporting only: without luacov the specs still run, as before.
+          # luacov-reporter-lcov: Codecov does not read luacov's own report, it does read LCOV.
+          # .luacov restricts coverage to the plugin *_helpers.lua modules and picks the lcov reporter.
+          if sudo luarocks --lua-version=5.4 install luacov && sudo luarocks --lua-version=5.4 install luacov-reporter-lcov; then
+            busted --coverage
+          else
+            echo "::warning::luacov unavailable, running the specs without coverage"
+            busted
+          fi
+      - name: Write the Lua coverage report
+        if: matrix.lang == 'lua'
+        continue-on-error: true
+        run: luacov
+
+      # Reporting only: a failed upload (or a fork PR, which gets no secret) never fails the job.
+      # fail_ci_if_error makes the action stop before running an uploader whose signature or checksum
+      # does not verify; continue-on-error keeps that from failing the job.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        continue-on-error: true
+        with:
+          files: ${{ matrix.lang == 'go' && 'coraza/api/coverage.out' || matrix.lang == 'python' && 'coverage.xml' || 'luacov.report.lcov' }}
+          flags: ${{ matrix.lang }}
+          disable_search: true
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   integration:
     needs: [tag, lint, unit]
@@ -161,8 +203,10 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Login to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -180,8 +224,10 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Login to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}

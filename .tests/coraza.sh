@@ -24,6 +24,7 @@ do_and_check_cmd cp -r ./coraza/api /tmp/bunkerweb-plugins/coraza
 
 # Copy compose
 do_and_check_cmd cp .tests/coraza/docker-compose.yml /tmp/bunkerweb-plugins/coraza
+do_and_check_cmd cp .tests/coraza/coraza-stub.conf /tmp/bunkerweb-plugins/coraza
 
 # Edit compose
 do_and_check_cmd sed -i "s@bunkerity/bunkerweb:.*\$@bunkerweb:tests@g" /tmp/bunkerweb-plugins/coraza/docker-compose.yml
@@ -119,6 +120,37 @@ if [ "$ret" != "200" ] ; then
 	docker compose logs
 	docker compose down -v
 	echo "❌ Error: benign request should pass (got $ret, expected 200)"
+	exit 1
+fi
+
+# Coraza API answering non-200 with a JSON body: the error must be logged with the body,
+# not crash the error path. Recreating the scheduler pushes the new CORAZA_API to
+# BunkerWeb and reloads it. The request status is deliberately not asserted: what the
+# plugin does with the request on an API error is a separate matter from this crash.
+echo "ℹ️ Testing a Coraza API error with a JSON body ..."
+do_and_check_cmd sed -i "s@- USE_CORAZA=yes@- USE_CORAZA=yes\n      - CORAZA_API=http://coraza-stub:8080@" docker-compose.yml
+do_and_check_cmd docker compose up -d bw-scheduler
+# Stop on the request-path error or the concatenation error; the init_worker() ping error also says "from Coraza API" and must not count.
+retry=0
+while [ $retry -lt 60 ] ; do
+	http_code "http://bunkerweb:8080/?id=/etc/passwd" >/dev/null
+	bw_logs="$(docker compose logs bunkerweb 2>&1)"
+	if echo "$bw_logs" | grep -qF -e "error while processing request : received status 503 from Coraza API" -e "attempt to concatenate" ; then
+		break
+	fi
+	retry=$((retry + 1))
+	sleep 1
+done
+if echo "$bw_logs" | grep -F "attempt to concatenate" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: a Coraza API error raised a Lua concatenation error"
+	exit 1
+fi
+if ! echo "$bw_logs" | grep -F "error while processing request : received status 503 from Coraza API with data" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: the request-path Coraza API error body was not logged"
 	exit 1
 fi
 

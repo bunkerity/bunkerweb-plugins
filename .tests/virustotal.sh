@@ -139,8 +139,9 @@ fi
 
 # Error paths: a VT API failure must FAIL OPEN — the request is allowed through,
 # never denied (403) and never leaked as a server error (5xx) to the client.
-# 5.5.5.5 -> mock returns 500 ; 6.6.6.6 -> mock returns unparsable JSON.
-for bad_ip in 5.5.5.5 6.6.6.6 ; do
+# 5.5.5.5 -> mock returns 500 ; 6.6.6.6 -> mock returns unparsable JSON ;
+# 7.7.7.7 -> mock returns 403 with a JSON body.
+for bad_ip in 5.5.5.5 6.6.6.6 7.7.7.7 ; do
 	echo "ℹ️ Testing fail-open when VT API errors for $bad_ip ..."
 	code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: $bad_ip" http://bunkerweb:8080/)"
 	if [ "$code" != "200" ] ; then
@@ -150,6 +151,22 @@ for bad_ip in 5.5.5.5 6.6.6.6 ; do
 		exit 1
 	fi
 done
+
+# The 403 JSON body must be logged, not crash the error path.
+echo "ℹ️ Checking the VT error body is logged ..."
+bw_logs="$(docker compose logs bunkerweb 2>&1)"
+if echo "$bw_logs" | grep -F "attempt to concatenate" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: VT error body raised a Lua concatenation error"
+	exit 1
+fi
+if ! echo "$bw_logs" | grep -F "received status 403 from VT API with data" >/dev/null 2>&1 ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: VT error body was not logged for 7.7.7.7"
+	exit 1
+fi
 
 # HTTP/2: the file-scan path used resty.upload (the raw request socket), which is
 # unavailable over HTTP/2 and used to crash with a 500 (issue #64/#87). Over a real
@@ -260,6 +277,54 @@ if curl --version 2>/dev/null | grep -qi "HTTP3" ; then
 	fi
 else
 	echo "⚠️ Skipped HTTP/3 test: curl has no HTTP/3 support"
+fi
+
+# Enabled with an empty API key: nothing is scanned (no VT request), requests are allowed
+# and the warning is logged once per worker, not once per request. Recreating the scheduler
+# pushes the new key to BunkerWeb and reloads it.
+echo "ℹ️ Testing the plugin does nothing when VIRUSTOTAL_API_KEY is empty ..."
+do_and_check_cmd sed -i "s@VIRUSTOTAL_API_KEY=dummy@VIRUSTOTAL_API_KEY=@" docker-compose.yml
+do_and_check_cmd docker compose up -d bw-scheduler
+success="ko"
+retry=0
+while [ $retry -lt 60 ] ; do
+	code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: 1.2.3.4" http://bunkerweb:8080/)"
+	if [ "$code" = "200" ] ; then
+		success="ok"
+		break
+	fi
+	retry=$((retry + 1))
+	sleep 1
+done
+if [ "$success" = "ko" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: empty VIRUSTOTAL_API_KEY should disable scanning (last code $code, expected 200)"
+	exit 1
+fi
+vt_hits_before="$(docker compose logs mock 2>/dev/null | grep -c "/ip_addresses/")"
+for i in $(seq 1 30) ; do
+	code="$(docker compose exec -T client curl -s -o /dev/null -w "%{http_code}" -H "Host: www.example.com" -H "X-Forwarded-For: 9.9.9.$i" http://bunkerweb:8080/)"
+	if [ "$code" != "200" ] ; then
+		docker compose logs
+		docker compose down -v
+		echo "❌ Error: request with an empty VIRUSTOTAL_API_KEY should be allowed (got $code)"
+		exit 1
+	fi
+done
+vt_hits_after="$(docker compose logs mock 2>/dev/null | grep -c "/ip_addresses/")"
+if [ "$vt_hits_before" != "$vt_hits_after" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: plugin queried the VT API despite an empty VIRUSTOTAL_API_KEY ($vt_hits_before -> $vt_hits_after)"
+	exit 1
+fi
+warn_pids="$(docker compose logs bunkerweb 2>&1 | grep -F "VIRUSTOTAL_API_KEY is empty, nothing will be scanned" | sed -E 's/.*\[warn\] ([0-9]+)#.*/\1/')"
+if [ -z "$warn_pids" ] || [ -n "$(echo "$warn_pids" | sort | uniq -d)" ] ; then
+	docker compose logs
+	docker compose down -v
+	echo "❌ Error: expected the empty-key warning once per worker, got: $(echo "$warn_pids" | tr '\n' ' ')"
+	exit 1
 fi
 
 if [ "$1" = "verbose" ] ; then

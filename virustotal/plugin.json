@@ -2,7 +2,7 @@
   "id": "virustotal",
   "name": "VirusTotal",
   "description": "Automatic scan of uploaded files and client IPs with the VirusTotal API.",
-  "version": "1.13",
+  "version": "1.14",
   "stream": "partial",
   "settings": {
     "USE_VIRUSTOTAL": {
@@ -17,7 +17,7 @@
     "VIRUSTOTAL_API_KEY": {
       "context": "global",
       "default": "",
-      "help": "Key to authenticate with VirusTotal API.",
+      "help": "Key to authenticate with VirusTotal API. The plugin does nothing (one warning is logged) until the key is set.",
       "id": "virustotal-api-key",
       "label": "API key",
       "regex": "^.*$",

@@ -329,6 +329,53 @@ def test_read_events_drops_a_torn_tail_line_and_keeps_following_events(tmp_path)
     assert [event["event_id"] for event in events] == ["event-2", "event-1"]
 
 
+def test_read_events_reads_pretty_printed_events(tmp_path):
+    first = _event("event-1", "2026-09-22T09:44:53.729")
+    second = _event("event-2", "2026-09-22T09:45:53.729")
+    log = tmp_path / "cp-nano-http-transaction-handler.log"
+    log.write_text(json.dumps(first, indent=4) + "\n" + json.dumps(second, indent=4) + "\n", encoding="utf-8")
+
+    events, error = openappsec_ui.read_events(str(tmp_path))
+
+    assert error is None
+    assert [event["event_id"] for event in events] == ["event-2", "event-1"]
+
+
+def test_read_events_reads_a_file_mixing_pretty_printed_and_ndjson_events(tmp_path):
+    pretty = _event("event-1", "2026-09-22T09:44:53.729")
+    compact = [_event("event-2", "2026-09-22T09:45:53.729"), _event("event-3", "2026-09-22T09:46:53.729")]
+    log = tmp_path / "cp-nano-http-transaction-handler.log"
+    log.write_text(json.dumps(pretty, indent=2) + "\n" + "\n".join(json.dumps(item) for item in compact) + "\n", encoding="utf-8")
+
+    events, error = openappsec_ui.read_events(str(tmp_path))
+
+    assert error is None
+    assert [event["event_id"] for event in events] == ["event-3", "event-2", "event-1"]
+
+
+def test_read_events_skips_a_torn_pretty_printed_tail_without_raising(tmp_path):
+    first = _event("event-1", "2026-09-22T09:44:53.729")
+    second = _event("event-2", "2026-09-22T09:45:53.729")
+    torn = json.dumps(second, indent=4)
+    log = tmp_path / "cp-nano-http-transaction-handler.log"
+    log.write_text(json.dumps(first, indent=4) + "\n" + torn[: len(torn) // 2], encoding="utf-8")
+
+    events, error = openappsec_ui.read_events(str(tmp_path))
+
+    assert error is None
+    assert [event["event_id"] for event in events] == ["event-1"]
+
+
+def test_json_records_counts_a_torn_tail_and_resumes_at_the_next_object():
+    good = json.dumps({"n": 1}, indent=2)
+    torn = json.dumps({"n": 2, "pad": "x" * 20}, indent=2)[:-8]
+
+    records, skipped = openappsec_ui._json_records(good + "\n" + torn + "\n" + good + "\n")
+
+    assert records == [{"n": 1}, {"n": 1}]
+    assert skipped == 1
+
+
 def test_read_events_filters_healthcheck_and_openappsec_user_agent_noise(tmp_path):
     healthcheck = _event("healthcheck", "2026-09-22T09:44:53.729", host="healthcheck.invalid")
     user_agent = _event("user-agent", "2026-09-22T09:45:53.729")

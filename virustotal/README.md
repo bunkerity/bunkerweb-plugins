@@ -1,6 +1,6 @@
 # VirusTotal plugin
 
-![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.13-blue)
+![BunkerWeb plugins version](https://img.shields.io/badge/bunkerweb_plugins-1.14-blue)
 
 ```mermaid
 flowchart TD
@@ -109,8 +109,8 @@ For a request to `https://app.example.com/...`:
    the upstream.
 
 On any other API error (a non-`200`, non-`404` response — for example a `401`
-from a missing key or a `429` rate limit), the handler returns the error, which
-surfaces as a BunkerWeb HTTP 500 rather than silently allowing the request.
+from an invalid key or a `429` rate limit), the error is logged and the request
+is allowed through (fail open); it is never denied or turned into a server error.
 
 The plugin also exposes an internal `POST /virustotal/ping` API endpoint, used
 by the BunkerWeb web UI to confirm connectivity: it looks up the EICAR test
@@ -181,27 +181,28 @@ metadata:
 
 # Settings
 
-| Setting                      | Default                             | Context   | Multiple | Description                                                                      |
-| ---------------------------- | ----------------------------------- | --------- | -------- | -------------------------------------------------------------------------------- |
-| `USE_VIRUSTOTAL`             | `no`                                | multisite | no       | Activate VirusTotal integration.                                                 |
-| `VIRUSTOTAL_API_KEY`         |                                     | global    | no       | Key to authenticate with VirusTotal API.                                         |
-| `VIRUSTOTAL_API_URL`         | `https://www.virustotal.com/api/v3` | global    | no       | Base URL of the VirusTotal API (or a VirusTotal-compatible endpoint).            |
-| `VIRUSTOTAL_TIMEOUT`         | `1000`                              | global    | no       | Timeout in milliseconds for VirusTotal API requests.                             |
-| `VIRUSTOTAL_SCAN_FILE`       | `yes`                               | multisite | no       | Activate automatic scan of uploaded files with VirusTotal (only existing files). |
-| `VIRUSTOTAL_SCAN_IP`         | `yes`                               | multisite | no       | Activate automatic scan of the client IP with VirusTotal.                        |
-| `VIRUSTOTAL_IP_SUSPICIOUS`   | `5`                                 | global    | no       | Minimum number of suspicious reports before considering IP as bad.               |
-| `VIRUSTOTAL_IP_MALICIOUS`    | `3`                                 | global    | no       | Minimum number of malicious reports before considering IP as bad.                |
-| `VIRUSTOTAL_FILE_SUSPICIOUS` | `5`                                 | global    | no       | Minimum number of suspicious reports before considering file as bad.             |
-| `VIRUSTOTAL_FILE_MALICIOUS`  | `3`                                 | global    | no       | Minimum number of malicious reports before considering file as bad.              |
+| Setting                      | Default                             | Context   | Multiple | Description                                                                                                    |
+| ---------------------------- | ----------------------------------- | --------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `USE_VIRUSTOTAL`             | `no`                                | multisite | no       | Activate VirusTotal integration.                                                                               |
+| `VIRUSTOTAL_API_KEY`         |                                     | global    | no       | Key to authenticate with VirusTotal API. The plugin does nothing (one warning is logged) until the key is set. |
+| `VIRUSTOTAL_API_URL`         | `https://www.virustotal.com/api/v3` | global    | no       | Base URL of the VirusTotal API (or a VirusTotal-compatible endpoint).                                          |
+| `VIRUSTOTAL_TIMEOUT`         | `1000`                              | global    | no       | Timeout in milliseconds for VirusTotal API requests.                                                           |
+| `VIRUSTOTAL_SCAN_FILE`       | `yes`                               | multisite | no       | Activate automatic scan of uploaded files with VirusTotal (only existing files).                               |
+| `VIRUSTOTAL_SCAN_IP`         | `yes`                               | multisite | no       | Activate automatic scan of the client IP with VirusTotal.                                                      |
+| `VIRUSTOTAL_IP_SUSPICIOUS`   | `5`                                 | global    | no       | Minimum number of suspicious reports before considering IP as bad.                                             |
+| `VIRUSTOTAL_IP_MALICIOUS`    | `3`                                 | global    | no       | Minimum number of malicious reports before considering IP as bad.                                              |
+| `VIRUSTOTAL_FILE_SUSPICIOUS` | `5`                                 | global    | no       | Minimum number of suspicious reports before considering file as bad.                                           |
+| `VIRUSTOTAL_FILE_MALICIOUS`  | `3`                                 | global    | no       | Minimum number of malicious reports before considering file as bad.                                            |
 
 # Troubleshooting
 
-- **HTTP 500 on every scanned request, log says `received status 401 from VT
-API`.** `VIRUSTOTAL_API_KEY` is missing or invalid. The key is required as
-  soon as `USE_VIRUSTOTAL=yes` and a scan would fire; without a valid key the
-  API call fails and the error surfaces as a 500 (the plugin never silently
-  allows on error).
-- **Intermittent HTTP 500 under load (`received status 429`).** You are hitting
+- **Nothing is scanned and the log says `VIRUSTOTAL_API_KEY is empty`.**
+  `USE_VIRUSTOTAL=yes` with no `VIRUSTOTAL_API_KEY`: the plugin logs one warning
+  per worker and lets every request through. Set the key to start scanning.
+- **Nothing is scanned and the log says `received status 401 from VT API`.**
+  `VIRUSTOTAL_API_KEY` is invalid. The API call fails, the error is logged and
+  the request is allowed through (fail open).
+- **Intermittent unscanned requests under load (`received status 429`).** You are hitting
   VirusTotal's rate limit. The public/free tier allows roughly 4 requests per
   minute, so high-traffic file scanning can exceed it. Use a private API key,
   cut down on what you scan, or rely on the 24-hour cache to absorb repeated

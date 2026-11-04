@@ -229,11 +229,17 @@ expect_403 "SQL-like GET payload" "http://bunkerweb:8080/?id=%27%20OR%201%3D1--"
 echo "ℹ️ Testing with POST payload ..."
 expect_403 "POST /etc/passwd" -X POST "http://bunkerweb:8080/" -d 'id=/etc/passwd'
 
+# The judge answers 200 to everything during its policy hot-reload (the canary flaps to
+# not_enforcing for ~10s, seen ~5s after the first "enforcing"), and the agent can still log a
+# Prevent event for such a request afterwards. BunkerWeb rightly let that one through, so the
+# first Prevent event is not necessarily an enforced one. Pass as soon as ANY Prevent event
+# carrying an x-request-id appears in BunkerWeb's deny log; fail if none ever does.
 echo "ℹ️ Waiting for the correlated open-appsec event ..."
 success="ko"
 retry=0
 request_id=""
 while [ "$retry" -lt 60 ] ; do
+	deny_log="$(docker compose logs --no-color --since "$compose_start" bunkerweb 2>/dev/null | grep -F "open-appsec denied request [" || true)"
 	for event_file in /tmp/bunkerweb-plugins/openappsec/appsec-logs/cp-nano-http-transaction-handler.log* ; do
 		if [ ! -f "$event_file" ] ; then
 			continue
@@ -242,11 +248,14 @@ while [ "$retry" -lt 60 ] ; do
 			&& grep -q '"securityAction": "Prevent"' "$event_file" \
 			&& grep -Eq '"httpRequestHeaders": ".*x-request-id:' "$event_file" \
 			&& grep -Fq "\"httpSourceId\": \"$client_ip\"" "$event_file" ; then
-			request_id="$(grep '"eventName": "Web Request"' "$event_file" | grep '"securityAction": "Prevent"' | sed -n 's/.*x-request-id: \([[:alnum:]-]*\).*/\1/p' | head -n 1)"
-			if [ -n "$request_id" ] ; then
-				success="ok"
-				break 2
-			fi
+			candidates="$(grep '"eventName": "Web Request"' "$event_file" | grep '"securityAction": "Prevent"' | sed -n 's/.*x-request-id: \([[:alnum:]-]*\).*/\1/p' | sort -u)"
+			while IFS= read -r candidate ; do
+				if [ -n "$candidate" ] && grep -Fq "open-appsec denied request [$candidate]" <<<"$deny_log" ; then
+					request_id="$candidate"
+					success="ok"
+					break 3
+				fi
+			done <<<"$candidates"
 		fi
 	done
 	retry=$((retry + 1))
@@ -255,16 +264,10 @@ done
 if [ "$success" == "ko" ] ; then
 	docker compose logs
 	docker compose down -v
-	echo "❌ Error: no correlated Prevent event found within 60s"
+	echo "❌ Error: no open-appsec Prevent event matched a request denied by BunkerWeb within 60s"
 	exit 1
 fi
-
-if ! wait_for_log "open-appsec denied request \\[$request_id\\]" 30 "$compose_start" ; then
-	docker compose logs
-	docker compose down -v
-	echo "❌ Error: BunkerWeb deny log did not contain [$request_id]"
-	exit 1
-fi
+echo "ℹ️ Prevent event [$request_id] matches the BunkerWeb deny log"
 
 # A benign request with a normal query arg must pass (no false positive -> 200).
 echo "ℹ️ Testing that a benign GET request passes ..."
