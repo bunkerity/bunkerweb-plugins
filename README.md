@@ -37,10 +37,10 @@ Each plugin is located in a subdirectory of this repository. A README file locat
 
 # Compatibility and releases
 
-Release **1.13** supports **BunkerWeb 1.6.15**. The compatibility declaration
+Release **1.14** supports **BunkerWeb 1.6.17**. The compatibility declaration
 applies to all 12 plugins listed above. Historical declarations are preserved in
 [COMPATIBILITY.json](COMPATIBILITY.json); older BunkerWeb versions have not been
-revalidated for 1.13.
+revalidated for 1.14.
 
 To prepare a release, run `bash misc/update_version.sh <version>` from the repository
 root and add the matching version to `COMPATIBILITY.json`, listing the BunkerWeb
@@ -48,7 +48,7 @@ versions validated by the integration suite. CI checks that every plugin uses th
 same version and that its compatibility entry includes the resolved BunkerWeb tag.
 
 After `Tests` succeeds on `main`, a maintainer creates and pushes a signed annotated
-tag matching the plugin version (for example, `v1.13`). The signing key must be
+tag matching the plugin version (for example, `v1.14`). The signing key must be
 registered with the maintainer's GitHub account so GitHub can verify the signature.
 CI holds no private signing key.
 
