@@ -21,7 +21,7 @@ jobs:
           sparse-checkout: .github
           persist-credentials: false
       - name: Run Plumber
-        uses: getplumber/plumber@7bdbfee1f067431ce13f1b239c76f724ccadd0bf # v0.4.41
+        uses: getplumber/plumber@6452d3d9c12dfa4aecaecde6bc6c528eea3b21a5 # v0.4.55
         with:
           verify-attestation: true
           config-file: .github/plumber/plumber.yaml
