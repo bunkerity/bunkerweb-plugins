@@ -1,0 +1,42 @@
+README.md
+  s_f7a4b2542096dd::t_5c044e7405878b 51
+  s_f7a4b2542096dd::t_4b762d205632f1 40,43
+AGENTS.md
+  s_f7a4b2542096dd::t_53daa336dccd04 27
+  s_f7a4b2542096dd::t_7638ba2da469ae 119
+  s_f7a4b2542096dd::t_38d364cbd0d3db 126-128,130
+  s_f7a4b2542096dd::t_d958294a131868 42
+  s_f7a4b2542096dd::t_8cd246ee47c9b4 63
+  s_f7a4b2542096dd::t_8928db913f09ba 82,85
+  s_f7a4b2542096dd::t_e4e00504b8aa61 60
+  s_f7a4b2542096dd::t_08eae3d648c0f6 76,78
+  s_f7a4b2542096dd::t_6af5e7abb9abae 114
+  s_f7a4b2542096dd::t_32c886569b07b1 57
+  s_f7a4b2542096dd::t_c177dacd372166 7
+  s_f7a4b2542096dd::t_4c68891a04997d 47-48
+  s_f7a4b2542096dd::t_5513b15123be95 92
+  s_f7a4b2542096dd::t_8b4eed0e83d128 120
+  s_f7a4b2542096dd::t_fdb89eaa7b6d1d 28,30
+  s_f7a4b2542096dd::t_81a5ea02e60978 52-53
+  s_f7a4b2542096dd::t_94fd07de234575 66
+coraza/README.md
+  s_f7a4b2542096dd::t_28dfe2ab101d70 201-205
+  s_f7a4b2542096dd::t_93b02fea9cc66f 175-179
+  s_f7a4b2542096dd::t_0692b9de4b8f95 102-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2b8e9df1eafa7d0bc56f5b70d8e3c9125330e49b",
+  "prompts": {},
+  "sessions": {
+    "s_f7a4b2542096dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7423b0d1-a0ae-47aa-9084-c85e4ec98b90",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
