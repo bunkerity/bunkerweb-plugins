@@ -1,0 +1,19 @@
+.gitignore
+  s_01cfb0bdd258bc::t_bdf7b5a736b404 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1fa81e46e46caa6379a5ff64b93a307a8f4662dd",
+  "prompts": {},
+  "sessions": {
+    "s_01cfb0bdd258bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d64b8883-95cf-4d6d-b960-7a6f2686e5fa",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
