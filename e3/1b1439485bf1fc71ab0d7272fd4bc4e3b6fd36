@@ -1,0 +1,24 @@
+clamav/README.md
+  s_8cfab5fcf978d5::t_5818469f33460f 391-394
+  s_8cfab5fcf978d5::t_885d32169ce33a 321-330
+  s_8cfab5fcf978d5::t_3b1ee218dce110 67
+  s_8cfab5fcf978d5::t_1f2faba7240c2b 241-320,331-339
+virustotal/README.md
+  s_8cfab5fcf978d5::t_d1ecef4362ed50 245-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e31b1439485bf1fc71ab0d7272fd4bc4e3b6fd36",
+  "prompts": {},
+  "sessions": {
+    "s_8cfab5fcf978d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fde4c0df-65c3-4bb3-9861-13e9b02828bb",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
