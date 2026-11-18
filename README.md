@@ -127,7 +127,7 @@ Get technical support, tailored consulting, and custom development directly from
 
 The panel also offers:
 
-- [BunkerWeb PRO](https://panel.bunkerweb.io/store/bunkerweb-pro?utm_campaign=self&utm_source=github), with a 30-day free trial.
+- [BunkerWeb PRO](https://panel.bunkerweb.io/store/bunkerweb-pro?utm_campaign=self&utm_source=github), with a 30-day free trial: order a plan, then keep **Free 30 Days Trial** as the payment method at checkout ([step-by-step guide](https://docs.bunkerweb.io/latest/?utm_campaign=self&utm_source=github#pro-version)).
 - [BunkerWeb Cloud](https://panel.bunkerweb.io/store/bunkerweb-cloud?utm_campaign=self&utm_source=github), a fully managed BunkerWeb instance with PRO features, monitoring dashboards and alerts, and technical support.
 
 ## Community
