@@ -1,0 +1,19 @@
+README.md
+  s_9ecd1387db26eb::t_0531e394070bb5 130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "767abbb27957b1ec1586838f53a787544a4bd839",
+  "prompts": {},
+  "sessions": {
+    "s_9ecd1387db26eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "350a8bb1-07f7-48de-b38d-4ab17ba9add5",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
