@@ -242,6 +242,11 @@ metadata:
 - **No startup health check.** Because VirusTotal exposes no usable ping
   endpoint, there is no `init_worker` pre-connect — an unreachable API or a bad
   key is only detected on the first request that triggers a lookup.
+- **Nothing to cluster, but the cache is per instance.** VirusTotal is a hosted
+  API, so there is no scanning backend to scale. With several BunkerWeb
+  instances, each one keeps its own 24-hour cache and queries the API on its
+  own cache misses; they only share the cache (and so spend fewer API calls)
+  with `USE_REDIS=yes`.
 - **Verdict quality depends on VirusTotal's data.** Only files and IPs already
   present in VirusTotal's database yield a meaningful verdict, and the
   suspicious / malicious counts reflect third-party engines, so tune the

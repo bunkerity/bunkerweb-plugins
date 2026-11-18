@@ -64,6 +64,7 @@ a `POST /clamav/ping` health endpoint used by the BunkerWeb web UI.
   - [Docker](#docker)
   - [Swarm](#swarm)
   - [Kubernetes](#kubernetes)
+  - [Several clamd nodes](#several-clamd-nodes)
 - [Settings](#settings)
 - [Troubleshooting](#troubleshooting)
 - [Notes](#notes)
@@ -237,6 +238,105 @@ metadata:
     bunkerweb.io/CLAMAV_HOST: "svc-bunkerweb-clamav.default.svc.cluster.local"
 ```
 
+## Several clamd nodes
+
+With a high volume of uploads you can spread the scans over several `clamd`
+nodes. The plugin has no node list: it connects to `CLAMAV_HOST` once per
+scanned file, so the only requirement is a name that resolves to every node.
+
+Validated on **Docker Compose** with BunkerWeb 1.6.17, two `clamav/clamav:1.4`
+nodes, and Docker's built-in DNS round-robin (replicas of one service share the
+service name). Swarm, Kubernetes and external load balancers were **not**
+tested.
+
+```yaml
+services:
+
+  bw-scheduler:
+    image: bunkerity/bunkerweb-scheduler:1.6.11
+    ...
+    environment:
+      USE_CLAMAV: "yes"
+      CLAMAV_HOST: "clamav"
+    ...
+
+  # The only container that runs freshclam
+  clamav-updater:
+    image: clamav/clamav:1.4
+    environment:
+      CLAMAV_NO_CLAMD: "true"
+    volumes:
+      - clamav-data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "test", "-f", "/var/lib/clamav/main.cvd"]
+      interval: 5s
+      retries: 120
+    networks:
+      - bw-plugins
+
+  # The pool: every replica answers to the name "clamav"
+  clamav:
+    image: clamav/clamav:1.4
+    deploy:
+      replicas: 2
+    depends_on:
+      clamav-updater:
+        condition: service_healthy
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "true"
+    volumes:
+      - clamav-data:/var/lib/clamav
+    networks:
+      - bw-plugins
+
+volumes:
+  clamav-data:
+```
+
+All nodes must serve the same signatures. In this layout the nodes mount one
+database volume, a single container runs `freshclam`, and the nodes do not. The
+[ClamAV Docker documentation](https://docs.clamav.net/manual/Installing/Docker.html#multiple-containers-sharing-the-same-mounted-databases)
+describes the layout: a node loads new signatures at its next self-check
+(every 600 seconds by default) or when you run `clamdscan --reload` in it. The
+updater logs `Clamd was NOT notified` after each update, because no `clamd`
+runs in that container.
+
+What was observed:
+
+- **Scans are spread over the nodes.** 40 uploads of distinct files produced 19
+  scans on one node and 21 on the other, counted from `clamd`'s own log
+  (`LogClean yes`).
+- **Verdicts do not depend on the node.** 40 distinct archives, each holding
+  the EICAR test file, were all denied, and each node logged detections. Clean
+  uploads all passed.
+- **A cache hit does not scan again.** Ten identical uploads produced one scan.
+  The plugin still opens a connection to a node before it looks the checksum
+  up, so the other nine show up in the `clamd` log as `Client disconnected`
+  with no verdict.
+
+Limits:
+
+- **No failover and no retry.** One connection is made per file, to whichever
+  address the name resolves to. With one of the two nodes stopped, 37 of 60
+  uploads picked the stopped node. Each of those scans failed after
+  `CLAMAV_TIMEOUT` (about one second added to the request), BunkerWeb logged
+  `error while scanning file(s) : socket failed : timeout`, and **the upload
+  went through unscanned**, including 14 of 20 EICAR archives. In the test,
+  uploads kept timing out for about eight minutes after the node stopped, then
+  none did. A restarted node received scans again within its first 30 uploads.
+- **With every node down, nothing is scanned.** All 20 uploads of the test
+  went through, and the log said either `socket failed : timeout` or
+  `could not be resolved (2: Server failure)`. Monitor the nodes and replace a
+  dead one quickly: the pool does not protect you from a failed node.
+- **One pool for the whole instance.** `CLAMAV_HOST` and `CLAMAV_PORT` are
+  global settings, so every service uses the same pool.
+- **The startup check covers one node.** The `init_worker` ping and the
+  `POST /clamav/ping` endpoint each open one connection, so they report on
+  whichever node answered.
+- **One verdict cache for the pool.** The cache key includes `CLAMAV_HOST` and
+  `CLAMAV_PORT`, not the node, so all nodes share one cache. Several BunkerWeb
+  instances only share it with `USE_REDIS=yes`.
+
 # Settings
 
 | Setting          | Default  | Context   | Multiple | Description                                                                            |
@@ -288,7 +388,7 @@ StreamMaxLength in clamd.conf` and **skips** that file - it does not deny it.
   uploads are bounded by `MAX_CLIENT_SIZE`. If the request body genuinely cannot be
   read (a rare read error), the upload is allowed through unscanned and logged - the
   same best-effort stance as other un-scannable files.
-- **Clustered / replicated `clamd` is not yet validated.** Pointing
-  `CLAMAV_HOST` at a load-balanced pool of `clamd` nodes should work, since the
-  INSTREAM protocol is self-contained per connection, but this topology is not
-  officially tested or documented yet.
+- **Several `clamd` nodes can share the load, without failover.** A pool of
+  nodes behind one `CLAMAV_HOST` name was tested on Docker Compose; see
+  [Several clamd nodes](#several-clamd-nodes) for the layout, what was
+  observed and the limits.
