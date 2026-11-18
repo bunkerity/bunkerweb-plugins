@@ -1,0 +1,19 @@
+.github/workflows/codeql.yml
+  s_fcb3bb970c7f2e::t_f78a9215deb3d4 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e1f1f13f72c8164da9d1da796d9fa868a0d9e390",
+  "prompts": {},
+  "sessions": {
+    "s_fcb3bb970c7f2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bae27651-4cec-4a22-a8bb-8772a78fd12c",
+        "model": "claude-mythos-5-2"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
